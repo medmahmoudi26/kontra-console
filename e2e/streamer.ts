@@ -13,7 +13,7 @@
  * {@link serveFakeStreamer} is the same object with a `webServer`-shaped lifetime for a human.
  */
 
-import { PanelServer } from '../../kontra/backend/src/panels/server';
+import { PanelServer } from '../../kontra/control/orchestrator/src/panels/server';
 import { FakeFleet } from './fakeFleet';
 import { HOST, PANEL_ORIGINS, PANEL_PORT, PANEL_TOKEN, PANEL_TOKEN_VAR, SNAPSHOT_MS } from './env';
 

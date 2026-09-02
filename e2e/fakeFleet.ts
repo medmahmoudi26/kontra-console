@@ -19,9 +19,9 @@
  * that catches a wall which renders an absent session as a quiet tile.
  */
 
-import type { MachineTarget } from '../../kontra/backend/src/panels/discovery';
-import type { ProbeResult } from '../../kontra/backend/src/panels/probe';
-import type { PanelDeps } from '../../kontra/backend/src/panels/server';
+import type { MachineTarget } from '../../kontra/control/orchestrator/src/panels/discovery';
+import type { ProbeResult } from '../../kontra/control/orchestrator/src/panels/probe';
+import type { PanelDeps } from '../../kontra/control/orchestrator/src/panels/server';
 
 /** The window every screen carries, exactly once. Counting it in the DOM is how the specs tell a
  * repaint from an append: five appended screens leave five markers. */

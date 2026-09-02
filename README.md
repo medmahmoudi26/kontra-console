@@ -30,7 +30,7 @@ pnpm test:e2e       # e2e, needs a live control plane
 ### The one dependency on kontra
 
 ```json
-"@kontra/core": "link:../kontra/core"
+"@kontra/core": "link:../kontra/shared/core"
 ```
 
 `@kontra/core` is the shared kernel — the contract types, the Transcript reader, the Warden's

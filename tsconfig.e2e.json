@@ -1,7 +1,7 @@
 {
   // THE ONE PROJECT THAT NEEDS THE ORCHESTRATOR'S SOURCE, kept separate so that it is the only one.
   //
-  // `e2e/streamer.ts` constructs a real `PanelServer` from `kontra/backend/src/panels/server` — not
+  // `e2e/streamer.ts` constructs a real `PanelServer` from `kontra/control/orchestrator/src/panels/server` — not
   // a mock of one — because the whole claim of the Monitor e2e is that a browser can read what the
   // orchestrator actually writes. That code is server-side (it reaches ssh, discovery and probe),
   // so it cannot move into `@kontra/core`, and there is no version of this harness that does not
@@ -16,7 +16,7 @@
   //       kontra-console/    <- this repository
   //
   // `pnpm typecheck` is the standalone one. `pnpm typecheck:e2e` is the one that needs the sibling,
-  // and it fails with `Cannot find module '../../kontra/backend/...'` when it is missing — which
+  // and it fails with `Cannot find module '../../kontra/control/orchestrator/...'` when it is missing — which
   // names the requirement rather than describing a compiler bug.
   "extends": "./tsconfig.json",
   "include": ["e2e"]

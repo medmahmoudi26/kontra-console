@@ -1,0 +1,93 @@
+# The console's own gate.
+#
+# WHY IT EXISTS AT ALL. This suite had no CI job for most of its life, which is how two real UI
+# regressions rode a fully green branch in August 2026: `workflowSource.ts` stopped recognising a
+# promoted Dataset as a write, and the Workflows page under-reported a workflow's outputs. Every
+# gated suite was green the whole time, because ~1100 of these tests were running only when someone
+# remembered. The job was added in kontra and moved here with the source (ADR 0038).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    name: console
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kontra-console
+
+      # THE SIBLING CHECKOUT, AND WHY IT IS STILL HERE.
+      #
+      # `@kontra/core` is the shared kernel — the contract types, the Transcript reader, the
+      # Warden's vocabulary, the queue derivations. It is a real dependency now rather than a
+      # `../backend/src` path alias, which is what let this repository leave kontra at all. But it
+      # is NOT PUBLISHED YET, so `package.json` names it `link:../kontra/shared/core` and there has to be
+      # a `../kontra` to link to.
+      #
+      # This step is the one thing standing between here and a self-contained build. When
+      # `@kontra/core` goes to npm, this checkout and the build step below both go away and the
+      # dependency becomes an ordinary version range.
+      #
+      # `KONTRA_CORE_TOKEN` is a token with read access to kontra while it is private. A missing
+      # secret fails with a 404 on a repository that exists, which reads like a typo and is not.
+      - uses: actions/checkout@v4
+        with:
+          repository: medmahmoudi26/kontra
+          path: kontra
+          token: ${{ secrets.KONTRA_CORE_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: kontra-console/pnpm-lock.yaml
+
+      # THE PACKAGE IS BUILT, NOT RESOLVED FROM SOURCE, and the distinction is the subject of
+      # ADR 0041. `@kontra/core` ships JavaScript because Temporal's Workflow bundler excludes
+      # node_modules from its TypeScript loader; nothing here consumes `core/src` directly, so a
+      # missing build is a resolution failure rather than a slow path.
+      - name: build @kontra/core
+        working-directory: kontra
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @kontra/core run build
+
+      - name: pnpm install
+        working-directory: kontra-console
+        run: pnpm install --frozen-lockfile
+
+      # `typecheck` is `src` alone. `typecheck:e2e` is the Playwright harness, which constructs a
+      # real PanelServer out of the orchestrator's source — it is a separate tsconfig precisely so
+      # that the sibling requirement is visible instead of being an obscure failure in the main one.
+      - name: typecheck (tsc --noEmit)
+        working-directory: kontra-console
+        run: pnpm run typecheck
+
+      - name: typecheck the e2e harness (needs the kontra checkout)
+        working-directory: kontra-console
+        run: pnpm run typecheck:e2e
+
+      - name: vitest
+        working-directory: kontra-console
+        run: pnpm test
+
+      # THE BUNDLE IS PART OF THE GATE. A suite that passes and a build that fails is a state this
+      # repository has been in: rollup reads a CommonJS dependency as one default export, so
+      # `@kontra/core` being CJS-only failed `vite build` with `"workflowScratchId" is not exported
+      # by dist/scratch.js` while every test passed. Only a build catches that.
+      #
+      # NO EXPLORE TOKEN HERE, deliberately. `VITE_KONTRA_EXPLORE_TOKEN` is baked into the bundle at
+      # build time, and a token inside a browser bundle is not private from anyone who loads the
+      # page. CI builds without one; a deployment supplies it.
+      - name: build the SPA
+        working-directory: kontra-console
+        run: pnpm run build
