@@ -34,13 +34,21 @@ export interface QueryResult {
 export const EXPORT_FORMATS = ['csv', 'parquet', 'json', 'jsonl'] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
-function token(): string {
-  return (import.meta.env?.VITE_KONTRA_EXPLORE_TOKEN as string | undefined) ?? '';
-}
-
+/**
+ * NOTHING HERE. The session token is added by the `fetch` wrapper in `run/session.ts`, for every
+ * same-origin `/api/…` call in the console.
+ *
+ * THIS USED TO READ `import.meta.env.VITE_KONTRA_EXPLORE_TOKEN` — a bearer baked into the bundle at
+ * build time. That is a credential inside a build artifact: invalidated by any rotation, identical
+ * for every operator, and silently replaced with the empty string by a `pnpm build` run for an
+ * unrelated reason, after which every query answered `query: unauthorized` and nothing said why.
+ * The login page is where the token comes from now (ADR 0045).
+ *
+ * Kept as a function returning nothing rather than deleted at each call site, so the reason is
+ * written where somebody would otherwise re-add the header.
+ */
 function authHeaders(): Record<string, string> {
-  const t = token();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  return {};
 }
 
 /**

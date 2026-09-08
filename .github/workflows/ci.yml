@@ -90,10 +90,4 @@ jobs:
       # page. CI builds without one; a deployment supplies it.
       - name: build the SPA
         working-directory: kontra-console
-        # KONTRA_SPA_NO_TOKEN: this job proves the bundle BUILDS; the artifact is thrown away.
-        # `vite.config.ts` otherwise refuses a tokenless production build, because one silently
-        # 401s every query. Saying "nothing serves this" is the honest form — a placeholder token
-        # would bake a bearer that fails exactly the same way while looking deliberate.
-        env:
-          KONTRA_SPA_NO_TOKEN: '1'
         run: pnpm run build
