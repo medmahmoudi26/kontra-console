@@ -43,6 +43,7 @@ import { copyText, visibleText } from './chrome/copy';
 import { tileRefFor } from './chrome/tileRef';
 import { useTileScroll } from './chrome/useTileScroll';
 import { TERMINAL_FONT_STACK, whenTerminalFontReady } from './theme';
+import { readOnlyTerminalOptions } from './terminalOptions';
 import { parseWidgetFrame, type Widget } from './widgets/parseWidget';
 import type { Terminal, TerminalHealth } from './panelsClient';
 
@@ -634,22 +635,23 @@ export default memo(function TerminalTile({
   // remount.
   useEffect(() => {
     if (!mountRef.current || termRef.current) return;
-    const term = new XTerm({
-      convertEol: true,
-      cursorBlink: false,
-      // Read-only, on top of there being no path for bytes to leave this page at all.
-      disableStdin: true,
-      // The frontend's OWN scrollback ring, capped (slice 05). tmux copy-mode is a keyboard feature a
-      // read-only pane cannot reach, so xterm holds the history and `scrollback.ts` names the cap in
-      // one place so the drawer can state it.
-      scrollback: SCROLLBACK_LINES,
-      fontSize,
-      // The Nerd Font, with the documented fallback chain behind it (`theme.ts`). Box-drawing and
-      // powerline glyphs are most of what makes terminal output look right, and a `monospace` default
-      // renders them as tofu.
-      fontFamily: TERMINAL_FONT_STACK,
-      theme,
-    });
+    // BUILT IN `terminalOptions.ts`, NOT HERE — ADR 0043 decision 6. Pane bytes reach xterm
+    // unfiltered, so which capabilities this emulator has is part of the read-only boundary rather
+    // than a detail beneath it; that file is the one construction site and `terminalOptions.test.ts`
+    // fails if `allowProposedApi` ever appears or `disableStdin` stops being true.
+    //
+    // The frontend's OWN scrollback ring, capped (slice 05): tmux copy-mode is a keyboard feature a
+    // read-only pane cannot reach, so xterm holds the history. The Nerd Font carries the documented
+    // fallback chain behind it (`theme.ts`) — box-drawing and powerline glyphs are most of what makes
+    // terminal output look right, and a `monospace` default renders them as tofu.
+    const term = new XTerm(
+      readOnlyTerminalOptions({
+        scrollback: SCROLLBACK_LINES,
+        fontSize,
+        fontFamily: TERMINAL_FONT_STACK,
+        theme,
+      })
+    );
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(mountRef.current);
