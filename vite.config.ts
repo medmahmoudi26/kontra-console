@@ -16,7 +16,64 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // installed. ADR 0038 split them, so the shared kernel is published as `@kontra/core` and imported
 // by name like anything else. `@` stays — it is the app's own src, the shadcn/ui convention its
 // copied components import by.
-export default defineConfig({
+/**
+ * A PRODUCTION BUILD WITHOUT THE EXPLORE TOKEN IS A BUNDLE THAT 401s, AND IT USED TO BE SILENT.
+ *
+ * `src/run/query.ts` reads `import.meta.env.VITE_KONTRA_EXPLORE_TOKEN` and falls back to `''`; with
+ * no token it sends no `Authorization` header, and `/api/datasets/query` is deliberately fail-closed
+ * ("a PRIVILEGED surface: it can read every dataset"). So the whole workbench answers
+ * `query: unauthorized` and nothing about the build said why.
+ *
+ * MEASURED, on the live instance, by doing it: `dist/` here is BIND-MOUNTED READ-ONLY into the
+ * running orchestrator (`/root/oss/kontra-console/dist -> /app/web/dist`), so a plain `pnpm build`
+ * in this directory does not produce an artifact to deploy later — it REPLACES what is being served,
+ * immediately. Two builds run for unrelated reasons took the query workbench down, and the error the
+ * operator saw named neither the token nor the build.
+ *
+ * `make ui` has always passed the token and even refuses without a `.env`. Nothing made the same
+ * true of the command anyone would type first. Now it is: a production build fails, names the
+ * variable, and says where the value comes from.
+ *
+ * DEV AND TEST ARE UNAFFECTED. `vite dev` talks to a dev API and the suites never build; only
+ * `vite build` can put a broken artifact where something serves it.
+ */
+function requireExploreToken(command: string, mode: string): void {
+  if (command !== 'build' || mode === 'test') return;
+  if ((process.env.VITE_KONTRA_EXPLORE_TOKEN ?? '').trim() !== '') return;
+  // THE ESCAPE HATCH IS ITS OWN VARIABLE, not a placeholder token, and the difference matters.
+  // CI builds this bundle to prove it BUILDS — the artifact is thrown away, so it needs no token.
+  // Telling those jobs to pass a junk value would bake a bearer that 401s exactly like an empty one
+  // while looking deliberate, which is the failure this guard exists to make impossible. So they say
+  // what is actually true instead: nothing serves this.
+  if ((process.env.KONTRA_SPA_NO_TOKEN ?? '').trim() !== '') return;
+  throw new Error(
+    [
+      'refusing to build: VITE_KONTRA_EXPLORE_TOKEN is empty.',
+      '',
+      'The query workbench sends it as a bearer and `/api/datasets/query` fails closed, so this',
+      'build would answer `query: unauthorized` for every query — silently, because the bundle',
+      'looks fine. On a dev deployment `dist/` is bind-mounted into the running orchestrator, so',
+      'the broken bundle would be SERVED the moment it is written.',
+      '',
+      'Build through the Makefile, which reads the value from the repo .env:',
+      '',
+      '    make ui                       # from the kontra checkout',
+      '',
+      'or pass it yourself:',
+      '',
+      "    VITE_KONTRA_EXPLORE_TOKEN=\"$(grep '^KONTRA_EXPLORE_TOKEN=' ../kontra/.env | cut -d= -f2-)\" pnpm build",
+      '',
+      'If nothing will ever serve this bundle — a CI build check, a bundle-size probe — say so',
+      'rather than inventing a token, because a junk bearer 401s exactly like an empty one:',
+      '',
+      '    KONTRA_SPA_NO_TOKEN=1 pnpm build',
+    ].join('\n')
+  );
+}
+
+export default defineConfig(({ command, mode }) => {
+  requireExploreToken(command, mode);
+  return {
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -107,4 +164,5 @@ export default defineConfig({
     setupFiles: ['./src/vitest.setup.ts'],
     pool: 'vmThreads',
   },
+  };
 });
