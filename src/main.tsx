@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ReactFlowProvider } from '@xyflow/react';
 import App from './App';
+import DevPane, { isDevRoute } from './panels/DevPane';
 import { startAddressing } from './state/addressing';
 import { install as installSession } from './run/session';
 import LoginGate from './panels/LoginGate';
@@ -22,14 +23,24 @@ if (!root) throw new Error('#root not found');
 // reason a reader could see. It is idempotent, so StrictMode's double invoke costs nothing.
 installSession();
 
-startAddressing();
+// THE EMBEDDABLE PANE BRANCHES HERE, before `startAddressing` and before the shell.
+//
+// Not inside `App`, and the reason is `startAddressing`: it seeds the surface store from the URL
+// and subscribes to `popstate` for the life of the document. `/dev` is not one of the console's
+// surfaces, so letting it run would have the store deciding which of workflows|actors|datasets an
+// embedded pane is — and then rewriting the address out from under the host that framed it.
+//
+// It keeps the LoginGate. An embedded pane is not an exemption from signing in: the host normally
+// hands a token over in the query string (consumed and stripped by DevPane), and when it does not,
+// the gate asking for a password is the correct outcome rather than a blank frame.
+const EMBEDDED = isDevRoute(window.location.pathname);
+
+if (!EMBEDDED) startAddressing();
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <ReactFlowProvider>
-      <LoginGate>
-        <App />
-      </LoginGate>
+      <LoginGate>{EMBEDDED ? <DevPane /> : <App />}</LoginGate>
     </ReactFlowProvider>
   </React.StrictMode>
 );

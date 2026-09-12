@@ -90,6 +90,21 @@ export function onSessionChange(fn: (token: string) => void): () => void {
   return () => listeners.delete(fn);
 }
 
+/**
+ * Adopt a token this page did not mint — the embeddable pane's door, and nothing else's.
+ *
+ * AN IFRAME HOST CAN ONLY PASS A CREDENTIAL IN THE URL, so `DevPane` takes it from the query string
+ * and immediately removes it from the address. This is the store half of that: it goes through the
+ * same `setToken` a sign-in does, so listeners fire and the gate settles exactly as if somebody had
+ * typed a password.
+ *
+ * It is NOT a second way to sign in. The token has to have come from `POST /api/login` already;
+ * this only moves it from a URL into the session.
+ */
+export function adoptSessionToken(token: string): void {
+  if (token) setToken(token);
+}
+
 export interface LoginResult {
   user: string;
   expiresAt: number;
