@@ -70,7 +70,32 @@ export interface SchemaField {
   enum?: string[];
   /** The author's declared default, as the string a text input holds. Absent when none. */
   default?: string;
+  /**
+   * Which control collects this field. Derived, never authored on the console side.
+   *
+   * THE TYPE IS NOT THE CONTROL, which is why this is its own field. `boolean` and `string` are
+   * both collectable by a text box and only one of them should be; `File` and `Retry` are both
+   * `$ref`ed models and only one of them is a thing you drag. Folding the decision into
+   * {@link SchemaField.type} would change what `coerceField` is handed — a type string in, a value
+   * out — and the contract table beside the form prints that same string, so the reader would start
+   * seeing `toggle` where the author wrote `bool`.
+   *
+   * ABSENT MEANS `text`. Every field that existed before this did collect through a box, and an
+   * older server or a schema with nothing to say about its control must keep doing exactly that.
+   */
+  control?: FieldControl;
 }
+
+/**
+ * How one leaf is collected.
+ *
+ *   text    a box. The default, and what anything unrecognised degrades to.
+ *   select  a closed set — `status: "open" | "closed"`. Decided by {@link SchemaField.enum}.
+ *   toggle  a boolean. `true`/`false` typed into a box is a value that can be misspelled, and was.
+ *   file    one uploaded file, carried as the content-addressed ref the actor dereferences.
+ *   folder  a directory of them, same ref per file.
+ */
+export type FieldControl = 'text' | 'select' | 'toggle' | 'file' | 'folder';
 
 /**
  * What a node IS to a form: one input, a nested group of them, or a repeatable row of them.
@@ -247,6 +272,49 @@ export function schemaType(raw: unknown): string {
   return typeof p.type === 'string' ? p.type : 'any';
 }
 
+/**
+ * The marker a kontra input type puts in its own JSON Schema.
+ *
+ * DECLARED BY THE ACTOR'S AUTHOR, IN THEIR OWN LANGUAGE, and carried through the derivation
+ * untouched: `kontra.File` is a pydantic model with `json_schema_extra={"x-kontra-input":"file"}`,
+ * and `TypeAdapter(...).json_schema()` copies unknown keywords straight through. So the console
+ * learns that a field is a file from the same document it learns everything else from, and an SDK
+ * that has not grown the type yet simply never sets it.
+ *
+ * `x-` BECAUSE JSON SCHEMA SAYS UNKNOWN KEYWORDS ARE IGNORED, which is what makes this safe to put
+ * in a document that pydantic, the Go reflector and every validator in the chain also read.
+ */
+export const INPUT_MARKER = 'x-kontra-input';
+
+/**
+ * Which control collects one property — `null` for the ordinary box.
+ *
+ * THE MARKER WINS OVER THE SHAPE. `kontra.File` derives an OBJECT with `name`, `sha256` and `size`
+ * properties, so without this it would draw as a group of three boxes and ask an operator to type a
+ * SHA-256 by hand. The marker is the author saying what the object is FOR, and that is a fact no
+ * amount of walking its properties can recover.
+ *
+ * A NULLABLE FIELD IS STILL ITS TYPE. `bool | None` derives `{"anyOf":[{"type":"boolean"},
+ * {"type":"null"}]}`, and a toggle is still the right control for it — the arm is walked for the
+ * same reason `schemaEnum` walks it, because an OPTIONAL field that silently degraded to a text box
+ * would be the one place the form stopped helping.
+ */
+export function schemaControl(raw: unknown): FieldControl | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as { type?: unknown; anyOf?: unknown; [k: string]: unknown };
+  const marked = p[INPUT_MARKER];
+  if (marked === 'file' || marked === 'folder') return marked;
+  if (p.type === 'boolean') return 'toggle';
+  if (Array.isArray(p.type) && p.type.includes('boolean')) return 'toggle';
+  if (Array.isArray(p.anyOf)) {
+    for (const arm of p.anyOf) {
+      const found = schemaControl(arm);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The walk
 // ---------------------------------------------------------------------------------------------
@@ -287,17 +355,27 @@ function nodeOf(
 ): FieldNode {
   const choices = schemaEnum(raw);
   const fallback = schemaDefault(raw);
+  /* THE MARKER IS READ BEFORE THE `$ref` IS RESOLVED, and after it too. A pydantic model reaches
+     here as `{"$ref":"#/$defs/File"}` — the keywords live on the DEFINITION, not on the reference —
+     so the shape has to be resolved to find them. `kontra.File` inline (no `$ref`, which is what a
+     Go reflector emits) is found by the first call. */
+  const control: FieldControl | null = choices
+    ? 'select'
+    : schemaControl(raw) ?? schemaControl(resolveShape(raw, root, seen)?.schema) ?? null;
   const base: SchemaField = {
     name,
     type: schemaType(raw),
     required,
     ...(choices ? { enum: choices } : {}),
     ...(fallback === undefined ? {} : { default: fallback }),
+    ...(control === null ? {} : { control }),
   };
 
-  // A CLOSED SET IS A LEAF EVEN WHEN ITS ARM IS AN OBJECT. Membership is the whole contract there,
-  // and a list of members is a better control than any group could be.
-  const shape = choices ? null : resolveShape(raw, root, seen);
+  // A CLOSED SET IS A LEAF EVEN WHEN ITS ARM IS AN OBJECT, and so is anything the author marked as
+  // a file or a folder. Membership is the whole contract in the first case and the ref is the whole
+  // contract in the second — a group of three boxes asking an operator to type a SHA-256 is not a
+  // better reading of either.
+  const shape = choices || control === 'file' || control === 'folder' ? null : resolveShape(raw, root, seen);
   if (shape && depth < MAX_DEPTH) {
     const kids = childrenOf(shape.schema, root, path, shape.seen, depth + 1);
     if (kids !== null) return { ...base, kind: 'group', path, children: kids };

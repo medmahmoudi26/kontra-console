@@ -12,8 +12,10 @@
   --card-foreground: oklch(0.24 0.02 262);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.02 262);
-  --primary: oklch(0.623 0.214 259.8);
-  --primary-foreground: oklch(0.985 0 0);
+  /* THE BRAND FOLLOWS THE DESIGN IN BOTH MODES. v2 specifies dark only; light is kept working
+     rather than invented, but the accent moves with it so the theme toggle is not two brands. */
+  --primary: oklch(0.72 0.15 163);
+  --primary-foreground: oklch(0.16 0.03 165);
   --secondary: oklch(0.96 0.004 258);
   --secondary-foreground: oklch(0.24 0.02 262);
   --muted: oklch(0.955 0.004 258);
@@ -23,30 +25,64 @@
   --destructive: oklch(0.577 0.245 27.3);
   --border: oklch(0.92 0.007 262);
   --input: oklch(0.92 0.007 262);
-  --ring: oklch(0.623 0.214 259.8);
+  --ring: oklch(0.72 0.15 163);
   --ok: oklch(0.627 0.17 149.2);
+  --warn: oklch(0.75 0.14 62);
+  --stall: oklch(0.62 0.17 295);
+  --park: oklch(0.78 0.15 85);
+  --author: oklch(0.68 0.13 232);
+  --line2: oklch(0.86 0.01 262);
+  --shadow-panel: 0 8px 26px rgba(16, 24, 20, 0.10);
 }
 
+/* ── v2: the dark palette IS the design (KontraConsole v2) ────────────────────────────────────
+   Hex, not oklch, and deliberately: these are the exact values the design specifies, and a
+   conversion would make "is this the design's colour?" un-answerable by comparison.
+
+   THE SHADCN NAMES ARE RETUNED RATHER THAN SHADOWED. The design ships a parallel `--k-*` set, but
+   every component already reads `bg-background` / `text-muted-foreground` / `border-border` — so
+   redefining those IS the re-skin, and no component has to change. A second parallel palette would
+   mean two answers to "what colour is a card", and the components would keep using the old one. */
 .dark {
-  --background: oklch(0.16 0.014 262);
-  --foreground: oklch(0.93 0.006 264);
-  --card: oklch(0.205 0.015 262);
-  --card-foreground: oklch(0.93 0.006 264);
-  --popover: oklch(0.205 0.015 262);
-  --popover-foreground: oklch(0.93 0.006 264);
-  --primary: oklch(0.707 0.165 254.6);
-  --primary-foreground: oklch(0.18 0.03 260);
-  --secondary: oklch(0.27 0.015 262);
-  --secondary-foreground: oklch(0.93 0.006 264);
-  --muted: oklch(0.26 0.015 262);
-  --muted-foreground: oklch(0.71 0.02 261);
-  --accent: oklch(0.28 0.02 262);
-  --accent-foreground: oklch(0.93 0.006 264);
-  --destructive: oklch(0.704 0.191 22.2);
-  --border: oklch(0.31 0.015 262);
-  --input: oklch(0.31 0.015 262);
-  --ring: oklch(0.707 0.165 254.6);
-  --ok: oklch(0.72 0.17 150);
+  --background: #0a0c0b;
+  --foreground: #e7ece9;
+  --card: #101413;
+  --card-foreground: #e7ece9;
+  --popover: #101413;
+  --popover-foreground: #e7ece9;
+  /* THE ACCENT MOVES FROM BLUE TO EMERALD, which is the one change that reaches every surface at
+     once. It is the design's call, not a tint. */
+  --primary: #34d399;
+  --primary-foreground: #06231a;
+  --secondary: #161b19;
+  --secondary-foreground: #e7ece9;
+  --muted: #161b19;
+  --muted-foreground: #98a4a0;
+  --accent: #1a201e;
+  --accent-foreground: #e7ece9;
+  --destructive: #fb7185;
+  --border: #212725;
+  --input: #212725;
+  --ring: #34d399;
+  --ok: #6ee7b7;
+
+  /* ── tones with no shadcn equivalent ───────────────────────────────────────────────────────
+     These exist because the transcript reader distinguishes states that a two-colour palette
+     cannot. `@kontra/core/vocabulary` already separates them; the palette has to as well, or two
+     readings that mean different things render the same.
+
+       warn    a batch returned, but isolated some units
+       stall   nothing is wrong and nothing is moving — a retry backoff, or a queue nobody polls.
+               NOT a failure, and painting it as one would be a lie about whose problem it is.
+       park    the run is waiting for a HUMAN. It is not stuck; it asked.
+       author  narration the workflow's author wrote, not something the system observed.
+       line2   a stronger rule, for a divider that has to separate rather than suggest. */
+  --warn: #fdba74;
+  --stall: #c4b5fd;
+  --park: #fcd34d;
+  --author: #7dd3fc;
+  --line2: #2d3532;
+  --shadow-panel: 0 8px 26px rgba(0, 0, 0, 0.42);
 }
 
 @theme inline {
@@ -69,10 +105,24 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-stall: var(--stall);
+  --color-park: var(--park);
+  --color-author: var(--author);
+  --color-line2: var(--line2);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* NO WEBFONT IS FETCHED. The design names Inter and JetBrains Mono; the console is served from the
+   appliance on loopback and may be run airgapped, so a Google Fonts link would be a request that
+   fails silently and falls back to something unnamed. They are used WHEN INSTALLED and the stack
+   degrades to the platform's own — which is what `ui-sans-serif` and `ui-monospace` are for. */
+:root {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @layer base {

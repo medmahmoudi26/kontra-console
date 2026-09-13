@@ -48,9 +48,11 @@
  */
 
 import {
+  KeyRound,
   Boxes,
   Database,
   LayoutGrid,
+  LibraryBig,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -75,10 +77,12 @@ const RAIL_W_COLLAPSED = 'w-12';
 /** One glyph per surface. A `Record<View, …>` on purpose: a sixth surface added to `surfaces.ts`
  *  and given no icon fails to compile, rather than drawing an item with a hole in it. */
 const ICONS: Record<View, LucideIcon> = {
+  catalog: LibraryBig,
   workflows: Workflow,
   actors: Boxes,
   datasets: Database,
   monitor: LayoutGrid,
+  secrets: KeyRound,
   settings: Settings,
 };
 
@@ -291,7 +295,14 @@ export function NavRail({
         })}
       </div>
 
-      {/* COLLAPSED KEEPS THE TWO THINGS THAT ARE ABOUT RIGHT NOW, and nothing else. The pulse,
+      {/* NOT A FOOTER ANY MORE. This block was `mt-auto ... border-t`, which pushed it to the floor
+          of the rail and drew a rule above it — a bordered box glued to the bottom of a bordered
+          column, which is exactly the boxed-in feel v2 is meant to remove. The content is unchanged
+          and the argument for it is unchanged; it simply CONTINUES the rail now, below the nav
+          items, separated by space rather than by a line. Nothing here was ever load-bearing about
+          being at the bottom — what it had to be was visible from every surface, and it still is.
+
+          COLLAPSED KEEPS THE TWO THINGS THAT ARE ABOUT RIGHT NOW, and nothing else. The pulse,
           because "is anything happening" is the question a 48-pixel rail is least able to send you
           somewhere else to answer; and `live`, which counts Terminals holding a real PTY attach —
           an sshd session, a PTY and a per-viewer tmux session per Machine — and is the number an
@@ -299,10 +310,8 @@ export function NavRail({
           they have forgotten about it. The spark and `units/s` are answered by visiting a surface;
           a leaking attach and a stopped fleet are not. */}
       {collapsed ? (
-        <div
-          className="mt-auto flex flex-col items-center gap-1 border-t border-border py-3"
-          data-testid="nav-counts"
-        >
+        <div className="flex flex-col items-center gap-1 pb-3 pt-4" data-testid="nav-counts">
+
           <Pulse reading={pulse} collapsed onView={onView} onOpenRun={onOpenRun} />
           <span className="text-[9px] uppercase tracking-wide text-muted-foreground">live</span>
           <span
@@ -315,10 +324,7 @@ export function NavRail({
           </span>
         </div>
       ) : (
-        <div
-          className="mt-auto flex flex-col gap-2 border-t border-border px-3.5 py-3"
-          data-testid="nav-counts"
-        >
+        <div className="flex flex-col gap-2 px-3.5 pb-3 pt-4" data-testid="nav-counts">
           {/* FIRST IN THE FOOTER, above the throughput it explains. `units/s` says how fast rows
               are landing; this says whether anything is putting them there at all, and a rate over
               a fleet you have not been told is idle is a number with nothing to stand on. */}
@@ -477,6 +483,7 @@ export function SideNav(): JSX.Element {
   const pulse = useAppStore((s) => s.pulse);
   const pulseError = useAppStore((s) => s.pulseError);
   const actorFolderCount = useAppStore((s) => s.actorFolderCount);
+  const catalogCount = useAppStore((s) => s.catalogCount);
   const datasets = useAppStore((s) => s.datasets);
   const workflowCount = useAppStore((s) => s.workflowCount);
   const fleetSeries = useAppStore((s) => s.fleetSeries);
@@ -491,6 +498,17 @@ export function SideNav(): JSX.Element {
   const waiting = stillParked(parked, runs);
 
   const counts: Record<View, number | null> = {
+    // PUBLISHED BY THE PAGE, like the two below it, and it is NOT their sum. The Catalog lists
+    // workflow folders plus every actor this control plane knows about — including deployments
+    // whose code is not on this disk, which the Actors surface deliberately does not draw — so
+    // adding the other two numbers would print a total that matches neither page. It is `null`
+    // until the surface has loaded once, which is the honest answer to a registry nobody has read.
+    catalog: catalogCount,
+    // NO NUMBER ON SECRETS, deliberately. A count here is "how many secrets exist" — the one fact
+    // about a write-only store that is worth nothing to an operator and is a hint to anybody else.
+    // UNBOUND slots are worth surfacing, and they belong on the surface itself, where the actor
+    // they block can be named.
+    secrets: null,
     // `null` where the number is not known yet — the Workflows page publishes its own file count
     // when it loads, and a rail that printed 0 before then would be stating something false about
     // a directory it has not read.

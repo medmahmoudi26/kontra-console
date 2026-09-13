@@ -1331,13 +1331,24 @@ function CellInspector({
         {detail.body}
       </pre>
       {/* The DuckDB spelling too, for the value an operator is about to paste into a WHERE clause.
-          Only when it differs from what is above — on a plain string the two are the same text. */}
+          Only when it differs from what is above — on a plain string the two are the same text.
+
+          CAPPED AND SCROLLABLE, WHICH IS THE WHOLE OF WHY THIS IS THREE ELEMENTS AND NOT ONE.
+          `shrink-0` with no height cap means this footer takes its CONTENT's height, and a
+          `detect.Row` observation — three nested structs, each carrying a body preview — is
+          thousands of pixels of it. Two things then went wrong at once and the second hid the
+          first: the `pre` above is `flex-1`, so it was squeezed to nothing and the JSON body this
+          panel exists to show never appeared; and the overflow ran past the `overflow-hidden` on
+          the `aside`, so what WAS on screen was clipped with nothing to scroll. The cap keeps the
+          body's share of the panel, and `overflow-auto` on the `code` gives the notation somewhere
+          to scroll INSIDE its share — a percentage rather than a fixed height because this console
+          is also read on a wall, where 8rem of a 2160px panel is a slot. */}
       {detail.kind === 'json' && (
-        <div className="shrink-0 border-t border-border bg-muted/30 p-2">
-          <div className="mb-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+        <div className="flex max-h-[35%] min-h-0 shrink-0 flex-col border-t border-border bg-muted/30 p-2">
+          <div className="mb-0.5 shrink-0 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
             as duckdb prints it
           </div>
-          <code className="block break-words font-mono text-[10.5px] text-muted-foreground">
+          <code className="block min-h-0 flex-1 overflow-auto break-words font-mono text-[10.5px] text-muted-foreground">
             {duckdbText(value)}
           </code>
         </div>

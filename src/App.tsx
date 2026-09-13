@@ -1,9 +1,16 @@
 /** App shell: the nav rail down the left, then the current surface.
  *
- * FIVE SURFACES, and Workflows is the centre. A workflow is a thread, each of its runs is a
+ * SEVEN SURFACES, and Workflows is the centre. A workflow is a thread, each of its runs is a
  * conversation, and everything else here is what a run calls (**Actors**), what it produces
- * (**Datasets**), the machines under it (**Monitor**), and what the whole appliance is configured
- * with (**Settings**).
+ * (**Datasets**), the machines under it (**Monitor**), the credentials it resolves (**Secrets**),
+ * and what the whole appliance is configured with (**Settings**).
+ *
+ * **Catalog** IS THE ONE THAT IS NOT ABOUT A RUNNING SYSTEM. It is the registry — everything this
+ * control plane knows about, searchable, including deployments whose code is on no disk here. The
+ * two work surfaces deliberately draw only what you can act on, which leaves "what is there"
+ * unanswered; this answers it and hands you over. It is first in the rail and is NOT the landing
+ * surface: an operator opens this console to see what their system is doing, and a search box in
+ * front of that answer would be a toll on every visit.
  *
  * TWO SURFACES WERE RETIRED, and neither was deleted from the address space.
  *
@@ -37,10 +44,12 @@ import { useAppStore } from './state/store';
 // CodeMirror SQL editor, and Monitor pulls xterm.js plus its CSS and talks to a DIFFERENT origin,
 // so a session that never opens it makes no cross-origin request at all. The light ones are lazy
 // for consistency: which surface is heavy should not be visible in this file's structure.
+const CatalogPage = lazy(() => import('./panels/CatalogPage'));
 const WorkflowsPage = lazy(() => import('./panels/WorkflowsPage'));
 const ActorsPage = lazy(() => import('./panels/ActorsPage'));
 const DatasetPage = lazy(() => import('./panels/DatasetPage'));
 const MonitorPage = lazy(() => import('./panels/DashboardPage'));
+const SecretsPage = lazy(() => import('./panels/SecretsPage'));
 const SettingsPage = lazy(() => import('./panels/SettingsPage'));
 
 /** How often the nav rail's Terminal count is refreshed when the Monitor is not mounted. Matches
@@ -175,12 +184,14 @@ export default function App(): JSX.Element {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  // All five are full-bleed beside the rail. Monitor in particular must not sit in a narrower
+  // All of them are full-bleed beside the rail. Monitor in particular must not sit in a narrower
   // column: a Terminal is sized to its container's measured cols/rows, so anything that shrinks the
   // wall shrinks every session on it.
   return (
     <Shell>
-      {view === 'workflows' ? (
+      {view === 'catalog' ? (
+        <CatalogPage />
+      ) : view === 'workflows' ? (
         <WorkflowsPage />
       ) : view === 'actors' ? (
         <ActorsPage />
@@ -188,6 +199,8 @@ export default function App(): JSX.Element {
         <DatasetPage />
       ) : view === 'monitor' ? (
         <MonitorPage />
+      ) : view === 'secrets' ? (
+        <SecretsPage />
       ) : (
         <SettingsPage />
       )}

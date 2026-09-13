@@ -16,7 +16,49 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // installed. ADR 0038 split them, so the shared kernel is published as `@kontra/core` and imported
 // by name like anything else. `@` stays — it is the app's own src, the shadcn/ui convention its
 // copied components import by.
-export default defineConfig({
+/**
+ * A PRODUCTION BUILD MUST NOT CARRY A BEARER — and this guard used to say the opposite.
+ *
+ * The console authenticated with `VITE_KONTRA_EXPLORE_TOKEN`, baked in at build time, and the first
+ * version of this check REQUIRED it: a tokenless bundle sent no `Authorization`, the fail-closed
+ * `/api/datasets/query` refused it, and the whole workbench answered `query: unauthorized` with
+ * nothing in the build to say why. Measured on the live instance, by causing it — `dist/` here is
+ * bind-mounted read-only into the running orchestrator, so a `pnpm build` run for an unrelated
+ * reason does not produce an artifact to deploy later, it REPLACES what is being served.
+ *
+ * ADR 0045 removed the reason rather than the symptom. The operator signs in against the credential
+ * on the filesystem and the server hands back a session token, so the browser gets its bearer at
+ * RUNTIME and the bundle needs none. Which inverts this file's job: a token in the artifact is now
+ * a leak with no upside — it cannot rotate, it is the same for every operator, and it outlives the
+ * container in whatever registry or backup holds the image.
+ *
+ * So the check stands, pointing the other way. It is the one place a build can notice.
+ */
+function refuseBakedCredential(command: string, mode: string): void {
+  if (command !== 'build' || mode === 'test') return;
+  const baked = (process.env.VITE_KONTRA_EXPLORE_TOKEN ?? '').trim();
+  if (baked === '') return;
+  throw new Error(
+    [
+      'refusing to build: VITE_KONTRA_EXPLORE_TOKEN is set.',
+      '',
+      'The console no longer reads it. Since ADR 0045 the browser gets its bearer by SIGNING IN —',
+      '`kontra init` generates the credential at install and prints it once — so a token baked into',
+      'the bundle is a credential in a build artifact with nothing to buy: it cannot be rotated, it',
+      'is identical for every operator, and it outlives this container in any image that keeps it.',
+      '',
+      'Unset it and build again:',
+      '',
+      '    unset VITE_KONTRA_EXPLORE_TOKEN && pnpm build',
+      '',
+      'If a Makefile or CI job is passing it, that is the thing to fix — it is no longer read.',
+    ].join('\n')
+  );
+}
+
+export default defineConfig(({ command, mode }) => {
+  refuseBakedCredential(command, mode);
+  return {
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -107,4 +149,5 @@ export default defineConfig({
     setupFiles: ['./src/vitest.setup.ts'],
     pool: 'vmThreads',
   },
+  };
 });

@@ -234,6 +234,40 @@ interface AppState {
   setActorFolderCount: (n: number) => void;
 
   /**
+   * How many entries the Catalog lists — published by that surface, on the same terms as the two
+   * counts above.
+   *
+   * IT IS NOT THEIR SUM, and that is the whole reason it is its own number. The Catalog draws
+   * workflow folders plus every Actor this control plane knows about, INCLUDING the ones whose code
+   * is not on this disk — which the Actors surface deliberately refuses to draw, because nothing on
+   * a page of things you cannot edit, serve, call or forget is actionable. Browsing is a different
+   * verb from working, so the two inventories differ on purpose and adding the other two numbers
+   * would print a total that matches neither page.
+   */
+  catalogCount: number | null;
+  setCatalogCount: (n: number) => void;
+
+  /**
+   * The Actor the Actors surface should reveal when it next renders.
+   *
+   * THE WAY OUT OF THE CATALOG, and the same shape as {@link AppState.focusTerminal} and
+   * {@link AppState.datasetFocus}: consumed once and cleared, because it is a navigation and not a
+   * selection. The Actors surface has no id in its address — one card in a grid is not a place, and
+   * `/actors` is what an operator pastes — so a reveal cannot be expressed as a URL and is held
+   * here instead.
+   *
+   * IT PRESETS THE EXISTING NAME FILTER rather than adding a second mechanism. That page already
+   * narrows by name and already says "showing 1 of 23", which is the honest landing state for
+   * "open this one": the operator can see what was filtered out and clear it in one click, where a
+   * scroll-and-flash would leave them in a grid with no idea why it moved.
+   */
+  actorFocus: string | null;
+  /** Go to the Actors surface and reveal one Actor. The two always happen together — a focus with
+   *  no surface change is a link that appears to do nothing. */
+  openActor: (name: string) => void;
+  clearActorFocus: () => void;
+
+  /**
    * Every Dataset, and how fast rows are landing in them.
    *
    * ONE POLLER, not one per surface. Three surfaces want this listing — a run detail watches
@@ -476,6 +510,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setScratchCount: (scratchCount) => set({ scratchCount }),
   actorFolderCount: null,
   setActorFolderCount: (actorFolderCount) => set({ actorFolderCount }),
+  catalogCount: null,
+  setCatalogCount: (catalogCount) => set({ catalogCount }),
+
+  actorFocus: null,
+  openActor: (actorFocus) => {
+    set({ actorFocus, view: 'actors' });
+    addressed(get());
+  },
+  clearActorFocus: () => set({ actorFocus: null }),
 
   datasets: [],
   datasetsError: null,

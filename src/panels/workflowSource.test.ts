@@ -302,3 +302,35 @@ describe('one-hop string bindings', () => {
     expect(stringBindings('x = catalog.actor(name="probe")\n').has('name')).toBe(false);
   });
 });
+
+describe('both SDK package names are read (ADR 0044)', () => {
+  // `actorkit` became `kontra` and the old name is a deprecation alias that is NOT scheduled for
+  // removal — so both spellings are live Python a real workflow may contain. Matching only one
+  // would read a working file and silently report no prerequisites, because `moduleAliases` falls
+  // back to the canonical prefix when it recognises no import. The miss would be invisible.
+  for (const pkg of ['kontra', 'actorkit'] as const) {
+    it(`reads a plain import from ${pkg}`, () => {
+      expect(moduleAliases(`from ${pkg} import catalog, fleet\n`, 'catalog')).toEqual(['catalog']);
+      expect(moduleAliases(`from ${pkg} import catalog, fleet\n`, 'fleet')).toEqual(['fleet']);
+    });
+
+    it(`follows an alias through ${pkg}, which is where a miss actually costs something`, () => {
+      // The fallback masks a missed plain import; it cannot mask a missed ALIAS, because the call
+      // sites are spelled `cat.actor(...)` and nothing would match them.
+      expect(moduleAliases(`from ${pkg} import catalog as cat\n`, 'catalog')).toEqual(['cat']);
+      expect(
+        workflowRefs(`from ${pkg} import catalog as cat\nx = cat.actor("probe", "0.1.0")\n`)
+      ).toEqual([{ kind: 'actor', name: 'probe', version: '0.1.0' }]);
+    });
+
+    it(`reads a module import from ${pkg}`, () => {
+      expect(moduleAliases(`import ${pkg}.catalog\n`, 'catalog')).toEqual([`${pkg}.catalog`]);
+      expect(moduleAliases(`import ${pkg}.catalog as c\n`, 'catalog')).toEqual(['c']);
+    });
+  }
+
+  it('does not match a package that merely starts the same way', () => {
+    // NON-VACUOUS: the alternation must not become a substring match. `kontrafoo` is nobody's SDK.
+    expect(moduleAliases('from kontrafoo import catalog as cat\n', 'catalog')).toEqual(['catalog']);
+  });
+});

@@ -140,27 +140,35 @@ export function workflowDefns(source: string): string[] {
 /**
  * The local name(s) each caller-side module is bound to in this file.
  *
- * `from actorkit import catalog, fleet` is the canonical spelling and what every example uses, but
+ * `from kontra import catalog, fleet` is the canonical spelling and what every example uses, but
  * an alias is legal Python and silently changes every call site. Returning the prefixes rather
  * than hard-coding one keeps the scan honest about the file in front of it.
  *
- * LIMIT: a prefix is required, so `from actorkit.catalog import actor` and a bare `actor("x")` is
+ * BOTH PACKAGE NAMES ARE ACCEPTED — ADR 0044 renamed `actorkit` to `kontra` and kept the old name as
+ * an alias that is not scheduled for removal, so both spellings are live Python that a real workflow
+ * may contain. Matching only the new one would read a working file and report no prerequisites; the
+ * fallback below hides that by assuming the canonical prefix, so the miss would be SILENT and the
+ * actor references would simply be absent from the checklist.
+ *
+ * LIMIT: a prefix is required, so `from kontra.catalog import actor` and a bare `actor("x")` is
  * not seen. Deliberate — a bare `actor(` is too common a name to attribute to this module without
  * a real parser, and a WRONG prerequisite is worse than a missing one in a checklist.
  */
+const SDK_PACKAGE = '(?:kontra|actorkit)';
+
 export function moduleAliases(source: string, module: 'catalog' | 'fleet'): string[] {
   const clean = stripCommentsAndDocstrings(source);
   const aliases: string[] = [];
-  for (const m of clean.matchAll(/^\s*from\s+actorkit\s+import\s+([^\n]+)/gm)) {
+  for (const m of clean.matchAll(new RegExp(`^\\s*from\\s+${SDK_PACKAGE}\\s+import\\s+([^\\n]+)`, 'gm'))) {
     for (const part of (m[1] ?? '').split(',')) {
       const named = new RegExp(`^\\s*${module}(?:\\s+as\\s+([A-Za-z_]\\w*))?\\s*$`).exec(part);
       if (named) aliases.push(named[1] ?? module);
     }
   }
   for (const m of clean.matchAll(
-    new RegExp(`^\\s*import\\s+actorkit(?:\\.${module})?(?:\\s+as\\s+([A-Za-z_]\\w*))?`, 'gm')
+    new RegExp(`^\\s*import\\s+(${SDK_PACKAGE})(?:\\.${module})?(?:\\s+as\\s+([A-Za-z_]\\w*))?`, 'gm')
   )) {
-    aliases.push(m[1] ?? `actorkit.${module}`);
+    aliases.push(m[2] ?? `${m[1]}.${module}`);
   }
   // No recognizable import: assume the canonical spelling rather than reporting no prerequisites
   // at all. A file with `catalog.actor(...)` in it references an actor whatever its imports look

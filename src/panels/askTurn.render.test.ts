@@ -424,10 +424,12 @@ describe('a surface with nowhere to send a signal', () => {
 
 describe('the chrome says a run is waiting on you', () => {
   const counts: Record<View, number | null> = {
+    catalog: 7,
     workflows: 3,
     actors: 4,
     datasets: 11,
     monitor: 2,
+    secrets: null,
     settings: null,
   };
 
