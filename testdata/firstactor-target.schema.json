@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "File": {
+      "properties": {
+        "contentType": {
+          "default": "",
+          "title": "Contenttype",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "sha256",
+        "size"
+      ],
+      "title": "File",
+      "type": "object",
+      "x-kontra-input": "file"
+    },
+    "Folder": {
+      "properties": {
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Folder",
+      "type": "object",
+      "x-kontra-input": "folder"
+    }
+  },
+  "properties": {
+    "corpus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Folder"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "follow_redirects": {
+      "default": false,
+      "title": "Follow Redirects",
+      "type": "boolean"
+    },
+    "host": {
+      "title": "Host",
+      "type": "string"
+    },
+    "mode": {
+      "default": "quick",
+      "enum": [
+        "quick",
+        "deep"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "wordlist": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/File"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "host"
+  ],
+  "title": "Target",
+  "type": "object"
+}

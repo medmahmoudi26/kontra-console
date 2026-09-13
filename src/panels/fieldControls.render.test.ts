@@ -159,6 +159,65 @@ describe('against a schema pydantic actually emitted', () => {
   });
 });
 
+/**
+ * THE TEMPLATE ACTOR'S OWN FORM, which is the claim `examples/python/firstactor` makes in its
+ * first sentence: every control the console can draw, on one Method. A README can say that and be
+ * wrong the next time a control is added; this fails when it becomes wrong.
+ *
+ * The fixture is `TypeAdapter(Target).json_schema()` for that actor's input model, captured from
+ * the SDK with docstrings stripped. It carries the one case the other fixture does not — a REAL
+ * `Literal["quick","deep"]`, which is what an author writes to get a dropdown.
+ */
+describe("the template actor's Target draws all five controls", () => {
+  const schema = JSON.parse(
+    readFileSync(join(__dirname, '..', '..', 'testdata', 'firstactor-target.schema.json'), 'utf8')
+  ) as JsonSchema;
+  const nodes = schemaTree(schema);
+  const by = (name: string) => nodes!.find((n) => n.name === name);
+
+  it('read the fixture', () => {
+    // The guard on the guard: a fixture that failed to parse satisfies every `?.` below.
+    expect(nodes).not.toBeNull();
+    expect(nodes!.map((n) => n.name).sort()).toEqual([
+      'corpus',
+      'follow_redirects',
+      'host',
+      'mode',
+      'wordlist',
+    ]);
+  });
+
+  it('is five DISTINCT controls, which is the whole claim', () => {
+    // Asserted as a set rather than field by field: five assertions that each passed would still
+    // let a reader that answered `text` for everything look nearly right in a diff.
+    const drawn = nodes!.map((n) => n.control ?? 'text').sort();
+    expect(drawn).toEqual(['file', 'folder', 'select', 'text', 'toggle']);
+  });
+
+  it('a Literal from pydantic is a dropdown, with both arms on it', () => {
+    expect(by('mode')?.control).toBe('select');
+    expect(by('mode')?.enum).toEqual(['quick', 'deep']);
+  });
+
+  it('an OPTIONAL File and Folder are still drop zones', () => {
+    // Both are `X | None` here, so the marker is two indirections down — through the union, then
+    // through the pointer — and both must stay `leaf` or the form draws their properties.
+    expect(by('wordlist')?.control).toBe('file');
+    expect(by('wordlist')?.kind).toBe('leaf');
+    expect(by('corpus')?.control).toBe('folder');
+    expect(by('corpus')?.kind).toBe('leaf');
+  });
+
+  it('the plain string stays a box', () => {
+    expect(by('host')?.control).toBeUndefined();
+    expect(by('host')?.required).toBe(true);
+  });
+
+  it('the bool is a toggle', () => {
+    expect(by('follow_redirects')?.control).toBe('toggle');
+  });
+});
+
 describe('a boolean toggle', () => {
   const bool = field({ name: 'dryRun', type: 'boolean', control: 'toggle' });
 
