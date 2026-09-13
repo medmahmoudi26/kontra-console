@@ -1305,10 +1305,19 @@ function WorkflowList({
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
         {rows.length === 0 ? (
           <p className="m-0 p-2 text-[11px] text-muted-foreground">
-            No folders registered, so there is nothing to serve. Run{' '}
-            <code className="font-mono">kontra init</code> and drop a workflow folder under{' '}
-            <code className="font-mono">{dir || '.kontra/workflows/'}</code>, or register one holding{' '}
-            <code className="font-mono">workflow.py</code> from anywhere on this disk.
+            {/* IT NAMED ONE FILE AND REGISTRATION WANTS TWO, which is how somebody spends an
+                evening on a folder that will not register (issue #4). `workflow.py` is what RUNS;
+                `workflow.json` is what registration READS — the name, the version and the entry it
+                records — and the refusal for a folder without it is the one a first-time user is
+                most likely to meet. Naming the command that writes it is shorter than explaining
+                the format. */}
+            No folders registered, so there is nothing to serve. Drop a workflow folder under{' '}
+            <code className="font-mono">{dir || '.kontra/workflows/'}</code>, or register one from{' '}
+            anywhere on this disk — a folder holding{' '}
+            <code className="font-mono">workflow.py</code> and{' '}
+            <code className="font-mono">workflow.json</code> beside it.{' '}
+            <code className="font-mono">kontra workflow register &lt;dir&gt; --init</code> writes the
+            second one for you.
           </p>
         ) : (
           rows.map(({ name: rowName, file, folder }) => {
