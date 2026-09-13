@@ -23,8 +23,6 @@
 import type { ReactNode } from 'react';
 
 import { useAppStore, type Theme } from '../state/store';
-import SecretsSection from './SecretsSection';
-import SlotBindingsSection from './SlotBindings';
 import { Button } from '@/components/ui/button';
 
 export interface SettingsSection {
@@ -144,22 +142,6 @@ export default function SettingsPage(): JSX.Element {
   const setTheme = useAppStore((s) => s.setTheme);
 
   const sections: SettingsSection[] = [
-    {
-      id: 'secrets',
-      title: 'Secrets',
-      blurb:
-        'Named, versioned references — never inlined. Workflow code names a secret and the worker resolves it at the last hop; an actor fetches its own at load, authenticated as itself. A value is never handed through a Batch, an activity argument or a workflow argument, because workflow history keeps all three in the clear.',
-      state: 'ready',
-      body: <SecretsSection />,
-    },
-    {
-      id: 'bindings',
-      title: 'Credential bindings',
-      blurb:
-        'Actors declare slots; you bind them. A third-party actor\u2019s author cannot know your secret names, so it declares `api_key` and you point that at whichever of your secrets it should be \u2014 and it never learns which. What an actor will ask for is listed before it runs, a new slot in a new version reads as a change, and every read and every refusal is in the ledger at the bottom.',
-      state: 'ready',
-      body: <SlotBindingsSection />,
-    },
     {
       id: 'appearance',
       title: 'Appearance',

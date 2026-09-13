@@ -428,6 +428,7 @@ describe('the chrome says a run is waiting on you', () => {
     actors: 4,
     datasets: 11,
     monitor: 2,
+  secrets: null,
     settings: null,
   };
 

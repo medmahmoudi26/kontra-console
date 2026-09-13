@@ -41,6 +41,7 @@ const WorkflowsPage = lazy(() => import('./panels/WorkflowsPage'));
 const ActorsPage = lazy(() => import('./panels/ActorsPage'));
 const DatasetPage = lazy(() => import('./panels/DatasetPage'));
 const MonitorPage = lazy(() => import('./panels/DashboardPage'));
+const SecretsPage = lazy(() => import('./panels/SecretsPage'));
 const SettingsPage = lazy(() => import('./panels/SettingsPage'));
 
 /** How often the nav rail's Terminal count is refreshed when the Monitor is not mounted. Matches
@@ -188,6 +189,8 @@ export default function App(): JSX.Element {
         <DatasetPage />
       ) : view === 'monitor' ? (
         <MonitorPage />
+      ) : view === 'secrets' ? (
+        <SecretsPage />
       ) : (
         <SettingsPage />
       )}

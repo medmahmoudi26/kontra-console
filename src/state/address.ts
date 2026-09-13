@@ -74,7 +74,10 @@ export type Address =
    * of those bytes out of the path, so what the server has to recognise stays `/workflows`.
    */
   | { view: 'workflows'; workflow: string | null; run: string | null; pane: string | null }
-  | { view: 'actors' | 'settings' }
+  // `secrets` joins the arms that carry NOTHING. A secret is never addressable from the bar:
+  // naming one in a URL would put it in history and in every referrer, and the whole point of the
+  // store is that a value never leaves it. The surface is addressable; a secret is not.
+  | { view: 'actors' | 'secrets' | 'settings' }
   | { view: 'monitor'; terminal: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 

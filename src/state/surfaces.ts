@@ -33,7 +33,7 @@
  * The union is what makes {@link SURFACE_DETAIL}'s `Record` a compile-time guard: a sixth surface
  * that nobody gives a path, a label and a hint fails to build the day it is added.
  */
-export type View = 'workflows' | 'actors' | 'datasets' | 'monitor' | 'settings';
+export type View = 'workflows' | 'actors' | 'datasets' | 'monitor' | 'secrets' | 'settings';
 
 /** What the rail needs to draw one item, and what the router needs to address it. */
 export interface Surface {
@@ -76,14 +76,19 @@ const SURFACE_DETAIL: Record<View, Omit<Surface, 'id'>> = {
     label: 'Monitor',
     hint: 'the wall of read-only Terminals over tmux',
   },
+  secrets: {
+    path: '/secrets',
+    label: 'Secrets',
+    hint: 'named secrets, the actor slots they are bound to, and who read one — write-only, never readable back',
+  },
   settings: {
     path: '/settings',
     label: 'Settings',
-    hint: 'secrets and configuration — named, bound to an actor’s slots, and never readable back',
+    hint: 'this installation: the control plane it talks to, and how it is displayed',
   },
 };
 
-/** The five, in nav order. */
+/** Every surface, in nav order. */
 export const SURFACES: readonly Surface[] = ORDER.map((id) => ({ id, ...SURFACE_DETAIL[id] }));
 
 /** Every live surface's path, keyed by view. The `Record` is the guard — see {@link View}. */

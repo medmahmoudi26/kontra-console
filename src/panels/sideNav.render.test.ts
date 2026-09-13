@@ -94,7 +94,7 @@ const PARK: PulsePark = { runId: 'dnssweep-1787', workflow: 'DnsSweep', pending:
 /** Nothing counted, nothing measured, and the pulse not yet read — a session that has just loaded. */
 const EMPTY: NavRailProps = {
   view: 'workflows',
-  counts: { workflows: null, actors: null, datasets: null, monitor: null, settings: null },
+  counts: { workflows: null, actors: null, datasets: null, monitor: null, secrets: null, settings: null },
   pulse: UNREAD,
   collapsed: false,
   theme: 'dark',
@@ -110,7 +110,7 @@ const EMPTY: NavRailProps = {
 /** Every surface has reported its inventory, two Machines are attached and two runs are going. */
 const LOADED: NavRailProps = {
   ...EMPTY,
-  counts: { workflows: 3, actors: 2, datasets: 11, monitor: 4, settings: null },
+  counts: { workflows: 3, actors: 2, datasets: 11, monitor: 4, secrets: null, settings: null },
   pulse: reading({ running: 2 }),
   wall: { panes: 4, live: 2 },
   fleetSeries: [0, 41, 118],

@@ -48,6 +48,7 @@
  */
 
 import {
+  KeyRound,
   Boxes,
   Database,
   LayoutGrid,
@@ -79,6 +80,7 @@ const ICONS: Record<View, LucideIcon> = {
   actors: Boxes,
   datasets: Database,
   monitor: LayoutGrid,
+  secrets: KeyRound,
   settings: Settings,
 };
 
@@ -491,6 +493,11 @@ export function SideNav(): JSX.Element {
   const waiting = stillParked(parked, runs);
 
   const counts: Record<View, number | null> = {
+    // NO NUMBER ON SECRETS, deliberately. A count here is "how many secrets exist" — the one fact
+    // about a write-only store that is worth nothing to an operator and is a hint to anybody else.
+    // UNBOUND slots are worth surfacing, and they belong on the surface itself, where the actor
+    // they block can be named.
+    secrets: null,
     // `null` where the number is not known yet — the Workflows page publishes its own file count
     // when it loads, and a rail that printed 0 before then would be stating something false about
     // a directory it has not read.
