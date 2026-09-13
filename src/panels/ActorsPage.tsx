@@ -112,6 +112,25 @@ export default function ActorsPage() {
   const [calling, setCalling] = useState<{ key: string; method: string } | null>(null);
   const [filter, setFilter] = useState<ActorFilter>(EMPTY_ACTOR_FILTER);
   /**
+   * THE CATALOG'S WAY IN. `openActor` sets a name and this surface; this consumes it into the name
+   * filter and clears it.
+   *
+   * A FILTER RATHER THAN A SCROLL-AND-FLASH, and that is the honest landing state for "open this
+   * one": the bar already says "showing 1 of 23", so the operator can see that something was
+   * narrowed and clear it in a click. A grid that silently scrolled would leave them somewhere they
+   * did not ask to be with nothing saying why.
+   *
+   * CONSUMED ONCE, like every other reveal in the store — otherwise pressing `clear` would be
+   * undone by the next render, which is a filter bar that fights the person using it.
+   */
+  const actorFocus = useAppStore((s) => s.actorFocus);
+  const clearActorFocus = useAppStore((s) => s.clearActorFocus);
+  useEffect(() => {
+    if (actorFocus === null) return;
+    setFilter((prev) => ({ ...prev, name: actorFocus }));
+    clearActorFocus();
+  }, [actorFocus, clearActorFocus]);
+  /**
    * WHO IS POLLING EACH ACTOR'S QUEUE, by queue name — the only authority on "can this run".
    *
    * A queue with NO ENTRY is not the same as one nobody polls: the card draws a missing entry as

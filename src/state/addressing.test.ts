@@ -188,7 +188,19 @@ describe('the store writing the bar', () => {
       useAppStore.getState().setView(view);
       expect(bar.url()).toBe(`/${view}`);
     }
-    expect(bar.entries).toEqual(['/workflows', '/actors', '/datasets', '/monitor', '/settings']);
+    // `/workflows` first because that is where the store rests; the rest in rail order. Every one
+    // of them has to PRINT, which is the half a `Record<View, string>` cannot promise — a path the
+    // record was missing is `undefined` at runtime and typed `string`, and that is exactly how a
+    // finished surface once shipped with no address at all.
+    expect(bar.entries).toEqual([
+      '/workflows',
+      '/catalog',
+      '/actors',
+      '/datasets',
+      '/monitor',
+      '/secrets',
+      '/settings',
+    ]);
   });
 
   it('addresses a workflow thread', () => {

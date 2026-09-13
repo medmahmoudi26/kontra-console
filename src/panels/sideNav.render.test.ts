@@ -94,7 +94,15 @@ const PARK: PulsePark = { runId: 'dnssweep-1787', workflow: 'DnsSweep', pending:
 /** Nothing counted, nothing measured, and the pulse not yet read — a session that has just loaded. */
 const EMPTY: NavRailProps = {
   view: 'workflows',
-  counts: { workflows: null, actors: null, datasets: null, monitor: null, secrets: null, settings: null },
+  counts: {
+    catalog: null,
+    workflows: null,
+    actors: null,
+    datasets: null,
+    monitor: null,
+    secrets: null,
+    settings: null,
+  },
   pulse: UNREAD,
   collapsed: false,
   theme: 'dark',
@@ -110,7 +118,15 @@ const EMPTY: NavRailProps = {
 /** Every surface has reported its inventory, two Machines are attached and two runs are going. */
 const LOADED: NavRailProps = {
   ...EMPTY,
-  counts: { workflows: 3, actors: 2, datasets: 11, monitor: 4, secrets: null, settings: null },
+  counts: {
+    catalog: 5,
+    workflows: 3,
+    actors: 2,
+    datasets: 11,
+    monitor: 4,
+    secrets: null,
+    settings: null,
+  },
   pulse: reading({ running: 2 }),
   wall: { panes: 4, live: 2 },
   fleetSeries: [0, 41, 118],
@@ -376,7 +392,12 @@ describe('what the tooltip says', () => {
    * actually meets, which is strictly more than the old tests said: they pinned a return value and
    * never once checked that the rail put it on the button.
    */
-  const hint = SURFACES[0]!.hint;
+  // BY ID, NOT BY POSITION. This was `SURFACES[0]`, paired with the literal label `Workflows` —
+  // which held until a surface was added above it in the rail and the two halves started describing
+  // different items. A test that pins an order should pin it on purpose (`surfaces.test.ts` does),
+  // not by indexing into it for something else.
+  const workflows = SURFACES.find((s) => s.id === 'workflows')!;
+  const hint = workflows.hint;
 
   it('is just the hint when expanded — the label and count are already on screen', () => {
     expect(draw({ ...LOADED, collapsed: false })).toContain(`title="${hint}"`);

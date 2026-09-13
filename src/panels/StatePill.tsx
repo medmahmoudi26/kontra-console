@@ -30,6 +30,13 @@ const PILL: Record<string, string> = {
   // Materialization — authority the ledger.
   complete: 'bg-sky-500/15 text-sky-500',
   writing: 'bg-amber-500/15 text-amber-500',
+  // REGISTRY — what the Catalog draws over workflows and actors alike (`panels/catalog.ts`), and
+  // the same words `run/workflowState.ts` already uses. Only `serving` is given a colour: it is the
+  // one that says something is live. `idle`, `unserved` and `unknown` all take the muted fallback
+  // below on purpose — nothing is happening in any of the three, and the difference between them
+  // is a sentence (the pill's `title`), not a hue. Dimmer than `running` because a worker polling
+  // an empty queue is ready, not busy.
+  serving: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
 };
 
 /** `testid` is REQUIRED rather than defaulted, and that is a correction: the same pill draws a

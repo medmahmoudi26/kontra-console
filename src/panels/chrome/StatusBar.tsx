@@ -82,7 +82,10 @@ export default memo(function StatusBar({ stats, phase, tickMs = 1000 }: StatusBa
 
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border bg-card px-2 py-1 text-[11px] text-muted-foreground"
+      // NOT A BOX. This was `rounded border bg-card` — a bordered, filled card sitting under a
+      // wall of bordered, filled tiles, which reads as a footer bolted to the page rather than as a
+      // readout belonging to it. The words are unchanged; what went is the frame around them.
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-[11px] text-muted-foreground"
       data-testid="status-bar"
       // DELIBERATELY NOT A LIVE REGION. `role="status"` here would be the obvious accessible choice and it
       // is the wrong one: the snapshot age changes every second, so a polite live region would have a screen

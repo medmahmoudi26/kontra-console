@@ -48,9 +48,9 @@ import type { DatasetFocus } from './store';
 /**
  * Where the app is, as the bar says it.
  *
- * Three of the five surfaces address an entity and two do not, which is why this is a union and
- * not a record with three mostly-null fields: `{ view: 'actors', run: null, terminal: null,
- * dataset: null }` invites code that reads `run` on the Actors surface.
+ * Three surfaces address an entity and four do not, which is why this is a union and not a record
+ * with three mostly-null fields: `{ view: 'actors', run: null, terminal: null, dataset: null }`
+ * invites code that reads `run` on the Actors surface.
  */
 export type Address =
   /**
@@ -77,7 +77,13 @@ export type Address =
   // `secrets` joins the arms that carry NOTHING. A secret is never addressable from the bar:
   // naming one in a URL would put it in history and in every referrer, and the whole point of the
   // store is that a value never leaves it. The surface is addressable; a secret is not.
-  | { view: 'actors' | 'secrets' | 'settings' }
+  // `catalog` and `secrets` join the arms that carry NOTHING, for opposite reasons. A secret is
+  // never addressable from the bar: naming one in a URL would put it in history and in every
+  // referrer, and the whole point of the store is that a value never leaves it. The Catalog's
+  // filter is not addressed because it is not an entity — a search box and three chips are how you
+  // FIND the thing whose own address is the one worth pasting, and two ways to link one workflow is
+  // a link that does not round-trip. The surface is addressable; a query within it is not.
+  | { view: 'actors' | 'catalog' | 'secrets' | 'settings' }
   | { view: 'monitor'; terminal: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 

@@ -1423,7 +1423,9 @@ function WorkflowList({
       )}
 
       {openType && (
-        <div className="shrink-0 border-t border-border px-3.5 py-2 text-[9.5px] text-muted-foreground">
+        // A FOOTNOTE, NOT A FOOTER. It was `border-t` across the foot of the column, which drew a
+        // rule under the list and made one sentence of explanation look like page chrome.
+        <div className="shrink-0 px-3.5 pb-2 pt-1 text-[9.5px] text-muted-foreground">
           the dot on the open workflow is measured; the others report only their runs
         </div>
       )}

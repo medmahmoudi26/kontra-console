@@ -46,8 +46,20 @@ function roundTrip(url: string): { state: Partial<AddressedState>; url: string }
 describe('the address of a surface', () => {
   const VIEWS: View[] = SURFACES.map((s) => s.id);
 
-  it('covers all five and no more', () => {
-    expect(VIEWS).toEqual(['workflows', 'actors', 'datasets', 'monitor', 'settings']);
+  it('covers every surface and no more', () => {
+    // THIS IS THE ASSERTION THAT SHOULD HAVE CAUGHT AN UNREACHABLE SURFACE and did not, because it
+    // was left saying `all five` while a sixth was being added. Restating the list is the point —
+    // deriving it from `SURFACES` would make it true of whatever that module happens to say — so
+    // the cost of adding a surface is updating it here, deliberately, once.
+    expect(VIEWS).toEqual([
+      'catalog',
+      'workflows',
+      'actors',
+      'datasets',
+      'monitor',
+      'secrets',
+      'settings',
+    ]);
   });
 
   it.each(VIEWS)('round-trips /%s through the store and back', (view) => {
