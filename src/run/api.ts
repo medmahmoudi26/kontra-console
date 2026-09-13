@@ -1138,6 +1138,52 @@ export async function fetchExposure(): Promise<{ open: boolean; detail: string }
  * Returns `null` if the backend is unreachable (pure browser/localStorage flow), so a
  * transient failure is distinguishable from a genuinely empty catalog.
  */
+/**
+ * One uploaded file, as `POST /api/uploads` answers — and as a `File` field then carries it.
+ *
+ * `sha256` IS THE ADDRESS AND `name` IS NOT. The bytes live in the same content-addressed store the
+ * claim-check codec writes and `kontra.fetch_blob` reads, keyed by the hash; the name rides along
+ * for the ACTOR to read and is never used to find anything.
+ */
+export interface UploadedBlob {
+  name: string;
+  sha256: string;
+  size: number;
+  contentType: string;
+  /** The path inside the dropped directory, for a folder field — `2026/hosts.txt`. Absent for a
+   *  single file, which has no directory to be relative to. */
+  path?: string;
+}
+
+/**
+ * Put one file in the store and get back the ref a form field carries.
+ *
+ * RAW BODY, NOT MULTIPART. The route takes the bytes as the body and the name as a query parameter,
+ * which needs no parser plugin on either side; a folder is N of these calls, because a folder in a
+ * browser IS N files and inventing an archive format on the way in would mean unpacking one on the
+ * way out inside somebody's actor.
+ *
+ * THE AUTHORIZATION HEADER IS NOT SET HERE. `run/session.ts` wraps `fetch` and attaches the session
+ * bearer to everything; a header set here would be the one call that kept a stale token after a
+ * re-sign-in.
+ */
+export async function uploadBlob(file: File, relativePath?: string): Promise<UploadedBlob> {
+  const query = new URLSearchParams({ name: file.name });
+  if (file.type !== '') query.set('type', file.type);
+  const res = await fetch(`${BASE}/uploads?${query.toString()}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: file,
+  });
+  if (!res.ok) return asError(res, `upload ${file.name}`);
+  const blob = (await res.json()) as UploadedBlob;
+  // THE RELATIVE PATH IS THE CLIENT'S TO KEEP. The route deliberately reduces the name to its last
+  // segment — a name that travels into an actor must not be a path — so the directory structure a
+  // folder drop carries is held here, where it was read, rather than round-tripped through a route
+  // that is right not to trust it.
+  return relativePath === undefined || relativePath === '' ? blob : { ...blob, path: relativePath };
+}
+
 export async function fetchCatalog(): Promise<CatalogActor[] | null> {
   try {
     const res = await fetch(`${BASE}/actors`);
