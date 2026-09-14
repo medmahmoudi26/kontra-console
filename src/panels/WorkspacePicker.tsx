@@ -99,7 +99,7 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
           No workspaces mount. On the host:
         </p>
         <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-muted/40 p-1.5 font-mono text-[9px] text-foreground">
-          {list.mountHint || 'mkdir -p workspaces.kontra'}
+          {list.mountHint || 'mkdir -p workspaces.kontra beside kontra/'}
         </pre>
       </div>
     );
