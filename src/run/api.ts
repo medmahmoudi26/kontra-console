@@ -529,6 +529,44 @@ export async function fetchSources(
   return (await res.json()) as { defaultRoot: string; sources: Source[] };
 }
 
+/** Named workspaces under the Compose parent mount (actors/workflows only). */
+export interface WorkspaceList {
+  parent: string;
+  current: string;
+  names: string[];
+  currentPath: string;
+  mountHint: string;
+}
+
+export async function fetchWorkspaces(): Promise<WorkspaceList> {
+  const res = await fetch(`${BASE}/workspaces`);
+  if (!res.ok) return asError(res, 'list workspaces');
+  return (await res.json()) as WorkspaceList;
+}
+
+export async function useWorkspace(name: string): Promise<WorkspaceList> {
+  const res = await fetch(`${BASE}/workspaces/current`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) return asError(res, 'switch workspace');
+  return (await res.json()) as WorkspaceList;
+}
+
+export async function createWorkspace(
+  name: string,
+  opts: { seed?: boolean } = {}
+): Promise<WorkspaceList> {
+  const res = await fetch(`${BASE}/workspaces`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, seed: Boolean(opts.seed), use: true }),
+  });
+  if (!res.ok) return asError(res, 'create workspace');
+  return (await res.json()) as WorkspaceList;
+}
+
 export async function registerSource(kind: SourceKind, path: string): Promise<Source> {
   const res = await fetch(`${BASE}/sources/${kind}`, {
     method: 'POST',
