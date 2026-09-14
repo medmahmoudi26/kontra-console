@@ -74,18 +74,38 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
     );
   }
 
-  if (!list?.parent) {
+  if (error && !list) {
+    return (
+      <div className="border-b border-border px-3 py-2" data-testid="workspace-picker">
+        <p className="m-0 text-[10px] text-destructive" data-testid="workspace-error">
+          {error}
+        </p>
+      </div>
+    );
+  }
+
+  if (!list) {
+    return (
+      <div className="border-b border-border px-3 py-2" data-testid="workspace-picker">
+        <p className="m-0 text-[10px] text-muted-foreground">Loading workspaces…</p>
+      </div>
+    );
+  }
+
+  if (!list.parent) {
     return (
       <div className="border-b border-border px-3 py-2" data-testid="workspace-picker">
         <p className="m-0 text-[10px] leading-snug text-muted-foreground">
           No workspaces mount. On the host:
         </p>
         <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-muted/40 p-1.5 font-mono text-[9px] text-foreground">
-          {list?.mountHint ?? 'mkdir -p workspaces.kontra'}
+          {list.mountHint || 'mkdir -p workspaces.kontra'}
         </pre>
       </div>
     );
   }
+
+  const selectValue = list.names.includes(list.current) ? list.current : '';
 
   return (
     <div className="flex flex-col gap-1.5 border-b border-border px-3 py-2" data-testid="workspace-picker">
@@ -95,7 +115,7 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
         </span>
         <select
           className="rounded border border-border bg-background px-1.5 py-1 font-mono text-[11px] text-foreground"
-          value={list.current}
+          value={selectValue}
           disabled={busy || list.names.length === 0}
           onChange={(e) => onSelect(e.target.value)}
           data-testid="workspace-select"
@@ -103,11 +123,14 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
           {list.names.length === 0 ? (
             <option value="">(none)</option>
           ) : (
-            list.names.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))
+            <>
+              {!selectValue && <option value="">(select)</option>}
+              {list.names.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </>
           )}
         </select>
       </label>
