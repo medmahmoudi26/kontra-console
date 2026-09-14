@@ -67,6 +67,7 @@ import { useAppStore, type Theme, type View, type WallCounts } from '../state/st
 import { SURFACES } from '../state/surfaces';
 import { NAV_COLLAPSED_KEY, usePersistedFlag } from './chrome/persistedFlag';
 import { readPulse, type PulseReading, type PulseTone } from './chrome/pulse';
+import { WorkspacePicker } from './WorkspacePicker';
 
 /** Expanded. Was `w-60` (240px) — five short words never needed that, and every surface here is a
  *  full-height column that wanted the pixels more than the rail did. */
@@ -221,6 +222,8 @@ export function NavRail({
           </button>
         )}
       </div>
+
+      <WorkspacePicker collapsed={collapsed} />
 
       <div className={`flex flex-col gap-0.5 ${collapsed ? 'p-1.5' : 'p-2'}`}>
         {SURFACES.map((surface) => {
