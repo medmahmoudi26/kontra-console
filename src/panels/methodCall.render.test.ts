@@ -25,7 +25,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { callerFor } from '@kontra/core/caller';
-import { MethodCallPanel, type ServeReading } from './MethodCallPanes';
+import { MethodCallPanel, type ServeReading, runStopper } from './MethodCallPanes';
 import { draftFor, setCell, setJson, unitsOf, type BatchDraft } from './methodCall';
 import type { GeneratedCaller, ProbeReading, ProbeStarted } from '../run/api';
 import type { ActorOperation, CatalogActor } from '../types';
@@ -471,5 +471,44 @@ describe('what this panel cannot do', () => {
       expect(src).not.toContain('startRun');
       expect(src).not.toContain('stopRun');
     }
+  });
+});
+
+describe('a blocked Run always names the command', () => {
+  const CMD = 'docker exec -it kontra-api kontra serve --actor /w/qa/actors/hello --watch';
+  /* Built inline rather than with `serveWords`, and that is not laziness: importing
+     `./actorWorkers` here adds another arm to the `actorWorkers.ts` / `ActorWorkers.tsx` casing
+     collision that already stops this repo typechecking on macOS. `words` is `{label, title}` and
+     `runStopper` never reads it — it composes its own sentence. */
+  const reading = (state: ServeReading['state']): ServeReading => ({
+    state,
+    queue: 'hello-0.1.0',
+    words: { label: state, title: '' },
+    serving: 0,
+  });
+
+  it('puts the command in the STALE notice, which was the one branch that dropped it', () => {
+    // The most detailed diagnosis on the page used to end at "Serve this Actor again first" with
+    // no line to type — reported repeatedly, and the answer was always "run the command".
+    const said = runStopper(null, reading('stale'), CMD);
+    expect(said).toContain('none has polled recently');
+    expect(said).toContain(CMD);
+  });
+
+  it('still explains itself when no caller knows the command', () => {
+    const said = runStopper(null, reading('stale'), undefined);
+    expect(said).toContain('none has polled recently');
+    expect(said).toContain('Serve this Actor again first');
+  });
+
+  it('names it for every other blocked state too', () => {
+    for (const state of ['unknown', 'registered'] as const) {
+      expect(runStopper(null, reading(state), CMD), state).toContain(CMD);
+    }
+  });
+
+  it('says nothing at all while a worker is serving, or while the Batch is unparseable', () => {
+    expect(runStopper(null, reading('serving'), CMD)).toBeNull();
+    expect(runStopper('bad batch', reading('stale'), CMD)).toBeNull();
   });
 });

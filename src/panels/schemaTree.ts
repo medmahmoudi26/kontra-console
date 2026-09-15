@@ -161,6 +161,35 @@ export function schemaFields(schema?: JsonSchema): FieldNode[] | null {
  */
 export function schemaTree(schema?: JsonSchema): FieldNode[] | null {
   if (!schema || typeof schema !== 'object') return null;
+
+  /* THE ROOT GETS THE UNWRAPPING EVERY PROPERTY ALREADY GOT, and its not getting it was a real bug
+     rather than an omission of taste.
+     `resolveShape` is reached from `nodeOf` and `elementOf` only — properties and array elements.
+     The root was handed straight to `childrenOf`, which answers `null` for any document without
+     top-level `properties`. So the one spelling `resolveShape` exists to undo — its docstring says
+     "`anyOf` with a `null` arm is its spelling for an optional one" — defeated the whole tree when
+     it appeared at the top.
+     WHY ACTORS NEVER HIT IT: a Method says `takes=Target`, never `Target | None`, so an actor's root
+     always carries `properties`. A WORKFLOW's argument is routinely optional —
+     `async def run(self, req: HelloRequest | None = None)` — and pydantic derives
+     `anyOf: [{$ref: HelloRequest}, {type: null}]` with the fields parked in `$defs`. MEASURED: that
+     exact schema returned `null` here, `draftForInput` turned the `null` into `why: 'no-fields'`,
+     and the page drew "This workflow declares an open input (any object). Type its one argument as
+     JSON" over a model with three required fields.
+     A GENUINE UNION IS STILL REFUSED. `A | B` has two non-null arms and there is no honest single
+     form for it; picking the first would collect something that validates against one arm and
+     silently not the other — tolerable at a property, where it costs one field, and not at the
+     ROOT, where it is the whole argument. `Model | None` always has exactly one. */
+  const p = schema as { properties?: unknown; anyOf?: unknown };
+  if (!p.properties) {
+    const arms = Array.isArray(p.anyOf) ? p.anyOf.filter((a) => !isNullArm(a)) : null;
+    if (!arms || arms.length === 1) {
+      const resolved = resolveShape(schema, schema, new Set());
+      if (resolved && resolved.schema !== schema) {
+        return childrenOf(resolved.schema, schema, '', resolved.seen, 0);
+      }
+    }
+  }
   return childrenOf(schema, schema, '', new Set(), 0);
 }
 

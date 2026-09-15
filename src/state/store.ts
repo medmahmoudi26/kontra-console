@@ -234,6 +234,17 @@ interface AppState {
   setActorFolderCount: (n: number) => void;
 
   /**
+   * WHICH WORKSPACE IS CURRENT, and where the workspaces tree is rooted.
+   *
+   * Here rather than in `WorkspacePicker`'s own state because the Actors grid needs it too, and a
+   * second fetch would be a second answer to a question that changes only when someone switches.
+   * `null` until the picker has loaded; every reader must treat that as "do not filter yet" rather
+   * than as "no workspace", or a card blinks out of existence for one render.
+   */
+  workspace: { current: string; parent: string } | null;
+  setWorkspace: (w: { current: string; parent: string } | null) => void;
+
+  /**
    * How many entries the Catalog lists — published by that surface, on the same terms as the two
    * counts above.
    *
@@ -510,6 +521,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setScratchCount: (scratchCount) => set({ scratchCount }),
   actorFolderCount: null,
   setActorFolderCount: (actorFolderCount) => set({ actorFolderCount }),
+  workspace: null,
+  setWorkspace: (workspace) => set({ workspace }),
   catalogCount: null,
   setCatalogCount: (catalogCount) => set({ catalogCount }),
 

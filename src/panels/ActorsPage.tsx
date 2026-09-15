@@ -77,7 +77,8 @@ import { RegisterFolder } from './RegisterFolder';
 import { useRegisteredFolders } from './RegisteredFolders';
 import { FolderWorkbench } from './FolderWorkbench';
 import { MethodCall } from './MethodCall';
-import { catalogForFolder, folderForActor } from './sourceFolders';
+import { methodFromDisk, shapeSig, useDiskSchema } from './diskSchema';
+import { catalogForFolder, folderForActor, workspaceOf } from './sourceFolders';
 import { ActorFilterBar } from './ActorFilterBar';
 import { actorNames, matchActor, EMPTY_ACTOR_FILTER, type ActorFilter } from './actorFilter';
 import { Button } from '@/components/ui/button';
@@ -100,6 +101,8 @@ export default function ActorsPage() {
   const loadPanes = useAppStore((s) => s.loadPanes);
   const setActorFolderCount = useAppStore((s) => s.setActorFolderCount);
   const panes = useAppStore((s) => s.panes);
+  /** Published by `WorkspacePicker`. `null` until it loads — treated as "do not filter yet". */
+  const workspace = useAppStore((s) => s.workspace);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   /** The folder whose workbench is open, by id — NOT the Source itself. The list is re-read after
    *  every save (a new description.md changes what the row says), and holding the object would keep
@@ -109,7 +112,12 @@ export default function ActorsPage() {
   /** The Method being called, by catalog key and Method name. Held here rather than in the card so
    *  it survives the card re-rendering, and so the panel gets the whole surface — a Batch table, a
    *  run report and a source block do not fit in a 452px column. */
-  const [calling, setCalling] = useState<{ key: string; method: string } | null>(null);
+  const [calling, setCalling] = useState<{ key: string; method: string; folderId: string } | null>(
+    null
+  );
+  /** Show every workspace's registrations, not only the current one's. Off by default; the count
+   *  of what is hidden is drawn beside the grid so this is never a silent omission. */
+  const [showEveryWorkspace, setShowEveryWorkspace] = useState(false);
   const [filter, setFilter] = useState<ActorFilter>(EMPTY_ACTOR_FILTER);
   /**
    * THE CATALOG'S WAY IN. `openActor` sets a name and this surface; this consumes it into the name
@@ -189,10 +197,6 @@ export default function ActorsPage() {
   // `catalog.length` — 23 against a page of 1 — because the rail could see the catalog and not the
   // folders. Published on every change rather than on first load, so forgetting a folder moves the
   // badge with the grid.
-  useEffect(() => {
-    setActorFolderCount(folders.sources.length);
-  }, [folders.sources.length, setActorFolderCount]);
-
   /** Machines per actor, keyed the way the catalog keys them. The streamer tags each pane with the
    *  actor and version it is running, so this is a join over two real inventories rather than a
    *  guess from a name. */
@@ -299,10 +303,51 @@ export default function ActorsPage() {
     };
   }, [queueList, pollNonce]);
 
-  const names = useMemo(() => actorNames(cards.map((c) => c.actor)), [cards]);
+  /* ── ONE WORKSPACE'S ACTORS, NOT EVERY WORKSPACE'S ────────────────────────────────────────────
+   *
+   * REGISTRATION IS PERMANENT AND PATH-KEYED; switching workspaces unregisters nothing. So a disk
+   * with one Actor per workspace drew a card for EVERY workspace's copy — two identical
+   * `hello@0.1.0` cards, distinguishable only by a path in small type, on a page whose switcher
+   * said `qa`.
+   *
+   * IT IS NOT MERELY CLUTTER, which is why this filters rather than sorts. Both cards derive the
+   * SAME Temporal queue, because a queue is name+version and never the path — so a worker serving
+   * one answers calls dispatched from the other, silently running different code than the card you
+   * clicked. And the two tie in `folderForActor`, which is how calling the `qa` card read `hello`'s
+   * schema and reported "declares no input schema" over a Method that declares one.
+   *
+   * A FOLDER OUTSIDE THE WORKSPACES TREE IS ALWAYS SHOWN — see `workspaceOf`. Registering your own
+   * checkout somewhere else is a deliberate act, and this page is the only place that can open,
+   * serve, call or forget it.
+   *
+   * AND NOTHING VANISHES SILENTLY: what this hides is counted and offered back below. A page that
+   * quietly shows less than it has is the failure this whole filter is meant to end, not repeat. */
+  const ofThisWorkspace = useMemo(
+    () =>
+      cards.filter((c) => {
+        if (!workspace || showEveryWorkspace) return true;
+        const owner = workspaceOf(c.folder.path, workspace.parent);
+        return owner === undefined || owner === workspace.current;
+      }),
+    [cards, workspace, showEveryWorkspace]
+  );
+  const hiddenByWorkspace = cards.length - ofThisWorkspace.length;
+
+  /* THE RAIL COUNTS WHAT THE PAGE SHOWS, and this moved down here to keep that true.
+     It published `folders.sources.length` — every registration in the database — so with the
+     workspace filter on, the rail read `Actors 2` beside a grid saying "showing 1 of 1". That is
+     the same two-numbers-one-truth confusion the filter exists to remove, reappearing three inches
+     to the left. It must be declared AFTER `ofThisWorkspace`: the dependency array is evaluated
+     during render, so naming a `const` from further down would be a TDZ crash rather than a stale
+     badge. */
+  useEffect(() => {
+    setActorFolderCount(ofThisWorkspace.length);
+  }, [ofThisWorkspace.length, setActorFolderCount]);
+
+  const names = useMemo(() => actorNames(ofThisWorkspace.map((c) => c.actor)), [ofThisWorkspace]);
   const shown = useMemo(
     () =>
-      cards.filter((c) =>
+      ofThisWorkspace.filter((c) =>
         matchActor(c.actor, filter, {
           // In the pane's OWN mode: `isHealthy(m.health)` alone demands `loads === 'ok'`, which only
           // a fleet Machine's vmagent ever produces, so this filter used to report every local and
@@ -312,7 +357,7 @@ export default function ActorsPage() {
           onDisk: !c.folder.absent,
         })
       ),
-    [cards, filter]
+    [ofThisWorkspace, filter]
   );
 
   /** Forget by id, because a card holds the folder and the shelf holds the Source. Closing the
@@ -326,6 +371,19 @@ export default function ActorsPage() {
     },
     [editing, folders]
   );
+
+  /* RESOLVED HERE, ABOVE EVERY EARLY RETURN, because `useDiskSchema` is a hook and the workbench
+     branch below returns before this point would otherwise be reached. The values themselves are
+     deliberately derived fresh on each render rather than captured when the Call button was
+     pressed — see the note on the call panel below. */
+  const callingActor = calling ? catalog.find((a) => a.key === calling.key) : undefined;
+  /* THE CLICKED FOLDER WINS OUTRIGHT. `folderForActor` stays as the fallback for a call opened
+     without one, where a name+version guess is all there is — but when the card said which folder
+     it was, guessing again can only be wrong. */
+  const clickedFolder = calling ? folders.sources.find((s) => s.id === calling.folderId) : undefined;
+  const callingFolder =
+    clickedFolder ?? (callingActor ? folderForActor(callingActor, folders.sources) : undefined);
+  const { disk } = useDiskSchema(callingFolder?.id);
 
   const workbench = editing ? folders.sources.find((s) => s.id === editing) : undefined;
   if (workbench) {
@@ -347,9 +405,14 @@ export default function ActorsPage() {
      schema an Actor had before its worker re-registered, and a held Source would keep offering a
      folder that has since been forgotten. Any of the three going missing closes the panel, which is
      what forgetting the registration while calling into it should do. */
-  const callingActor = calling ? catalog.find((a) => a.key === calling.key) : undefined;
-  const callingOp = callingActor?.operations.find((o) => o.name === calling?.method);
-  const callingFolder = callingActor ? folderForActor(callingActor, folders.sources) : undefined;
+  const catalogOp = callingActor?.operations.find((o) => o.name === calling?.method);
+  /* THE SHAPE FROM THE FILES, NOT ONLY FROM THE CATALOG — see `diskSchema.ts`.
+     The catalog is what a worker published when it booted, so an Actor that has never successfully
+     served has none, and this page drew "declares no input schema" over a Method whose input type
+     was annotated and saved. It told the author to annotate what they had already annotated, and
+     the real cause — no worker has ever registered — was nowhere on the screen. The editor pane had
+     read the files since it was written; this page, which is where people actually land, never did. */
+  const callingOp = methodFromDisk(catalogOp, disk);
   if (callingActor && callingOp && callingFolder && !callingFolder.absent) {
     return (
       <MethodCall
@@ -357,7 +420,14 @@ export default function ActorsPage() {
            holding the last Batch. Reaching a second Method goes through the grid today, which
            unmounts this — but the form's initial state is built once from the schema, and the day
            something opens one from another it would silently keep `head`'s fields under `title`. */
-        key={`${callingActor.key}/${callingOp.name}`}
+        /* THE SHAPE IS IN THE KEY, so the schema arriving from disk REMOUNTS the form.
+           `MethodCall` seeds its field state from `op` in a `useState` initialiser, which runs once
+           per mount — the disk read resolves a moment after this panel opens, so without the shape
+           here the correct schema lands in a component that never looks at it again. Measured: the
+           network log showed the schema route answering with `name` and `age` while the panel beside
+           it still read "declares no input schema". `DevPane` has carried this since it was written;
+           this page did not, which is the third and last place the two had drifted. */
+        key={`${callingActor.key}/${callingOp.name}/${shapeSig(callingOp)}`}
         actor={callingActor}
         op={callingOp}
         folder={callingFolder}
@@ -366,6 +436,13 @@ export default function ActorsPage() {
            answer to one question — the one where the two can disagree about whether a worker is
            stale. `?? null` keeps `unknown` distinct from "nothing is serving", which is what makes
            the panel refuse to offer a call rather than report one. */
+        /* WHAT TO TYPE TO SERVE IT, composed by the server because only it knows whether "here" is
+           a container or the reader's own checkout. This page passed nothing, on the reasoning that
+           the folder's workbench is a click away — but the workbench serves on the machine the
+           ORCHESTRATOR is on, which in the compose install is a container, and a reader looking at a
+           blocked Run button wants the line to type. Without it the stale-poller notice ended at
+           "Serve this Actor again first" and named no command. */
+        {...(disk?.serve ? { howToServe: disk.serve } : {})}
         pollers={pollers[sharedQueue(callingActor.name, callingActor.version)] ?? null}
         polledAt={polledAt}
         onClose={() => setCalling(null)}
@@ -432,8 +509,42 @@ export default function ActorsPage() {
             names={names}
             onChange={setFilter}
             shown={shown.length}
-            total={cards.length}
+            /* THE DENOMINATOR IS WHAT THIS PAGE IS SHOWING YOU, not every row in the database.
+               `cards.length` counts other workspaces' registrations too, so while they are filtered
+               out the bar read "showing 1 of 2" with no second card anywhere on the page — a
+               fraction whose missing half is explained nowhere. The workspace notice below owns
+               saying that, and says it in words. */
+            total={ofThisWorkspace.length}
           />
+          {hiddenByWorkspace > 0 && (
+            /* WHAT THE WORKSPACE FILTER TOOK, offered back. A registration is permanent and this is
+               the only page that can open, serve, call or forget one, so hiding some without saying
+               so would be a way to lose your own work. */
+            <p className="m-0 mb-2 text-[11px] text-muted-foreground">
+              {hiddenByWorkspace} more registered in other workspaces, hidden because this is{' '}
+              <strong className="font-semibold">{workspace?.current}</strong>.{' '}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-foreground"
+                onClick={() => setShowEveryWorkspace(true)}
+              >
+                show every workspace
+              </button>
+            </p>
+          )}
+          {showEveryWorkspace && workspace && (
+            <p className="m-0 mb-2 text-[11px] text-muted-foreground">
+              Showing every workspace&rsquo;s registrations. Two folders with the same name and
+              version share one Temporal queue, so a worker serving either answers calls from both.{' '}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-foreground"
+                onClick={() => setShowEveryWorkspace(false)}
+              >
+                only {workspace.current}
+              </button>
+            </p>
+          )}
 
           {shown.length === 0 ? (
             // NOT AN EMPTY PAGE. A grid that simply went blank reads as a catalog that emptied
@@ -468,8 +579,22 @@ export default function ActorsPage() {
                   }
                   onEdit={setEditing}
                   onForget={forget}
+                  /* THE FOLDER TRAVELS WITH THE CALL, and dropping it was a real bug rather than a
+                     tidiness point. This page is FOLDER-first — one card per registered folder —
+                     while `calling` held only the catalog key, which is name+version and is not
+                     unique on this disk: `workspaces.kontra` routinely holds the same Actor in
+                     several workspaces, so `hello` and `qa` both carry hello@0.1.0. The panel then
+                     re-derived the folder with `folderForActor`, both scored identically, and the
+                     tie-break is registration order. MEASURED: clicking call on the `qa` card
+                     resolved the `hello` folder, whose Target declares `properties: {}` — so the
+                     form said "declares no input schema" and told the author to annotate an input
+                     type they had annotated, while the schema route was answering `name` and `age`
+                     for the folder they had actually clicked. Same failure `DevPane`'s `dir`
+                     parameter exists to prevent; this is the other half of it. */
                   onCall={(method) =>
-                    c.kind === 'catalogued' ? setCalling({ key: c.actor.key, method }) : undefined
+                    c.kind === 'catalogued'
+                      ? setCalling({ key: c.actor.key, method, folderId: c.folder.id })
+                      : undefined
                   }
                 />
               ))}

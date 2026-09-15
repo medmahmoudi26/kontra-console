@@ -14,6 +14,7 @@ import {
   useWorkspace,
   type WorkspaceList,
 } from '../run/api';
+import { useAppStore } from '../state/store';
 
 export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Element {
   const [list, setList] = useState<WorkspaceList | null>(null);
@@ -21,15 +22,26 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  /* PUBLISHED, not kept private. The Actors grid filters its cards to the current workspace, and
+     this component is the only thing that knows when that changes — switching is a click here. */
+  const setWorkspace = useAppStore((s) => s.setWorkspace);
+
+  const publish = useCallback(
+    (got: WorkspaceList) => {
+      setList(got);
+      setWorkspace({ current: got.current, parent: got.parent });
+    },
+    [setWorkspace]
+  );
 
   const reload = useCallback(() => {
     void fetchWorkspaces()
       .then((got) => {
-        setList(got);
+        publish(got);
         setError(null);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
+  }, [publish]);
 
   useEffect(reload, [reload]);
 
@@ -38,7 +50,7 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
     setBusy(true);
     void useWorkspace(next)
       .then((got) => {
-        setList(got);
+        publish(got);
         setError(null);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
@@ -51,7 +63,7 @@ export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Elem
     setBusy(true);
     void createWorkspace(trimmed, { seed: true })
       .then((got) => {
-        setList(got);
+        publish(got);
         setName('');
         setCreating(false);
         setError(null);

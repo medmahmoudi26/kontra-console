@@ -91,7 +91,7 @@ import { streakOf } from '../run/runState';
 import { Streak } from '../components/Spark';
 import { RegisterFolder } from './RegisterFolder';
 import { FolderAbsent, FolderActions, useRegisteredFolders, type FolderShelf } from './RegisteredFolders';
-import { mergeWorkflowFolders } from './sourceFolders';
+import { mergeWorkflowFolders, workspaceOf } from './sourceFolders';
 import { StatePill } from './StatePill';
 import { WorkflowThread, type TurnsFailure } from './WorkflowThread';
 import { WorkflowSketch, useWorkflowSketch } from './WorkflowSketch';
@@ -1248,7 +1248,30 @@ function WorkflowList({
      — open, serve, start, forget — and drawing the files beside it put most workflows on screen
      twice in two vocabularies. The file half is joined in for its `description.md` sentence, which
      is the one thing a folder cannot say. */
-  const rows = mergeWorkflowFolders(files, folders.sources);
+  const allRows = mergeWorkflowFolders(files, folders.sources);
+  /* ── ONE WORKSPACE'S WORKFLOWS, the same rule the Actors grid follows ─────────────────────────
+   *
+   * Registration is permanent and path-keyed, and switching workspaces unregisters nothing — so a
+   * disk carrying one workflow per workspace listed every workspace's copy. Two rows both called
+   * `hello`, distinguishable only by a truncated path (`/Users/medma…/hello/workflows/hello` against
+   * `/Users/medma…/qa/workflows/hello`), on a page whose switcher named one of them.
+   *
+   * IT IS NOT ONLY CLUTTER. Both derive the same queue — `wf-hello-0.1.0`, from name and version,
+   * never the path — so serving either answers starts dispatched from the other, running code the
+   * reader did not open.
+   *
+   * A FOLDER OUTSIDE THE WORKSPACES TREE IS ALWAYS LISTED (`workspaceOf` answers undefined for one):
+   * registering your own checkout elsewhere is a deliberate act, and this list is the only place
+   * that can open, serve, start or forget it. Nothing is hidden silently — the count is offered
+   * back below. */
+  const workspace = useAppStore((s) => s.workspace);
+  const [showEveryWorkspace, setShowEveryWorkspace] = useState(false);
+  const rows = allRows.filter((r) => {
+    if (!workspace || showEveryWorkspace) return true;
+    const owner = workspaceOf(r.folder.path, workspace.parent);
+    return owner === undefined || owner === workspace.current;
+  });
+  const hiddenByWorkspace = allRows.length - rows.length;
   const dock = useSideDock('workflows', { width: 264, side: 'left', collapsed: false });
 
   if (dock.collapsed) {
@@ -1298,6 +1321,32 @@ function WorkflowList({
             onRegistered={folders.registered}
           />
         </div>
+        {hiddenByWorkspace > 0 && (
+          <p className="m-0 mt-1.5 text-[10px] leading-snug text-muted-foreground">
+            {hiddenByWorkspace} in other workspaces, hidden because this is{' '}
+            <strong className="font-semibold">{workspace?.current}</strong>.{' '}
+            <button
+              type="button"
+              className="underline underline-offset-2 hover:text-foreground"
+              onClick={() => setShowEveryWorkspace(true)}
+            >
+              show all
+            </button>
+          </p>
+        )}
+        {showEveryWorkspace && workspace && (
+          <p className="m-0 mt-1.5 text-[10px] leading-snug text-muted-foreground">
+            Every workspace. Same name and version means one queue, so serving either answers the
+            other.{' '}
+            <button
+              type="button"
+              className="underline underline-offset-2 hover:text-foreground"
+              onClick={() => setShowEveryWorkspace(false)}
+            >
+              only {workspace.current}
+            </button>
+          </p>
+        )}
       </div>
       {/* `flex-1 min-h-0` so this scrolls INSIDE the aside. It sized to its content while it was the
           only thing here, which was invisible; with the folders under it, a checkout of more than a

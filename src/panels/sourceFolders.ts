@@ -203,3 +203,29 @@ export function folderForActor(actor: CatalogedActor, folders: Source[]): Source
   }
   return best;
 }
+
+/**
+ * Which named workspace a folder path belongs to, or `undefined` when it is outside that tree.
+ *
+ * WHY THIS IS NOT "does the path start with the current workspace". A registered folder may live
+ * ANYWHERE on disk — someone's own checkout, outside `workspaces.kontra` entirely — and that is a
+ * deliberate act (`register` is its own verb). Treating those as "not the current workspace" would
+ * hide them from the only page that can open, serve, call or forget them, which turns a filter into
+ * a way to lose your own registration. So the question asked here is narrower: does this path sit
+ * under the workspaces PARENT, and if so, under which child. A path outside answers `undefined`,
+ * and callers show it always.
+ *
+ * WHY IT MATTERS AT ALL. Registration is permanent and path-keyed; switching workspaces does not
+ * unregister anything. Create a second workspace and both its Actor and the first one's stay
+ * registered forever, so the grid drew two identical `hello@0.1.0` cards for a disk with one Actor
+ * per workspace. That is not only clutter: both derive the SAME Temporal queue (name+version, not
+ * path), so a worker serving one answers calls dispatched from the other — and the two tie in
+ * `folderForActor`, which is how a call on one workspace's card read the other's schema.
+ */
+export function workspaceOf(path: string, parent: string): string | undefined {
+  if (!parent || !path) return undefined;
+  const root = parent.endsWith('/') ? parent : `${parent}/`;
+  if (!path.startsWith(root)) return undefined;
+  const name = path.slice(root.length).split('/')[0];
+  return name || undefined;
+}

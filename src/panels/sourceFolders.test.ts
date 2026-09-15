@@ -4,6 +4,7 @@ import {
   canForget,
   catalogForFolder,
   folderForActor,
+  workspaceOf,
   isDiscovered,
   mergeWorkflowFolders,
   registeredActors,
@@ -289,5 +290,34 @@ describe('the workflow rows', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.file?.description).toBe('Hunts lame delegations.');
+  });
+});
+
+describe('workspaceOf', () => {
+  const parent = '/Users/me/kontra-local/workspaces.kontra';
+
+  it('names the workspace a folder sits in', () => {
+    expect(workspaceOf(`${parent}/qa/actors/hello`, parent)).toBe('qa');
+    expect(workspaceOf(`${parent}/hello/actors/hello`, parent)).toBe('hello');
+  });
+
+  it('answers undefined for a folder OUTSIDE the workspaces tree, which must never be hidden', () => {
+    // Someone's own checkout, registered deliberately. It belongs to no workspace, and a filter
+    // that treated "no workspace" as "not the current one" would make it unreachable.
+    expect(workspaceOf('/Users/me/projects/scraper/actors/scraper', parent)).toBeUndefined();
+  });
+
+  it('is not fooled by a sibling directory that merely shares the prefix', () => {
+    // `workspaces.kontra-old` starts with the parent string but is not inside it.
+    expect(workspaceOf('/Users/me/kontra-local/workspaces.kontra-old/qa/actors/x', parent)).toBeUndefined();
+  });
+
+  it('tolerates a trailing slash on the parent, and the parent itself', () => {
+    expect(workspaceOf(`${parent}/qa/actors/hello`, `${parent}/`)).toBe('qa');
+    expect(workspaceOf(parent, parent)).toBeUndefined();
+  });
+
+  it('answers undefined when there is no parent to compare against', () => {
+    expect(workspaceOf(`${parent}/qa/actors/hello`, '')).toBeUndefined();
   });
 });

@@ -70,6 +70,7 @@ export function MethodCall({
   op,
   folder,
   pollers,
+  howToServe,
   polledAt,
   onClose,
 }: {
@@ -84,6 +85,8 @@ export function MethodCall({
    * same as nothing serving.
    */
   pollers: PollerReport | null;
+  /** Passed straight to `runStopper`: what to type to serve this Actor, when the caller knows. */
+  howToServe?: string;
   /** When that report was read. Every age is measured against THIS, never against render time. */
   polledAt: number;
   onClose(): void;
@@ -263,6 +266,7 @@ export function MethodCall({
     <MethodCallPanel
       actor={actor}
       op={op}
+      {...(howToServe ? { howToServe } : {})}
       draft={draft}
       batch={batch}
       onDraft={onDraft}

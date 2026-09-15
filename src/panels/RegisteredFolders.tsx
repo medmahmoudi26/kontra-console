@@ -32,6 +32,7 @@ import {
   type SourceKind,
 } from '../run/api';
 import { canForget, withRegistered, withoutSource } from './sourceFolders';
+import { useAppStore } from '../state/store';
 import { Button } from '@/components/ui/button';
 
 /** What a page holds about its registered folders, and the three things it can do to them. */
@@ -58,6 +59,18 @@ export function useRegisteredFolders(kind: SourceKind): FolderShelf {
   const [error, setError] = useState<string | null>(null);
   const [forgetting, setForgetting] = useState<string | null>(null);
 
+  /* THE WORKSPACE IS A DEPENDENCY OF THIS LIST, and its absence was a bug you could only see once
+     the pages started filtering by workspace.
+     `sourceStore.list()` answers differently per workspace — it discovers under the CURRENT
+     `workspaceRoot()` — and `kontra workspace watch` registers a new workspace's folders as it seeds
+     them. So creating a workspace changes this list twice over, and nothing here asked again.
+     MEASURED: creating `test` switched `.current` to it and registered
+     `workspaces.kontra/test/workflows/hello`, while the open page still held the two rows it had
+     fetched as `qa`. With the workspace filter on, both were then hidden as "other workspaces" and
+     the shelf read "0 workflows" over a workspace that had one — under a sentence telling the
+     reader to go and register the folder that was already registered. */
+  const workspace = useAppStore((s) => s.workspace);
+
   const reload = useCallback(() => {
     void fetchSources(kind)
       .then((got) => {
@@ -72,7 +85,9 @@ export function useRegisteredFolders(kind: SourceKind): FolderShelf {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [kind]);
 
-  useEffect(reload, [reload]);
+  // `workspace?.current` and not the object: the picker republishes a fresh object on every poll,
+  // and depending on the identity would refetch this list forever.
+  useEffect(reload, [reload, workspace?.current]);
 
   const forget = useCallback(
     (source: Source) => {

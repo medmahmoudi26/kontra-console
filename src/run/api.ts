@@ -567,6 +567,53 @@ export async function createWorkspace(
   return (await res.json()) as WorkspaceList;
 }
 
+/** One Method as the FILES declare it — see the orchestrator's `actorControl.ts:diskSchema`. */
+export interface DiskMethod {
+  name: string;
+  description?: string;
+  /* THE SAME TYPES `ActorOperation` CARRIES, so a Method read from disk is substitutable for one
+     read from the catalog. They describe the same thing — `schemadump` and a booting worker call
+     the same `operations_of` — and typing this half loosely would have made the pane cast. */
+  params?: JsonSchema;
+  input?: JsonSchema;
+  output?: JsonSchema;
+}
+
+export interface DiskSchema {
+  actor: { name: string; version: string };
+  dir: string;
+  methods: DiskMethod[];
+  /**
+   * What to type to serve this folder, composed by the SERVER because only it knows where "here"
+   * is — a container, an appliance, or the reader's own checkout. Optional so an older orchestrator
+   * simply produces no hint rather than a wrong one.
+   */
+  serve?: string;
+}
+
+/**
+ * What a registered Actor's Methods take RIGHT NOW, read from disk rather than from the catalog.
+ *
+ * The catalog is what a worker published when it booted, which is the right answer for the Actors
+ * grid and the wrong one for a form beside an editor — a parameter added and saved a second ago is
+ * in no catalog until something restarts. The editor pane asks this instead.
+ */
+export async function fetchActorDiskSchema(id: string): Promise<DiskSchema> {
+  const res = await fetch(`${BASE}/sources/actor/${encodeURIComponent(id)}/schema`);
+  if (!res.ok) return asError(res, 'read the schema from disk');
+  return (await res.json()) as DiskSchema;
+}
+
+/**
+ * Where to hear that the folder above changed — an SSE endpoint, for `EventSource`.
+ *
+ * A URL rather than a subscription, because the caller is a React effect that already owns the
+ * teardown and `BASE` is the only thing it cannot work out for itself.
+ */
+export function actorDiskSchemaStream(id: string): string {
+  return `${BASE}/sources/actor/${encodeURIComponent(id)}/schema/stream`;
+}
+
 export async function registerSource(kind: SourceKind, path: string): Promise<Source> {
   const res = await fetch(`${BASE}/sources/${kind}`, {
     method: 'POST',

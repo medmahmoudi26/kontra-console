@@ -91,9 +91,12 @@ export function MethodCallPanel({
   copied,
   onOpenDataset,
   onClose,
+  howToServe,
 }: {
   actor: CatalogActor;
   op: ActorOperation;
+  /** The command that makes this Actor servable, when the surface knows one — see `runStopper`. */
+  howToServe?: string;
   draft: BatchDraft;
   /** The Batch as it currently parses — or the sentence saying why it does not. */
   batch: BatchResult;
@@ -118,7 +121,7 @@ export function MethodCallPanel({
   const blocked = 'error' in batch ? batch.error : null;
   // THE BUTTON IS DISABLED FOR EXACTLY ONE REASON AT A TIME, and it says which. A control that is
   // simply grey is a control an operator retries.
-  const stopper = runStopper(blocked, serve);
+  const stopper = runStopper(blocked, serve, howToServe);
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto" data-testid="method-call">
@@ -420,7 +423,22 @@ function Count({ label, value }: { label: string; value: number | string }): JSX
  * unreachable Temporal are separate branches for the reason `actorWorkers.ts` keeps them separate —
  * "nothing is there" and "we could not ask" send a reader to two different places.
  */
-export function runStopper(blocked: string | null, serve: ServeReading): string | null {
+export function runStopper(
+  blocked: string | null,
+  serve: ServeReading,
+  /**
+   * What to type to make this Actor servable. Composed by the SERVER (`actorControl.ts:serveCommand`)
+   * because only it knows where "here" is — a container, an appliance, or the reader's own checkout.
+   *
+   * EVERY CALLER PASSES ONE NOW, and the sentence that used to sit here explaining why the console
+   * did not — "it has the folder's own workbench a click away and says so" — was the bug. The
+   * workbench serves on the machine the orchestrator is on, which in the compose install is a
+   * container the reader cannot see; and a reader staring at a blocked Run button wants the line to
+   * type, not a description of a button somewhere else on the page. Reported repeatedly, and the
+   * answer was always "run the command" — so the message says the command.
+   */
+  howToServe?: string
+): string | null {
   /* A BATCH THAT DOES NOT PARSE DISABLES THE BUTTON WITHOUT A SECOND SENTENCE. It is already drawn,
      in red, immediately above — repeating it under the button would be the same fix said twice, and
      the reader would have to work out whether they were two problems. The DISABLING is not this
@@ -432,15 +450,24 @@ export function runStopper(blocked: string | null, serve: ServeReading): string 
     return (
       `Temporal could not be asked who is polling ${serve.queue}, so nothing here knows whether ` +
       'this Actor can run. That is a missing answer, not a negative — a dispatch is not offered ' +
-      'against it.'
+      'against it.' + (howToServe ? `\n\nServe it with:\n    ${howToServe}` : '')
     );
   }
   if (serve.state === 'stale') {
+    /* THE COMMAND GOES HERE TOO, and its absence was the whole complaint. This was the one branch
+       that took `howToServe` and never used it: the reader got the most detailed diagnosis on the
+       page — a killed worker lingers in Temporal's poller list for about five minutes, so a call
+       would sit and look like a slow run — and then "Serve this Actor again first", with no line to
+       type. A correct diagnosis and no next move is the shape this whole function exists to avoid. */
     return (
       `Temporal still lists a poller on ${serve.queue}, but none has polled recently — a worker ` +
       'that was killed stays listed for about five more minutes. A call would sit on this queue ' +
-      'and look like a slow run. Serve this Actor again first.'
+      'and look like a slow run.' +
+      (howToServe ? `\n\nServe it again first:\n    ${howToServe}` : ' Serve this Actor again first.')
     );
+  }
+  if (howToServe) {
+    return `nothing is polling ${serve.queue}. Serve this Actor and the call has somewhere to land:\n\n    ${howToServe}`;
   }
   return (
     `nothing is polling ${serve.queue}. Serve this Actor — the workbench on its card does it on ` +

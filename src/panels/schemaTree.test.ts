@@ -310,3 +310,66 @@ describe('an unusual but legal document degrades rather than breaking', () => {
     expect(gone.type).toBe('Missing');
   });
 });
+
+describe('an OPTIONAL model at the ROOT, which is what a workflow argument is', () => {
+  // Exactly what pydantic derives for `req: HelloRequest | None = None`. Captured from the real
+  // container: schema_of(Optional[HelloRequest]).
+  const optionalModel = {
+    $defs: {
+      HelloRequest: {
+        properties: {
+          name: { title: 'Name', type: 'string' },
+          age: { title: 'Age', type: 'integer' },
+          email: { title: 'Email', type: 'string' },
+        },
+        required: ['name', 'age', 'email'],
+        title: 'HelloRequest',
+        type: 'object',
+      },
+    },
+    anyOf: [{ $ref: '#/$defs/HelloRequest' }, { type: 'null' }],
+  } as unknown as Parameters<typeof schemaTree>[0];
+
+  it('draws the fields instead of collapsing to a JSON box', () => {
+    // Before this was fixed the root was handed straight to `childrenOf`, which answers null for a
+    // document with no top-level `properties` — so a three-field model rendered as a textarea and
+    // the page told the author to annotate the type they had annotated.
+    const tree = schemaTree(optionalModel);
+    expect(tree?.map((n) => n.name)).toEqual(['name', 'age', 'email']);
+  });
+
+  it('marks them required, from the REFERENCED model and not the wrapper', () => {
+    const tree = schemaTree(optionalModel);
+    expect(tree?.every((n) => n.required)).toBe(true);
+  });
+
+  it('refuses a genuine two-armed union rather than drawing the first arm', () => {
+    // At a property, guessing an arm costs one field. At the ROOT it is the whole argument, and the
+    // form would collect something that validates against one arm and silently not the other.
+    const union = {
+      $defs: {
+        A: { properties: { a: { type: 'string' } }, type: 'object' },
+        B: { properties: { b: { type: 'string' } }, type: 'object' },
+      },
+      anyOf: [{ $ref: '#/$defs/A' }, { $ref: '#/$defs/B' }],
+    } as unknown as Parameters<typeof schemaTree>[0];
+    expect(schemaTree(union)).toBeNull();
+  });
+
+  it('still answers null for an open dict, which is not a form', () => {
+    // `dict | None` — the seeded PING workflow's shape. It must keep the JSON box.
+    const openDict = {
+      anyOf: [{ additionalProperties: true, type: 'object' }, { type: 'null' }],
+    } as unknown as Parameters<typeof schemaTree>[0];
+    expect(schemaTree(openDict)).toBeNull();
+  });
+
+  it('leaves an ordinary actor root exactly as it was', () => {
+    const plain = {
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+      type: 'object',
+    } as unknown as Parameters<typeof schemaTree>[0];
+    expect(schemaTree(plain)?.map((n) => n.name)).toEqual(['name']);
+  });
+});
