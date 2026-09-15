@@ -1,0 +1,49 @@
+/* One palette, defined once. Dark-first because a control plane is looked at for hours. */
+:root {
+  --bg: #0b0f14;
+  --panel: #111820;
+  --track: #18212c;
+  --line: #22303d;
+  --fg: #dbe5ef;
+  --dim: #7b8b9c;
+  --blue: #4aa3ff;
+  --green: #3fca7d;
+  --red: #ff5f56;
+  --amber: #f0b429;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+button { font: inherit; }
+
+/* ── The things a prototype usually skips, and shouldn't ────────────────────────────────────── */
+
+/* DIGITS THAT LINE UP. Durations, unit counts and event totals all sit in columns and all change
+   while you watch; proportional figures make them jitter sideways as they tick. */
+.num, .mono, pre, code { font-variant-numeric: tabular-nums; }
+
+/* A VISIBLE FOCUS STATE. Every control here is a <button>, and without this the keyboard path
+   through the page is invisible — which on a control plane is the path an operator uses when
+   something is wrong and they are in a hurry. */
+:where(button, select, input, [role="switch"]):focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* THE TIMELINE IS THE ONLY THING THAT MOVES, so honouring this setting is one rule rather than an
+   audit. The run still advances and the bars still grow — what stops is the easing, so nothing
+   slides under a reader who asked for that. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* WIDE CONTENT SCROLLS INSIDE ITSELF. A table of queue names is wider than a phone, and a page
+   that scrolls sideways as a whole loses the timeline's left edge — the one column you navigate by. */
+.card table { display: block; overflow-x: auto; white-space: nowrap; }
+
+/* DARK BY COMMITMENT, NOT BY OMISSION. The real console is dark and this prototype is a proposal
+   for it, so there is one palette rather than two — and the ground is painted from a token so the
+   page holds whatever the host renders behind it. */
