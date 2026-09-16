@@ -28,8 +28,11 @@
     schema: JsonSchema | undefined;
     /** Absent while the contract is being fetched; `null` once it is known there is none. */
     loading?: boolean;
+    link?: 'connecting' | 'live' | 'reconnecting' | 'unsupported';
+    /** How many times the contract has been re-read. Shown because "live" is a claim otherwise. */
+    revisions?: number;
   }
-  let { actor, version, method, schema, loading = false }: Props = $props();
+  let { actor, version, method, schema, loading = false, link = 'connecting', revisions = 0 }: Props = $props();
 
   const nodes = $derived(schemaFields(schema) ?? []);
   const leaves = $derived(nodes.filter((n): n is FieldNode => n.kind === 'leaf'));
@@ -55,6 +58,14 @@
   <header>
     <h1 class="mono">{actor}.{method}</h1>
     <span class="ver mono">{version}</span>
+    <!-- THE LINK IS SHOWN, because a pane holding a four-minute-old contract with no indication is
+         worse than one that says it is stale. `live` earns a dot; the others say the word. -->
+    <span class="link {link}" title="the contract has been read {revisions} time(s)">
+      {#if link === 'live'}<span class="dot" aria-hidden="true"></span>live
+      {:else if link === 'reconnecting'}reconnecting…
+      {:else if link === 'unsupported'}not live
+      {:else}connecting…{/if}
+    </span>
   </header>
 
   {#if loading}
@@ -102,6 +113,10 @@
   header { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
   h1 { font-size: var(--t-lead); font-weight: 600; margin: 0; overflow-wrap: anywhere; }
   .ver { font-size: var(--t-small); color: var(--dim); }
+  .link { font-size: var(--t-small); color: var(--dim); margin-left: auto; display: inline-flex; align-items: center; gap: var(--s-1); }
+  .link.live { color: var(--ok); }
+  .link.reconnecting { color: var(--warn); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .form { display: flex; flex-direction: column; gap: var(--s-3); }
   .muted { font-size: var(--t-small); color: var(--dim); margin: 0; max-width: 62ch; line-height: var(--lh-body); }
   .go button {

@@ -11,28 +11,34 @@
    */
   import Dev from './dev/Dev.svelte';
   import Skeleton from './lib/Skeleton.svelte';
-  import { contractFor, type Contract } from './dev/contract';
+  import { watchContract, type LiveContract } from './dev/live';
 
   const first = location.pathname.split('/')[1] ?? '';
   const params = new URLSearchParams(location.search);
 
-  let contract = $state<Contract>({ state: 'loading' });
+  let live = $state<LiveContract>({ contract: { state: 'loading' }, link: 'connecting', revisions: 0 });
+
+  // THE EFFECT RETURNS ITS OWN TEARDOWN. An EventSource left open holds a connection the server
+  // counts, and the schema stream refuses past a limit with "close a runner tab and retry" — which
+  // is a message an operator gets for a leak they did not cause.
   $effect(() => {
     if (first !== 'dev') return;
-    void contractFor(params.get('actor') ?? '', params.get('method') ?? '').then((c) => (contract = c));
+    return watchContract(params.get('actor') ?? '', params.get('method') ?? '', (s) => (live = s));
   });
 </script>
 
 {#if first === 'dev'}
   <Dev
     actor={params.get('actor') ?? ''}
-    version={contract.state === 'ready' ? contract.version : ''}
+    version={live.contract.state === 'ready' ? live.contract.version : ''}
     method={params.get('method') ?? ''}
-    schema={contract.state === 'ready' ? contract.schema : undefined}
-    loading={contract.state === 'loading'}
+    schema={live.contract.state === 'ready' ? live.contract.schema : undefined}
+    loading={live.contract.state === 'loading'}
+    link={live.link}
+    revisions={live.revisions}
   />
-  {#if contract.state === 'error'}
-    <p class="err" role="alert">{contract.error}</p>
+  {#if live.contract.state === 'error'}
+    <p class="err" role="alert">{live.contract.error}</p>
   {/if}
 {:else}
   <Skeleton />

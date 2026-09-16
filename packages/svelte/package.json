@@ -8,7 +8,7 @@
     "build": "vite build",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "check": "node scripts/type-scale.mjs && node scripts/overflow.mjs"
+    "check": "node scripts/type-scale.mjs && node scripts/no-polling.mjs && node scripts/overflow.mjs"
   },
   "dependencies": {
     "@kontra/console-core": "workspace:*"
