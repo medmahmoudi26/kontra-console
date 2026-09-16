@@ -30,7 +30,15 @@
   type Gate = 'checking' | 'required' | 'open';
   let gate = $state<Gate>('checking');
 
-  let user = $state('admin');
+  /**
+   * EMPTY, NOT `admin`.
+   *
+   * `GET /api/login` says whether signing in is possible and deliberately names nobody, so any
+   * prefilled username is a guess — and this install's user is `root`. A wrong name with the right
+   * password fails exactly like a wrong password, which sends an operator looking for the wrong
+   * thing.
+   */
+  let user = $state('');
   let password = $state('');
   let error = $state('');
   let busy = $state(false);
@@ -79,19 +87,19 @@
         not in this page.
       </p>
 
+      <!-- svelte-ignore a11y_autofocus -->
       <label>
         <span>user</span>
-        <input name="user" autocomplete="username" bind:value={user} />
+        <input name="user" autocomplete="username" placeholder="the name `kontra init` printed" autofocus bind:value={user} />
       </label>
       <label>
         <span>password</span>
-        <!-- svelte-ignore a11y_autofocus -->
-        <input name="password" type="password" autocomplete="current-password" autofocus bind:value={password} />
+        <input name="password" type="password" autocomplete="current-password" bind:value={password} />
       </label>
 
       {#if error}<p class="err" role="alert">{error}</p>{/if}
 
-      <button type="submit" disabled={busy || password === ''}>{busy ? 'signing in…' : 'sign in'}</button>
+      <button type="submit" disabled={busy || user === '' || password === ''}>{busy ? 'signing in…' : 'sign in'}</button>
     </form>
   </main>
 {/if}
