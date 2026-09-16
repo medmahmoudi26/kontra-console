@@ -72,7 +72,7 @@ import {
   type ScratchNodeData,
   type ScratchNodeType,
   type ScratchNoteData,
-} from './scratchFlow';
+} from '@kontra/console-core/panels/scratchFlow';
 import { documentPorts } from '@kontra/console-core/panels/scratchPorts';
 import {
   mintSketchId,

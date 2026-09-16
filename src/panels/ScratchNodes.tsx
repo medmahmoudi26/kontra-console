@@ -25,7 +25,7 @@ import {
   type ScratchNodeData,
   type ScratchNodeType,
   type ScratchNoteData,
-} from './scratchFlow';
+} from '@kontra/console-core/panels/scratchFlow';
 import { fieldHandle, inHandle, outHandle, type ScratchHandleKind } from '@kontra/console-core/panels/scratchHandles';
 import { shortType, type NodePorts, type PortSide, type ScratchPort } from '@kontra/console-core/panels/scratchPorts';
 

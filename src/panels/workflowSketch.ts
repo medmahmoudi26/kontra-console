@@ -34,7 +34,7 @@
  */
 
 import type { ScratchDocument, ScratchNode, ScratchNote } from '@kontra/console-core/run/api';
-import { nodeSlot, noteSlot } from './scratchFlow';
+import { nodeSlot, noteSlot } from '@kontra/console-core/panels/scratchFlow';
 import {
   nodeLabel,
   readScratchNode,

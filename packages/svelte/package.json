@@ -11,12 +11,13 @@
     "check": "node scripts/type-scale.mjs && node scripts/no-polling.mjs && node scripts/overflow.mjs"
   },
   "dependencies": {
-    "@kontra/console-core": "workspace:*"
+    "@kontra/console-core": "workspace:*",
+    "@xyflow/svelte": "1.6.6"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "playwright": "1.61.0",
-    "svelte": "^5.19.0",
+    "svelte": "^5.25.0",
     "svelte-check": "^4.1.4",
     "typescript": "^5.5.0",
     "vite": "^6.0.7",

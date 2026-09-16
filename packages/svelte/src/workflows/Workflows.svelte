@@ -17,6 +17,22 @@
   import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
 
   import Timeline from './Timeline.svelte';
+  import { followRun, type Follow } from './runStream';
+  import type { ScratchFlowEdge, ScratchFlowNode } from '@kontra/console-core/panels/scratchFlow';
+
+  // LAZY, AND THAT IS THE POINT. `@xyflow/react` sits in the React console's ENTRY chunk, so
+  // everybody downloads the canvas to open Secrets. A dynamic import keeps Svelte Flow's ~181 KB
+  // with the people who open a canvas.
+  let Canvas = $state<unknown>(undefined);
+  let canvasWanted = $state(false);
+  $effect(() => {
+    if (!canvasWanted || Canvas) return;
+    void import('./canvas/Canvas.svelte').then((m) => (Canvas = m.default));
+  });
+
+  // The Scratch document for this workflow, once there is one to draw.
+  let flowNodes = $state<ScratchFlowNode[]>([]);
+  let flowEdges = $state<ScratchFlowEdge[]>([]);
 
   interface RunRow { runId: string; type: string; status: string; startedAt: number; closedAt: number }
 
@@ -26,6 +42,26 @@
   let history = $state<RunHistory | undefined>(undefined);
   let historyError = $state('');
   let focus = $state<number | undefined>(undefined);
+  let follow = $state<Follow<RunRow>>({ state: 'connecting' });
+
+  // FOLLOW THE PICKED RUN, and tear the stream down when it changes. The server counts open
+  // streams; an effect that opened one per click would exhaust them by browsing.
+  $effect(() => {
+    const id = picked;
+    if (!id) return;
+    follow = { state: 'connecting' };
+    return followRun<RunRow>(id, (f) => {
+      follow = f;
+      // A RUNNING RUN'S HISTORY GROWS. The stream says the run changed; the history endpoint says
+      // how. Re-read on a state frame rather than on a timer — this is the whole point.
+      if (f.state === 'live' && f.run && !f.run.closedAt) void reread(id);
+    });
+  });
+
+  async function reread(id: string): Promise<void> {
+    const r = await fetch(`/api/runs/${encodeURIComponent(id)}/history`, { credentials: 'same-origin' });
+    if (r.ok) history = (await r.json()) as RunHistory;
+  }
 
   $effect(() => {
     void fetch('/api/runs', { credentials: 'same-origin' })
@@ -93,7 +129,19 @@
       <div class="run">
         <header>
           <h2 class="mono">{run.type}</h2>
-          <span class="st {run.status}">{run.status}</span>
+          <span class="st {follow.state === 'live' && follow.run ? follow.run.status : run.status}">
+            {follow.state === 'live' && follow.run ? follow.run.status : run.status}
+          </span>
+          <!-- THE LINK, because a run view holding a minute-old state with no indication is worse
+               than one that says it is stale. `ended` is not a failure: the server closes a stream
+               deliberately when a run reaches a terminal status. -->
+          <span class="link {follow.state}">
+            {#if follow.state === 'live'}<span class="dot" aria-hidden="true"></span>following
+            {:else if follow.state === 'reconnecting'}reconnecting…
+            {:else if follow.state === 'ended'}finished
+            {:else if follow.state === 'unsupported'}not following
+            {:else}connecting…{/if}
+          </span>
           {#if history?.archived}
             <span class="arch" title="read from the ADR 0025 archive, not from Temporal">archived</span>
           {/if}
@@ -112,6 +160,20 @@
               than swallowed.
             </p>
           {/if}
+
+          <div class="canvas">
+            <button class="toggle" onclick={() => (canvasWanted = !canvasWanted)}>
+              {canvasWanted ? 'hide' : 'show'} the scratch canvas
+            </button>
+            {#if canvasWanted}
+              {#if Canvas}
+                {@const C = Canvas as typeof import('./canvas/Canvas.svelte').default}
+                <C nodes={flowNodes} edges={flowEdges} />
+              {:else}
+                <p class="muted">loading the canvas…</p>
+              {/if}
+            {/if}
+          </div>
 
           {#if focused}
             <dl class="pick">
@@ -154,6 +216,10 @@
   .st.completed { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
   .st.failed, .st.terminated { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
   .arch { font-size: var(--t-micro); color: var(--warn); }
+  .link { font-size: var(--t-small); color: var(--dim); margin-left: auto; display: inline-flex; align-items: center; gap: var(--s-1); }
+  .link.live { color: var(--ok); }
+  .link.reconnecting { color: var(--warn); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .run {
     display: flex; flex-direction: column; gap: var(--s-3);
     border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: var(--s-3);
@@ -166,4 +232,10 @@
   .pick dt { font-size: var(--t-small); color: var(--dim); }
   .pick dd { margin: 0; font-size: var(--t-small); overflow-wrap: anywhere; }
   code { font-size: var(--t-small); }
+  .canvas { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+  .toggle {
+    align-self: flex-start; font-size: var(--t-small); padding: var(--s-1) var(--s-3);
+    border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--track); color: var(--dim); cursor: pointer;
+  }
 </style>

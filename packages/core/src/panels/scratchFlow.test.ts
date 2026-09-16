@@ -20,7 +20,7 @@ import {
   SCRATCH_NODE_TYPES,
   type ScratchFlowEdge,
   type ScratchFlowNode,
-} from './scratchFlow';
+} from '@kontra/console-core/panels/scratchFlow';
 
 /**
  * The seam between the stored drawing and the canvas library.

@@ -1,6 +1,6 @@
 # 12 — Workflows
 
-Status: in-progress
+Status: done
 
 Type: AFK
 
@@ -66,3 +66,36 @@ Also fixed: the last gridline was drawn at 97% and its label clipped to `15` whe
 
 **Still to do for this slice:** the run list is not yet subscribed to `/api/runs/:runId/stream` — the
 second unconsumed SSE endpoint — and the canvas (Svelte Flow) is not ported.
+
+## Comments — the rest of the slice
+
+**Both SSE endpoints are now consumed.** `/api/runs/:runId/stream` has its first consumer, taking
+the PRD's count from 1 of 2 to **2 of 2**. The console has no data poll left, and `no-polling`
+enforces it.
+
+**`end` closes the source, and that is the bug worth naming.** The server closes a run stream
+deliberately when a run is terminal; `EventSource` reconnects on its own, so treating `end` as a
+drop would reopen forever against the one run guaranteed never to change again — a poll, reinvented.
+Asserted, along with: a `warn` keeps the last good state, an unparseable frame does not tear down a
+working stream, and no `reconnecting` is reported after the server said it was done.
+
+**`scratchFlow.ts` is in `@kontra/console-core`** — 508 lines and 80 tests, framework-free. It only
+ever imported `Edge` and `Node` as TYPE shapes, so core declares them locally and depends on neither
+library. That is what made the port a swap of the renderer rather than a rewrite of the model.
+
+**The spike was right about the APIs and missed a shape.** Every API existed, as reported. What it
+did not check was their types, and there is exactly one real difference: **React Flow's `Edge.style`
+is an object; Svelte Flow's is a CSS string.** It only surfaced when the compiler saw both at once.
+A string is the narrower form and converts trivially the other way, so that is what core speaks now.
+
+Also: I had added `markerEnd?: unknown` to the local `Edge` speculatively. Nothing set it, and it
+was the field that broke assignability. A guessed field is worse than a missing one.
+
+**Three node kinds became ONE component.** The React canvas had a component per kind and they
+differed by an icon and a border colour — which is a class, not a component. `NoteNode` stays
+separate because it has NO handles: a note is not part of the graph, and giving it connection points
+would let somebody draw an edge the document cannot represent.
+
+**Svelte Flow is in a LAZY chunk, and this is measured**: `Canvas-CLjBl_u-.js`, 164 KB. The Svelte
+entry is **92 KB for six surfaces**. React Flow is still inside the React entry's 464 KB, which is
+the ~180 KB everyone pays to open Secrets.

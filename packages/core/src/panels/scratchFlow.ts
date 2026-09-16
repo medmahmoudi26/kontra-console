@@ -13,8 +13,56 @@
  * rectangle with a label made the reader work out which was which from the text.
  */
 
-import type { CSSProperties } from 'react';
-import type { Edge, Node } from '@xyflow/react';
+/**
+ * `Node` and `Edge`, DECLARED HERE rather than imported from a canvas library.
+ *
+ * This module only ever used the two as type shapes, and both React Flow and Svelte Flow define
+ * them in the shared `@xyflow/system` with identical structure — so importing either one would tie
+ * a framework-free module (ADR 0048 §2) to a framework's package for types it does not need.
+ *
+ * Structural, not nominal: a value from either library satisfies these, which is the whole point
+ * while the canvas is being ported from one to the other.
+ */
+export interface Node<D = Record<string, unknown>, T extends string = string> {
+  id: string;
+  position: { x: number; y: number };
+  data: D;
+  type?: T;
+  width?: number;
+  height?: number;
+  selected?: boolean;
+  dragging?: boolean;
+  /** What the canvas MEASURED the rendered node to be, as opposed to what was asked for. Both
+   *  libraries report it the same way, and the layout reads it to avoid overlapping a node that
+   *  turned out taller than its declared height. */
+  measured?: { width?: number; height?: number };
+}
+
+export interface Edge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  type?: string;
+  animated?: boolean;
+  label?: string;
+  className?: string;
+  /**
+   * Inline style, as a CSS STRING.
+   *
+   * THE ONE PLACE THE TWO CANVAS LIBRARIES GENUINELY DIFFER. React Flow takes a style object;
+   * Svelte Flow takes a string. The spike (issue 09) checked that every API existed and did not
+   * check their shapes, so this only surfaced when the compiler saw both at once.
+   *
+   * A string is the narrower of the two and converts trivially in the other direction, so it is the
+   * one this framework-free module speaks.
+   */
+  style?: string;
+  ariaLabel?: string;
+  data?: Record<string, unknown>;
+  selected?: boolean;
+}
 import type {
   ScratchDocument,
   ScratchEdge,
@@ -229,7 +277,14 @@ export type ScratchFlowEdge = Edge;
 
 /** An edge that does not line up. Dashed and amber — the drawing is still drawn, because refusing
  *  it would be the canvas arguing with a sketch that is not finished (`scratchHandles.ts`). */
-const ODD_EDGE: CSSProperties = { stroke: '#f59e0b', strokeDasharray: '5 4' };
+/**
+ * An edge drawn as "this one is odd" — dashed and amber.
+ *
+ * A CSS STRING rather than an object, because that is what Svelte Flow takes and React Flow's
+ * object form converts from it trivially. See `Edge.style` above: it is the only real shape
+ * difference between the two libraries this port found.
+ */
+const ODD_EDGE = 'stroke: #f59e0b; stroke-dasharray: 5 4;';
 
 /**
  * One document edge, projected.
