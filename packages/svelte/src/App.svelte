@@ -1,63 +1,50 @@
 <script lang="ts">
   /**
-   * Slice 03: the skeleton route wearing the design language.
+   * Which surface this document is showing.
    *
-   * Still one page with no data — slices 04 onward bring surfaces. What it demonstrates is that the
-   * scale, the tokens and the panel-first shell hold at 320px, and the CI check asserts it.
+   * ── THE ROUTE IS READ, NOT ROUTED ───────────────────────────────────────────────────────────────
+   *
+   * There is no router. The orchestrator already decided which bundle serves this path (ADR 0048
+   * §1), so by the time this runs the answer is in `location.pathname` and a client-side router
+   * would be a second opinion about a question already settled. When there are several Svelte
+   * surfaces this becomes a `switch`; it does not become a routing library.
    */
-  import Shell from './lib/Shell.svelte';
-  import { whoami, type Who } from './session';
+  import Dev from './dev/Dev.svelte';
+  import Skeleton from './lib/Skeleton.svelte';
+  import { contractFor, type Contract } from './dev/contract';
 
-  const VIEWS = [{ id: '_svelte', label: 'Skeleton' }] as const;
-  let who = $state<Who>({ state: 'checking' });
+  const first = location.pathname.split('/')[1] ?? '';
+  const params = new URLSearchParams(location.search);
+
+  let contract = $state<Contract>({ state: 'loading' });
   $effect(() => {
-    void whoami().then((w) => (who = w));
+    if (first !== 'dev') return;
+    void contractFor(params.get('actor') ?? '', params.get('method') ?? '').then((c) => (contract = c));
   });
 </script>
 
-<Shell view="_svelte" views={VIEWS}>
-  <section>
-    <h1>The second bundle</h1>
-    <p class="lede">
-      Svelte, served by the orchestrator beside the React console. This page exists to prove the
-      plumbing and the type scale, and is replaced by the first real surface in slice 04.
-    </p>
-
-    <dl>
-      <dt>route</dt><dd class="mono">{location.pathname}</dd>
-      <dt>bundle</dt><dd class="mono">svelte</dd>
-      <dt>reachable</dt>
-      <dd>
-        {#if who.state === 'checking'}checking…
-        {:else if who.state === 'signed-in'}the API answers on this origin
-        {:else if who.state === 'signed-out'}signed out
-        {:else}<span class="bad">{who.error}</span>{/if}
-      </dd>
-    </dl>
-
-    <p class="note">
-      Every size on this page comes from the scale — 12px floor, 14px base. The narrow layout is the
-      default; the wider one is the media query.
-    </p>
-  </section>
-</Shell>
+{#if first === 'dev'}
+  <Dev
+    actor={params.get('actor') ?? ''}
+    version={contract.state === 'ready' ? contract.version : ''}
+    method={params.get('method') ?? ''}
+    schema={contract.state === 'ready' ? contract.schema : undefined}
+    loading={contract.state === 'loading'}
+  />
+  {#if contract.state === 'error'}
+    <p class="err" role="alert">{contract.error}</p>
+  {/if}
+{:else}
+  <Skeleton />
+{/if}
 
 <style>
-  section { display: flex; flex-direction: column; gap: var(--s-3); }
-  h1 { font-size: var(--t-head); font-weight: 600; margin: 0; text-wrap: balance; }
-  .lede { font-size: var(--t-body); color: var(--dim); margin: 0; max-width: 62ch; }
-  dl {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: var(--s-1) var(--s-3);
-    margin: 0;
-    padding: var(--s-3);
-    background: var(--panel);
-    border: 1px solid var(--line);
+  .err {
+    margin: 0 var(--s-3) var(--s-3);
+    padding: var(--s-2) var(--s-3);
+    font-size: var(--t-small);
+    color: var(--bad);
+    border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
     border-radius: var(--radius);
   }
-  dt { font-size: var(--t-small); color: var(--dim); }
-  dd { margin: 0; font-size: var(--t-small); overflow-wrap: anywhere; }
-  .bad { color: var(--bad); }
-  .note { font-size: var(--t-small); color: var(--dim); margin: 0; max-width: 62ch; }
 </style>

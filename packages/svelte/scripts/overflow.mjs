@@ -45,7 +45,15 @@ function routes() {
     const open = server.indexOf('[', start);
     const close = server.indexOf(']', open);
     if (open < 0 || close < 0) return [];
-    return [...server.slice(open, close).matchAll(/'([^']+)'/g)].map((x) => x[1]);
+    // COMMENTS STRIPPED FIRST. An apostrophe in prose — `the fallback's clause` — pairs with the
+    // next one and yields a "route" made of a comment, which this check then dutifully loaded and
+    // reported as passing. Found by reading the output rather than the exit code.
+    const body = server
+      .slice(open, close)
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, ''))
+      .join('\n');
+    return [...body.matchAll(/'([^']+)'/g)].map((x) => x[1]);
   };
   return [...grab('SVELTE_SURFACES'), ...grab('SVELTE_ROUTES')];
 }
