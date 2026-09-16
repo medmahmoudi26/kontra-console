@@ -9,8 +9,11 @@
    * would be a second opinion about a question already settled. When there are several Svelte
    * surfaces this becomes a `switch`; it does not become a routing library.
    */
+  import Catalog from './catalog/Catalog.svelte';
   import Dev from './dev/Dev.svelte';
+  import Shell from './lib/Shell.svelte';
   import Skeleton from './lib/Skeleton.svelte';
+  import { SURFACES, go } from './lib/surfaces';
   import { watchContract, type LiveContract } from './dev/live';
 
   const first = location.pathname.split('/')[1] ?? '';
@@ -40,6 +43,10 @@
   {#if live.contract.state === 'error'}
     <p class="err" role="alert">{live.contract.error}</p>
   {/if}
+{:else if first === 'catalog'}
+  <Shell view="catalog" views={SURFACES} onnavigate={(id) => location.assign(go(id, 'catalog').href)}>
+    <Catalog />
+  </Shell>
 {:else}
   <Skeleton />
 {/if}
