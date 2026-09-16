@@ -1,6 +1,6 @@
 # 07 — Actors
 
-Status: ready-for-agent
+Status: done
 
 Type: AFK
 
@@ -36,3 +36,25 @@ disagree.
 ## Blocked by
 
 - `06-catalog-and-navigation-between-bundles.md`
+
+## Comments
+
+**Done.** Actors serves from the Svelte bundle. Three serving states, not two.
+
+**`isServing` collapses two facts and this surface needs them apart.** Core's helper answers a
+boolean, which is right for a caller deciding whether to offer a dispatch. This surface EXPLAINS why
+a dispatch would wait, and for that "nothing is polling" and "the cluster could not be asked" have
+different fixes. Reporting an unreachable control plane as a wall of dead actors sends somebody to
+restart workers that are fine — `stuck.ts` in the orchestrator makes the same distinction, and its
+`pollers: null` is this `unknown`.
+
+**The freshness rule is not restated.** `pollIsFresh` comes from core, which shares the window with
+the server. A second spelling is how a page comes to offer a worker the server calls stale.
+Asserted: a poller listed with a stale timestamp is `idle`, not `serving` — Temporal keeps one
+listed for about five minutes after it was last seen.
+
+**An error beats a healthy-looking count.** A report carrying both is a stale count with a newer
+fact attached.
+
+**The contract table reuses `schemaFields`** — the same derivation `/dev` draws its form from. Two
+copies would let a table describing a call disagree with the form making it.

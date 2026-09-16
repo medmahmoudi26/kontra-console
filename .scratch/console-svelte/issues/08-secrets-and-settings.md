@@ -1,6 +1,6 @@
 # 08 — Secrets and Settings
 
-Status: ready-for-agent
+Status: done
 
 Type: AFK
 
@@ -34,3 +34,25 @@ rule.
 ## Blocked by
 
 - `06-catalog-and-navigation-between-bundles.md`
+
+## Comments
+
+**Done.** Both serve from the Svelte bundle. Five of seven surfaces are now Svelte; what remains in
+React is exactly the three the checkpoint is about — Workflows (React Flow), Datasets (ag-grid),
+Monitor (terminals).
+
+**Nothing on the Secrets page suggests a value is retrievable.** No reveal, no masked field holding a
+placeholder, no copy control. The value input is `type=password`, `autocomplete=off`, and is never
+populated — it is write-only because the API has nothing to put in it. A masked field showing
+`••••••••` that is not a secret is worse than an empty one: it teaches that the value is here and
+recoverable, which is what stops somebody recording it where it actually is.
+
+**A rotation says it rotated.** The API answers `rotated: true`; the UI says `rotated to version N`
+rather than `saved`. Silently replacing hides a destructive act behind a create button.
+
+**A disabled store is named as disabled**, not as an error — 503 on this route means the
+installation has no secret store, which is a configuration, not a fault.
+
+**Settings shows only facts the control plane already knows** — namespace, reachability, and which
+bundle serves each surface. A settings page you can type into would be a second source for values
+the appliance reads from `config.yaml` at boot.

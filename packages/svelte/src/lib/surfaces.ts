@@ -20,11 +20,11 @@ export interface Surface {
 export const SURFACES: readonly Surface[] = [
   { id: 'catalog', label: 'Catalog', bundle: 'svelte' },
   { id: 'workflows', label: 'Workflows', bundle: 'react' },
-  { id: 'actors', label: 'Actors', bundle: 'react' },
+  { id: 'actors', label: 'Actors', bundle: 'svelte' },
   { id: 'datasets', label: 'Datasets', bundle: 'react' },
   { id: 'monitor', label: 'Monitor', bundle: 'react' },
-  { id: 'secrets', label: 'Secrets', bundle: 'react' },
-  { id: 'settings', label: 'Settings', bundle: 'react' },
+  { id: 'secrets', label: 'Secrets', bundle: 'svelte' },
+  { id: 'settings', label: 'Settings', bundle: 'svelte' },
 ];
 
 /**
