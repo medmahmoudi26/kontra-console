@@ -110,3 +110,36 @@ describe('short', () => {
     expect(short(125)).toBe('2m 5s');
   });
 });
+
+describe('what counts as a failure', () => {
+  /** One event, shaped like the reduced log's rows. */
+  const ev = (id: number, type: string, cat: RunEvent['cat'], t: number): RunEvent =>
+    ({ id, type, cat, t, dur: 0, attempt: 1, summary: '', detail: '' }) as RunEvent;
+
+  it('does NOT count a cancelled timer, because that is what an answered ask looks like', () => {
+    // MEASURED ON A LIVE RUN. `approve` starts a deadline timer for its question and cancels it
+    // when the answer arrives; the run completed in 7.6s and the surface said `1 failed`, every
+    // time, for every answered ask.
+    const tl = buildTimeline([
+      ev(1, 'WorkflowExecutionStarted', 'workflow', 0),
+      ev(2, 'TimerStarted', 'timer', 0.4),
+      ev(3, 'WorkflowExecutionSignaled', 'signal', 6.3),
+      ev(4, 'TimerCanceled', 'timer', 6.4),
+      ev(5, 'WorkflowExecutionCompleted', 'workflow', 7.6),
+    ]);
+    expect(tl.failed).toBe(0);
+  });
+
+  it('still counts the cancellations that ARE failures', () => {
+    for (const type of [
+      'ActivityTaskFailed',
+      'ActivityTaskTimedOut',
+      'WorkflowExecutionTerminated',
+      'WorkflowExecutionCanceled',
+      'ActivityTaskCancelRequested',
+    ]) {
+      const tl = buildTimeline([ev(1, type, 'activity', 1)]);
+      expect(tl.failed, type).toBe(1);
+    }
+  });
+});

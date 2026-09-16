@@ -22,13 +22,7 @@
    */
   import { onMount } from 'svelte';
 
-  interface Workspaces {
-    parent: string;
-    current: string;
-    names: string[];
-    currentPath: string;
-    mountHint: string;
-  }
+  import { readWorkspaces, type Workspaces } from './workspaces';
 
   let ws = $state<Workspaces | undefined>(undefined);
   let busy = $state(false);
@@ -37,7 +31,7 @@
   async function read(): Promise<void> {
     try {
       const res = await fetch('/api/workspaces', { credentials: 'same-origin' });
-      ws = res.ok ? ((await res.json()) as Workspaces) : undefined;
+      ws = res.ok ? readWorkspaces(await res.json()) : undefined;
     } catch {
       ws = undefined;
     }
@@ -60,7 +54,7 @@
         error = ((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`;
         return;
       }
-      ws = (await res.json()) as Workspaces;
+      ws = readWorkspaces(await res.json());
       /**
        * A FULL RELOAD, ON PURPOSE. Every surface derives from the workspace — the actor list, the
        * workflow folders, the forms built from their contracts — and re-fetching them piecemeal

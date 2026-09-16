@@ -67,9 +67,24 @@
   /** The workspace folder that holds this Actor's code, if one does. */
   const folderOf = (a: ActorRow): Source | undefined => folders.find((f) => f.name === a.name);
 
+  /**
+   * THE ONES YOU CAN SERVE COME FIRST, and they are the ones with a button.
+   *
+   * The catalog is every Actor a worker ever registered — 29 on a four-week-old install — and the
+   * workspace is the code on this disk. Sorted alphabetically together, the four you can act on sat
+   * among twenty-five you cannot, so the surface looked like it had no actions at all: the first
+   * row was `bbscope`, whose code is not here.
+   */
+  const inWorkspace = $derived(actors.filter((a) => folderOf(a) !== undefined));
+  const elsewhere = $derived(actors.filter((a) => folderOf(a) === undefined));
+
   async function serve(a: ActorRow, restart = false): Promise<void> {
     const folder = folderOf(a);
     if (!folder) return;
+    // PRESSING SERVE OPENS THAT ACTOR. The outcome — the session name, or the server's refusal —
+    // is drawn in the detail panel, and it appeared under whichever actor happened to be open:
+    // `worker started` under `bbscope` for a worker started for `redditapi`.
+    open = a.key;
     serving = a.key;
     serveError = '';
     served = '';
@@ -106,18 +121,52 @@
       publishes one and its contract.
     </p>
   {:else}
-    <ul class="grid">
-      {#each actors as a (a.key)}
-        {@const s = stateOf(a)}
-        <li>
-          <button class:open={open === a.key} onclick={() => (open = a.key)}>
-            <span class="nm mono">{a.name}</span>
-            <span class="ver mono">{a.version}</span>
-            <span class="state {s}">{s === 'idle' ? 'no poller' : s}</span>
-          </button>
-        </li>
-      {/each}
-    </ul>
+    {#if inWorkspace.length > 0}
+      <h2 class="group">in this workspace</h2>
+      <ul class="grid">
+        {#each inWorkspace as a (a.key)}
+          {@const s = stateOf(a)}
+          <li>
+            <button class:open={open === a.key} onclick={() => (open = a.key)}>
+              <span class="nm mono">{a.name}</span>
+              <span class="ver mono">{a.version}</span>
+              <span class="state {s}">{s === 'idle' ? 'no poller' : s}</span>
+            </button>
+            <!-- THE BUTTON IS ON THE ROW, not behind a click. An Actor nothing is polling is the
+                 single most common reason a call sits there, and the fix is one press. -->
+            <button
+              class="serve"
+              data-testid="serve-actor-{a.name}"
+              disabled={serving === a.key}
+              onclick={() => void serve(a, s === 'serving')}
+            >
+              {#if serving === a.key}…{:else if s === 'serving'}re-serve{:else}serve{/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+
+    {#if elsewhere.length > 0}
+      <h2 class="group">
+        not in this workspace
+        <span class="why">
+          registered by a worker from somewhere else — their code is not here to serve
+        </span>
+      </h2>
+      <ul class="grid quiet">
+        {#each elsewhere as a (a.key)}
+          {@const s = stateOf(a)}
+          <li>
+            <button class:open={open === a.key} onclick={() => (open = a.key)}>
+              <span class="nm mono">{a.name}</span>
+              <span class="ver mono">{a.version}</span>
+              <span class="state {s}">{s === 'idle' ? 'no poller' : s}</span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
 
     {#if shown}
       {@const s = stateOf(shown)}
@@ -182,6 +231,26 @@
 <style>
   section { display: flex; flex-direction: column; gap: var(--s-3); }
   .acts { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+  .group {
+    font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--dim); font-weight: 600; margin: var(--s-2) 0 0;
+    display: flex; gap: var(--s-2); align-items: baseline; flex-wrap: wrap;
+  }
+  .group .why { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .grid.quiet li button { opacity: 0.72; }
+  /* ONE ROW PER ACTOR: the card, then its action. The card grows; the button is as wide as its
+     word. Both are buttons, so the card styling below has to exclude the second one — without
+     that, `width: 100%` made `serve` a full-size card of its own and the list read as twice as
+     many actors. */
+  .grid li { display: flex; align-items: stretch; gap: var(--s-1); min-width: 0; }
+  .grid li > button:not(.serve) { flex: 1; min-width: 0; }
+  .serve {
+    font-size: var(--t-micro); padding: 0 var(--s-2); border-radius: var(--radius);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
+    cursor: pointer; white-space: nowrap;
+  }
+  .serve:disabled { border-color: var(--line); background: var(--track); color: var(--dim); cursor: not-allowed; }
   .acts button {
     font-size: var(--t-small); padding: var(--s-1) var(--s-3); border-radius: var(--radius);
     border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
@@ -196,12 +265,14 @@
   .muted { font-size: var(--t-small); color: var(--dim); margin: 0; max-width: 62ch; line-height: var(--lh-body); }
 
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: var(--s-2); }
-  .grid button {
+  @media (min-width: 760px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1200px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .grid button:not(.serve) {
     width: 100%; display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; text-align: left;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
     padding: var(--s-2) var(--s-3); color: var(--fg); cursor: pointer;
   }
-  .grid button.open { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .grid button:not(.serve).open { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
   .nm { font-size: var(--t-small); }
   .ver { font-size: var(--t-micro); color: var(--dim); }
 

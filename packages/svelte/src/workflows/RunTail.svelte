@@ -68,6 +68,24 @@
     const stop = followRun<{ status?: string }>(id, (f) => {
       if (!live) return;
       follow = f;
+      /**
+       * A CLOSED STREAM IS NOT A CLOSED RUN — until somebody asks.
+       *
+       * The server closes this stream when the run reaches a terminal status, and `end` carries no
+       * state of its own. Reading a status only from `live` frames therefore left the strip saying
+       * `running` under a run that had completed seconds earlier — measured on `approve`, which
+       * finishes ~1s after its question is answered, so the last live frame is always the one
+       * before the end.
+       *
+       * One read on `end`, which is the moment there is a final answer to read.
+       */
+      if (f.state === 'ended') {
+        void fetchRun(id)
+          .then((d) => {
+            if (live && id === runId) detail = d;
+          })
+          .catch(() => {});
+      }
       const said = f.state === 'live' && f.run?.status ? asStatus(f.run.status) : undefined;
       // ONLY EXTENDS WHAT IS KNOWN. Before the detail lands there is no RunDetail to spread, and
       // inventing one would mean inventing the other dimension with it — so the status is held and
