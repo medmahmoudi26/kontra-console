@@ -13,6 +13,12 @@
    * happen between a table describing a call and the form making it.
    */
   import { schemaFields } from '@kontra/console-core/panels/schemaTree';
+  import {
+    AlreadyServingError,
+    fetchSources,
+    serveActorSource,
+    type Source,
+  } from '@kontra/console-core/run/api';
   import type { JsonSchema } from '@kontra/console-core/types';
 
   import { servingHint, servingState, type PollerReport } from './serving';
@@ -22,18 +28,33 @@
 
   let actors = $state<ActorRow[]>([]);
   let pollers = $state<Record<string, PollerReport>>({});
+  /**
+   * The workspace folders, joined to the catalog by name.
+   *
+   * TWO INVENTORIES, AND NEITHER IS THE OTHER'S INDEX. The catalog is what a running worker
+   * registered about ITSELF — 29 entries on this install, going back months. The workspace is the
+   * code on this disk right now. An Actor in the catalog with no folder here cannot be served from
+   * this console (its code is somewhere else, or gone), and saying which is which is the difference
+   * between "press Serve" and "go and find the code".
+   */
+  let folders = $state<Source[]>([]);
+  let serving = $state('');
+  let serveError = $state('');
+  let served = $state('');
   let loading = $state(true);
   let open = $state<string | undefined>(undefined);
   const now = Date.now();
 
   $effect(() => {
     void (async () => {
-      const [a, p] = await Promise.all([
+      const [a, p, f] = await Promise.all([
         fetch('/api/actors', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : [])).catch(() => []),
         fetch('/api/pollers', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+        fetchSources('actor').then((d) => d.sources).catch(() => []),
       ]);
       actors = Array.isArray(a) ? (a as ActorRow[]) : [];
       pollers = (p ?? {}) as Record<string, PollerReport>;
+      folders = f;
       open = actors[0]?.key;
       loading = false;
     })();
@@ -43,6 +64,35 @@
   const queueOf = (a: ActorRow) => `${a.name}-${a.version}`;
   const stateOf = (a: ActorRow) => servingState(pollers[queueOf(a)], now);
   const shown = $derived(actors.find((a) => a.key === open));
+  /** The workspace folder that holds this Actor's code, if one does. */
+  const folderOf = (a: ActorRow): Source | undefined => folders.find((f) => f.name === a.name);
+
+  async function serve(a: ActorRow, restart = false): Promise<void> {
+    const folder = folderOf(a);
+    if (!folder) return;
+    serving = a.key;
+    serveError = '';
+    served = '';
+    try {
+      const result = await serveActorSource(folder.id, { restart });
+      served = result.attach || result.session;
+      // The poller table is what decides the state chip; re-read it rather than assuming.
+      pollers = await fetch('/api/pollers', { credentials: 'same-origin' })
+        .then((r) => (r.ok ? r.json() : pollers))
+        .catch(() => pollers);
+    } catch (err) {
+      // A WORKER IS ALREADY THERE IS A QUESTION, NOT A FAILURE — and the answer is a second press
+      // that restarts it, which is why the server gives that case its own status and its own class.
+      serveError =
+        err instanceof AlreadyServingError
+          ? `${err.message} — press Re-serve to replace it.`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+    } finally {
+      serving = '';
+    }
+  }
 </script>
 
 <section>
@@ -75,6 +125,31 @@
         <h2 class="mono">{shown.name}@{shown.version}</h2>
         <p class="hint {s}">{servingHint(s)}</p>
 
+        <div class="acts">
+          {#if folderOf(shown)}
+            {@const folder = folderOf(shown)!}
+            <button
+              data-testid="serve-actor"
+              disabled={serving === shown.key}
+              onclick={() => void serve(shown, s === 'serving')}
+            >
+              {#if serving === shown.key}serving…{:else if s === 'serving'}Re-serve{:else}Serve{/if}
+            </button>
+            <span class="where mono" title={folder.path}>{folder.path}</span>
+          {:else}
+            <!-- NOT IN THE WORKSPACE. The catalog remembers Actors a worker registered from
+                 anywhere; this console can only serve code it can see. -->
+            <span class="where">
+              no folder for <b>{shown.name}</b> in the workspace — this entry is what a worker
+              registered, and the code is not here to serve.
+            </span>
+          {/if}
+        </div>
+        {#if serveError}<p class="err" role="alert">{serveError}</p>{/if}
+        {#if served}
+          <p class="muted">worker started — <code class="mono">{served}</code>, and its pane is on the Monitor.</p>
+        {/if}
+
         {#each shown.operations ?? [] as op (op.name)}
           {@const fields = schemaFields(op.input) ?? []}
           <div class="op">
@@ -106,6 +181,15 @@
 
 <style>
   section { display: flex; flex-direction: column; gap: var(--s-3); }
+  .acts { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+  .acts button {
+    font-size: var(--t-small); padding: var(--s-1) var(--s-3); border-radius: var(--radius);
+    border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); cursor: pointer;
+  }
+  .acts button:disabled { border-color: var(--line); background: var(--track); color: var(--dim); cursor: not-allowed; }
+  .where { font-size: var(--t-small); color: var(--dim); overflow-wrap: anywhere; }
+  .err { margin: 0; font-size: var(--t-small); color: var(--bad); overflow-wrap: anywhere; line-height: var(--lh-body); }
   h1 { font-size: var(--t-head); font-weight: 600; margin: 0; }
   h2 { font-size: var(--t-lead); font-weight: 600; margin: 0 0 var(--s-1); overflow-wrap: anywhere; }
   h3 { font-size: var(--t-body); font-weight: 600; margin: 0 0 var(--s-1); }

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Workspace from './Workspace.svelte';
+
   /**
    * The console's chrome, designed at ~390px.
    *
@@ -42,6 +44,9 @@
               onclick={() => onnavigate?.(v.id)}>{v.label}</button>
     {/each}
     <span class="spacer"></span>
+    <!-- WHICH WORKSPACE, top right, because it decides what every surface below lists. The tenant
+         chip sits beside it: one says whose cluster, the other says whose code. -->
+    <Workspace />
     <span class="tenant">tenant <b>{tenant}</b></span>
   </nav>
   <main>{@render children()}</main>

@@ -76,6 +76,27 @@
    */
   /** Bumped whenever the stream says the picked run changed. Children re-read on it. */
   let revision = $state(0);
+  /**
+   * Is the run list open.
+   *
+   * IT COLLAPSES BECAUSE RUNS ACCUMULATE. A workflow anybody actually uses has hundreds, and an
+   * always-open list pushes the thing you came for — what THIS run did — off the bottom of the
+   * screen.
+   *
+   * OPEN WHILE THERE ARE FEW, SHUT ONCE THERE ARE MANY, because the list stops being an overview
+   * at about a screenful and starts being an obstacle. The header keeps the count and the selected
+   * id visible either way, so a shut list never hides which run is on screen. Once a person
+   * touches it, their choice stands — `touched` is what stops the threshold from overriding them
+   * when the eleventh run arrives.
+   */
+
+  /**
+   * How many runs the list draws.
+   *
+   * A CAP, AND IT SAYS SO when it bites — a silent `slice` is a list that looks complete and is
+   * not. The rest are reachable by their address; this surface is about the newest.
+   */
+  const SHOWN_RUNS = 12;
   let scopeType = $state('');
   let scopeName = $state('');
 
@@ -184,6 +205,11 @@
    * selected is still the place you go to see what ran.
    */
   const shown = $derived(scopeType ? runs.filter((r) => r.type === scopeType) : runs);
+  let touched = $state(false);
+  let openedByHand = $state(true);
+  const OPEN_UP_TO = 5;
+  const runsOpen = $derived(touched ? openedByHand : shown.length <= OPEN_UP_TO);
+
   const run = $derived(runs.find((r) => r.runId === picked));
   // Seconds the run has been going, for the open bars. A closed run draws to its last event.
   const nowSeconds = $derived(
@@ -227,13 +253,26 @@
       {/if}
     </p>
   {:else}
-    <div class="runs">
-      {#each shown.slice(0, 12) as r (r.runId)}
-        <button class:on={picked === r.runId} onclick={() => { picked = r.runId; focus = undefined; }}>
-          <span class="rid mono">{r.runId}</span>
-          <span class="st {r.status}">{r.status}</span>
-        </button>
-      {/each}
+    <div class="runlist">
+      <button class="head" aria-expanded={runsOpen} onclick={() => { openedByHand = !runsOpen; touched = true; }}>
+        <span class="caret" aria-hidden="true">{runsOpen ? '▾' : '▸'}</span>
+        <span class="count">{shown.length} run{shown.length === 1 ? '' : 's'}</span>
+        {#if !runsOpen && picked}<span class="rid mono">{picked}</span>{/if}
+        {#if shown.length > SHOWN_RUNS}
+          <span class="more">showing the newest {SHOWN_RUNS}</span>
+        {/if}
+      </button>
+
+      {#if runsOpen}
+        <div class="runs">
+          {#each shown.slice(0, SHOWN_RUNS) as r (r.runId)}
+            <button class:on={picked === r.runId} onclick={() => { picked = r.runId; focus = undefined; }}>
+              <span class="rid mono">{r.runId}</span>
+              <span class="st {r.status}">{r.status}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     {#if run}
@@ -315,6 +354,16 @@
     font-size: var(--t-small); color: var(--bad); margin: 0; padding: var(--s-2) var(--s-3);
     border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); border-radius: var(--radius);
   }
+  .runlist { display: flex; flex-direction: column; gap: var(--s-1); }
+  .runlist .head {
+    display: flex; align-items: baseline; gap: var(--s-2); width: 100%;
+    background: none; border: 0; padding: var(--s-1) 0; cursor: pointer; text-align: left;
+    font-size: var(--t-small); color: var(--dim);
+  }
+  .runlist .head .caret { color: var(--dim); }
+  .runlist .head .count { color: var(--fg); }
+  .runlist .head .rid { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .runlist .head .more { margin-left: auto; font-size: var(--t-micro); }
   .runs { display: flex; flex-direction: column; gap: var(--s-1); }
   .runs button {
     display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; text-align: left; cursor: pointer;
