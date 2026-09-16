@@ -1,6 +1,6 @@
 # 02 — Two bundles, one login
 
-Status: ready-for-agent
+Status: done
 
 Type: AFK
 
@@ -37,3 +37,37 @@ that authenticated separately would put the split exactly where a user would fee
 ## Blocked by
 
 - `01-console-core-extracted-and-guarded.md`
+
+## Comments
+
+**Done.** `@kontra/console-svelte` builds to `dist/svelte.html` + `dist/assets/svelte-*.js`
+(**30.87 KB**, 11.99 KB gzipped, against React's 472 KB entry). Verified against the REAL build, not
+a fixture: `/_svelte` → `svelte.html`, `/catalog/an.id.with.dots` → `index.html`, a deleted chunk
+still 404s, an unknown API route still 404s as JSON.
+
+**Two documents, one directory, two rules.** Both bundles share `dist/`, so the Svelte one is
+`svelte.html` — `index.html` has an owner — and it builds with `emptyOutDir: false` AFTER the React
+build, or it deletes the console. The order lives in the root `build` script because a build tool
+cannot enforce the order of two builds it does not run. A `base: '/s/'` was the first attempt and it
+only moved the URLs, not the files; vite's hashes already keep the two asset sets apart.
+
+**`SVELTE_SURFACES` and `SVELTE_ROUTES`, plus a boot guard.** The new failure the split creates is a
+segment in BOTH sets — which serves whichever `if` runs first, a coin flip decided by source order.
+`assertBundlesAreDisjoint` throws at boot, and the test proves it by passing overlapping sets, not
+by observing that today's are fine.
+
+**`/_svelte` is a real route on purpose.** With both sets empty, every Svelte assertion in
+`spaFallback.test.ts` iterated nothing and passed — a suite proving the split works without ever
+having served the second document. The skeleton route makes them real and goes when `/dev` moves in
+slice 04.
+
+**The fixture needed the second document too.** It wrote only `index.html`, so the first honest run
+404'd and read as a routing bug rather than a missing file. Both documents now carry a
+`data-bundle` marker, because asserting on the substring `svelte` also matches a filename.
+
+**One login is not yet proven end to end.** `/api/health` is open, so a 200 shows reachability and
+not identity; `session.ts` says so rather than claiming more. Slice 06 is the first surface that
+needs a real session and is where that gets asserted.
+
+Unrelated: 14 orchestrator tests fail on this box with `EMFILE: too many open files`, and none of
+the four files imports from `server.ts`.

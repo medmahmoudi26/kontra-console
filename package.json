@@ -7,7 +7,7 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && pnpm --filter @kontra/console-svelte run build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
