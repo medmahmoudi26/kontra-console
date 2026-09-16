@@ -21,10 +21,10 @@ import {
   pushSample,
   VELOCITY_SAMPLES,
   wheelPixels,
-} from './scroll';
-import { visibleText, type BufferLike } from './copy';
-import { modeStakes, parseTileRef, tileRefFor } from './tileRef';
-import { ageWords, byteWords } from './format';
+} from '@kontra/console-core/panels/chrome/scroll';
+import { visibleText, type BufferLike } from '@kontra/console-core/panels/chrome/copy';
+import { modeStakes, parseTileRef, tileRefFor } from '@kontra/console-core/panels/chrome/tileRef';
+import { ageWords, byteWords } from '@kontra/console-core/panels/chrome/format';
 import {
   clampFontSize,
   DEFAULT_FONT_SIZE,
@@ -38,7 +38,7 @@ import {
   serializeTerminalStyle,
   SIDEBAR_DEFAULT_OPEN,
   TERMINAL_FONT_STACK,
-} from '../theme';
+} from '@kontra/console-core/panels/theme';
 
 // --- ids ------------------------------------------------------------------------------------------
 

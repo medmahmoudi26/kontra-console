@@ -24,8 +24,8 @@ import {
   revokeSecretVersion,
   writeSecret,
   type Secret,
-} from '../run/api';
-import { destroyConfirm, nameHint, revocationConfirm, toRows, type SecretRow } from './secrets';
+} from '@kontra/console-core/run/api';
+import { destroyConfirm, nameHint, revocationConfirm, toRows, type SecretRow } from '@kontra/console-core/panels/secrets';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

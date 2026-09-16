@@ -42,7 +42,7 @@ import { AgGridReact } from 'ag-grid-react';
 import type { ColDef, ICellRendererParams, ValueGetterParams } from 'ag-grid-community';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql as sqlLang, type SQLNamespace } from '@codemirror/lang-sql';
-import type { DatasetInfo } from '../run/api';
+import type { DatasetInfo } from '@kontra/console-core/run/api';
 import {
   addDatasetTag,
   deleteDataset,
@@ -50,7 +50,7 @@ import {
   renameDataset,
   resetDatasetName,
   type DatasetDeviation,
-} from '../run/api';
+} from '@kontra/console-core/run/api';
 import { Spark } from '../components/Spark';
 import {
   EXPORT_FORMATS,
@@ -60,18 +60,18 @@ import {
   type ExportFormat,
   type QueryResult,
   type SchemaEntry,
-} from '../run/query';
-import { queryCommand } from '../run/dataset';
+} from '@kontra/console-core/run/query';
+import { queryCommand } from '@kontra/console-core/run/dataset';
 import {
   DATASET_STATES,
   datasetBadge,
   datasetState,
   type DatasetBadgeState,
-} from '../datasets/state';
-import { fetchProvenance, type DatasetProvenance } from '../datasets/provenance';
-import { datasetExpiry } from '../datasets/expiry';
-import { scopeWords } from '../datasets/scope';
-import { duckdbText, inspect } from '../datasets/cells';
+} from '@kontra/console-core/datasets/state';
+import { fetchProvenance, type DatasetProvenance } from '@kontra/console-core/datasets/provenance';
+import { datasetExpiry } from '@kontra/console-core/datasets/expiry';
+import { scopeWords } from '@kontra/console-core/datasets/scope';
+import { duckdbText, inspect } from '@kontra/console-core/datasets/cells';
 import {
   groupDatasetName,
   groupDatasets,
@@ -79,19 +79,19 @@ import {
   runTitle,
   wholeDataset,
   type DatasetGroup,
-} from '../datasets/grouped';
+} from '@kontra/console-core/datasets/grouped';
 import {
   dispatchCell,
   listingRowId,
   listingRows,
   tagMeaning,
   type DatasetListingRow,
-} from '../datasets/listing';
+} from '@kontra/console-core/datasets/listing';
 import DatasetProvenancePanel from './DatasetProvenance';
 import DatasetAccrual from './DatasetAccrual';
 import { LiveRowTail } from './LiveRowTail';
-import { gridTheme } from '../lib/agGrid';
-import { useAppStore } from '../state/store';
+import { gridTheme } from '@kontra/console-core/lib/agGrid';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 

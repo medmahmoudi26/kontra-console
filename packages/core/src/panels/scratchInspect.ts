@@ -38,7 +38,7 @@ import type {
 } from '../run/api';
 import type { ActorOperation, CatalogActor, JsonSchema } from '../types';
 import { groupDatasets, type DatasetGroup } from '../datasets/grouped';
-import { schemaFields } from './MethodContract';
+import { schemaFields } from './schemaTree';
 
 /**
  * Everything the inspector reads, as the page already holds it.

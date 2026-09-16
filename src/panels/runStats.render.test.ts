@@ -20,12 +20,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { Concern } from '@kontra/core/vocabulary';
 
-import type { DatasetInfo, MaterializationSummary, RunEvent, RunHistory, RunRow } from '../run/api';
+import type { DatasetInfo, MaterializationSummary, RunEvent, RunHistory, RunRow } from '@kontra/console-core/run/api';
 import { RunStatsBar } from './RunStats';
-import { runStats, type RunStatsInput } from './runStats';
-import type { RunDatasets } from './runDatasets';
+import { runStats, type RunStatsInput } from '@kontra/console-core/panels/runStats';
+import type { RunDatasets } from '@kontra/console-core/panels/runDatasets';
 import { WorkflowThread, type WorkflowThreadProps } from './WorkflowThread';
-import { threadOf } from './workflowThread';
+import { threadOf } from '@kontra/console-core/panels/workflowThread';
 
 const T0 = 1_787_084_868_000;
 const NOW = T0 + 300_000;

@@ -14,8 +14,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { schemaTree, type FieldNode } from './schemaTree';
-import { addRow, coerceValues, initialValues, removeRow, rowCount } from './formFields';
+import { schemaTree, type FieldNode } from '@kontra/console-core/panels/schemaTree';
+import { addRow, coerceValues, initialValues, removeRow, rowCount } from '@kontra/console-core/panels/formFields';
 
 const NESTED = {
   type: 'object',

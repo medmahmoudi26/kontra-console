@@ -38,7 +38,7 @@
 
 import { lazy, useEffect } from 'react';
 import { Shell } from './panels/Shell';
-import { useAppStore } from './state/store';
+import { useAppStore } from '@kontra/console-core/state/store';
 
 // Every surface is lazy. The heavy ones earn it outright — Datasets pulls in AG Grid and the
 // CodeMirror SQL editor, and Monitor pulls xterm.js plus its CSS and talks to a DIFFERENT origin,

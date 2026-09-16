@@ -1,0 +1,7 @@
+# The console is a workspace so its framework-free half can be a package (ADR 0048 §2).
+#
+# The ROOT is the React app and stays a package in its own right — pnpm treats it as one. Moving it
+# under `packages/` as well would have been tidier and would have rewritten every path in the
+# Dockerfile, the CI job and the appliance's SPA bundle step for no behavioural gain.
+packages:
+  - packages/*

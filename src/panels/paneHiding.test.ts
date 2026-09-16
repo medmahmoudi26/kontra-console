@@ -20,7 +20,7 @@ import {
   toggleHidden,
   wantedSubscriptions,
 } from './paneHiding';
-import { resubscribePlan } from './reconnect';
+import { resubscribePlan } from '@kontra/console-core/panels/reconnect';
 
 const ACTOR = 'local:localhost/nscheck-0_1_0/actor';
 const HANDLER = 'local:localhost/nscheck-0_1_0/handler';

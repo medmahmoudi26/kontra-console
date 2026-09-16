@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 // The SERVER's own resolution, not a restatement of it: the sentence an author reads in the
 // inspector is the sentence the agent reads in the spec, or the two disagree about one drawing.
 import { resolveScratch } from '@kontra/core/scratch';
-import type { DatasetInfo, ScratchDocument, ScratchNode, WorkflowDescriptor, WorkflowFile } from '../run/api';
-import type { CatalogActor } from '../types';
+import type { DatasetInfo, ScratchDocument, ScratchNode, WorkflowDescriptor, WorkflowFile } from '@kontra/console-core/run/api';
+import type { CatalogActor } from '@kontra/console-core/types';
 import { withMethod } from './scratchFlow';
 import {
   describeWorkflow,
@@ -34,7 +34,7 @@ import {
   portText,
   readScratchNode,
   type ScratchCatalogue,
-} from './scratchInspect';
+} from '@kontra/console-core/panels/scratchInspect';
 
 /** `probe@0.1.0`: two Methods whose signatures differ, and one that repeats `fetch`'s exactly. */
 const PROBE: CatalogActor = {

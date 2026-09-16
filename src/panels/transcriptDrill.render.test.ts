@@ -19,14 +19,14 @@ import { categorize } from '@kontra/core/history';
 import { nameTranscript, readVocabulary, type NamedTurn } from '@kontra/core/vocabulary';
 import { readTranscript, type Turn } from '@kontra/core/transcript';
 
-import type { RunEvent, RunHistory, RunRow } from '../run/api';
-import { readRunTurns } from '../run/turns';
+import type { RunEvent, RunHistory, RunRow } from '@kontra/console-core/run/api';
+import { readRunTurns } from '@kontra/console-core/run/turns';
 import { TranscriptDrill, type DrillLevelView, type TranscriptDrillProps } from './TranscriptDrill';
 import { TranscriptView } from './Transcript';
 import { WorkflowThread, type WorkflowThreadProps } from './WorkflowThread';
-import { EVENT_LOG_TAB, openDrill, threadOf } from './workflowThread';
-import { rootLevel, type DrillLevel } from './eventDrill';
-import { rowsFor, subjectOf, turnKey } from './transcriptDrill';
+import { EVENT_LOG_TAB, openDrill, threadOf } from '@kontra/console-core/panels/workflowThread';
+import { rootLevel, type DrillLevel } from '@kontra/console-core/panels/eventDrill';
+import { rowsFor, subjectOf, turnKey } from '@kontra/console-core/panels/transcriptDrill';
 
 const BASE = 1_786_831_339_151;
 const RUN = 'nscheck-1786831339';

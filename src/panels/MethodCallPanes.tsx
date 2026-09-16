@@ -46,9 +46,9 @@ import {
   Plus,
   X,
 } from 'lucide-react';
-import type { GeneratedCaller, ProbeReading, ProbeStarted } from '../run/api';
-import type { ActorOperation, CatalogActor } from '../types';
-import type { ActorServeState, ServeWords } from './actorWorkers';
+import type { GeneratedCaller, ProbeReading, ProbeStarted } from '@kontra/console-core/run/api';
+import type { ActorOperation, CatalogActor } from '@kontra/console-core/types';
+import type { ActorServeState, ServeWords } from '@kontra/console-core/panels/actorWorkers';
 import {
   addUnit,
   leafFields,
@@ -61,7 +61,7 @@ import {
   toggleUnit,
   type BatchDraft,
   type BatchResult,
-} from './methodCall';
+} from '@kontra/console-core/panels/methodCall';
 import { Button } from '@/components/ui/button';
 
 /** Who can serve this Actor right now — `actorWorkers.ts`'s reading, threaded in whole rather

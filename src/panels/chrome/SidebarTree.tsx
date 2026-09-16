@@ -27,8 +27,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SideResizer, useSideDock } from './SideDock';
 import { Button } from '@/components/ui/button';
-import { SIDEBAR_WIDTH_PX } from '../theme';
-import type { Terminal } from '../panelsClient';
+import { SIDEBAR_WIDTH_PX } from '@kontra/console-core/panels/theme';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 import {
   allBranchKeys,
   buildTree,
@@ -37,7 +37,7 @@ import {
   type BranchHealth,
   type RollupState,
   type TreeRow,
-} from './tree';
+} from '@kontra/console-core/panels/chrome/tree';
 import './chrome.css';
 
 export interface SidebarTreeProps {

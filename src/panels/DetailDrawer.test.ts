@@ -17,8 +17,8 @@ import DetailDrawer, {
   type TerminalDetail,
 } from './DetailDrawer';
 import { SCROLLBACK_LINES } from './TerminalTile';
-import { modeStakes } from './chrome/tileRef';
-import type { TerminalHealth } from './panelsClient';
+import { modeStakes } from '@kontra/console-core/panels/chrome/tileRef';
+import type { TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 const NOW = 1_754_000_000_000;
 

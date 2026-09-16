@@ -11,7 +11,7 @@
  * has and never omit one something does.
  */
 
-import { ANY, filterActive, type PaneFilter } from '../paneFilter';
+import { ANY, filterActive, type PaneFilter } from '@kontra/console-core/panels/paneFilter';
 
 export interface PaneFilterBarProps {
   filter: PaneFilter;

@@ -36,8 +36,8 @@ import { memo, type MutableRefObject } from 'react';
 import { EyeOff, Maximize2, Minimize2 } from 'lucide-react';
 import PaneThroughput from './PaneThroughput';
 import TileMenu, { type TileMenuItem } from './TileMenu';
-import { byteWords } from './format';
-import { modeStakes, type TileRef } from './tileRef';
+import { byteWords } from '@kontra/console-core/panels/chrome/format';
+import { modeStakes, type TileRef } from '@kontra/console-core/panels/chrome/tileRef';
 
 export interface TileHeaderProps {
   id: string;

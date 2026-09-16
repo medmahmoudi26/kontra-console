@@ -51,10 +51,10 @@ import { filtersOf, nameTurn, type Concern, type Naming, type NamedTurn, type To
 import { expand, type Turn } from '@kontra/core/transcript';
 
 import type { FollowPhase } from '../run/follow';
-import type { RunTurns } from '../run/turns';
+import type { RunTurns } from '@kontra/console-core/run/turns';
 import { AskTurn, type AskDeck } from './AskTurn';
-import { deadlineWords, readAsks, waitedWords, waitingAsks, type AskReading } from './ask';
-import { turnKey } from './transcriptDrill';
+import { deadlineWords, readAsks, waitedWords, waitingAsks, type AskReading } from '@kontra/console-core/panels/ask';
+import { turnKey } from '@kontra/console-core/panels/transcriptDrill';
 
 /**
  * How each tone is painted.

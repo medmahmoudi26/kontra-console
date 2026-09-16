@@ -33,12 +33,12 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import TerminalTile from './TerminalTile';
-import { fetchTerminals, type Terminal as PaneTerminal } from './panelsClient';
-import { paneForSession } from './paneForSession';
+import { fetchTerminals, type Terminal as PaneTerminal } from '@kontra/console-core/panels/panelsClient';
+import { paneForSession } from '@kontra/console-core/panels/paneForSession';
 import { useSinglePane } from './useSinglePane';
-import { tileRefFor } from './chrome/tileRef';
+import { tileRefFor } from '@kontra/console-core/panels/chrome/tileRef';
 import { useTerminalStyle } from './chrome/useTerminalStyle';
-import { useAppStore } from '../state/store';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { Button } from '@/components/ui/button';
 
 /** How often the inventory is re-asked while a pane is missing, and for how long. The streamer

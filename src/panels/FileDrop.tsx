@@ -35,7 +35,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { File as FileIcon, FolderOpen, Loader2, Upload, X } from 'lucide-react';
 
-import { uploadBlob, type UploadedBlob } from '../run/api';
+import { uploadBlob, type UploadedBlob } from '@kontra/console-core/run/api';
 
 /** Bytes, said the way a person reads them. `1.2 kB`, not `1229`. */
 export function sizeWords(bytes: number): string {

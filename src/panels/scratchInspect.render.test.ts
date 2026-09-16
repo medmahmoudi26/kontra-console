@@ -20,10 +20,10 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { DatasetInfo, ScratchNode, WorkflowDescriptor, WorkflowFile } from '../run/api';
-import type { CatalogActor } from '../types';
+import type { DatasetInfo, ScratchNode, WorkflowDescriptor, WorkflowFile } from '@kontra/console-core/run/api';
+import type { CatalogActor } from '@kontra/console-core/types';
 import { ScratchInspector } from './ScratchInspector';
-import { readScratchNode, type EdgeFallout, type ScratchCatalogue } from './scratchInspect';
+import { readScratchNode, type EdgeFallout, type ScratchCatalogue } from '@kontra/console-core/panels/scratchInspect';
 
 const PROBE: CatalogActor = {
   key: 'probe@0.1.0',

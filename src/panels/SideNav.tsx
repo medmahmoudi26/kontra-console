@@ -62,11 +62,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Spark, SPARK_COLORS } from '../components/Spark';
-import { stillParked } from './ask';
-import { useAppStore, type Theme, type View, type WallCounts } from '../state/store';
-import { SURFACES } from '../state/surfaces';
+import { stillParked } from '@kontra/console-core/panels/ask';
+import { useAppStore, type Theme, type View, type WallCounts } from '@kontra/console-core/state/store';
+import { SURFACES } from '@kontra/console-core/state/surfaces';
 import { NAV_COLLAPSED_KEY, usePersistedFlag } from './chrome/persistedFlag';
-import { readPulse, type PulseReading, type PulseTone } from './chrome/pulse';
+import { readPulse, type PulseReading, type PulseTone } from '@kontra/console-core/panels/chrome/pulse';
 import { WorkspacePicker } from './WorkspacePicker';
 
 /** Expanded. Was `w-60` (240px) — five short words never needed that, and every surface here is a

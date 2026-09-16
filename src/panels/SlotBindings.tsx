@@ -33,7 +33,7 @@ import {
   type BindableSecret,
   type Resolution,
   type SlotBinding,
-} from '../run/api';
+} from '@kontra/console-core/run/api';
 import {
   SLOT_WORD,
   bindingGroups,
@@ -42,7 +42,7 @@ import {
   unbindConfirm,
   type BindingGroup,
   type ResolutionRow,
-} from './slots';
+} from '@kontra/console-core/panels/slots';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 

@@ -50,10 +50,10 @@
  */
 
 import { memo, useEffect, useState } from 'react';
-import { ageWords } from './format';
-import { modeStakes, type TileRef } from './tileRef';
+import { ageWords } from '@kontra/console-core/panels/chrome/format';
+import { modeStakes, type TileRef } from '@kontra/console-core/panels/chrome/tileRef';
 import { leadingFinding, leadingUnmeasured, type Finding } from '../HealthChips';
-import type { Terminal } from '../panelsClient';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 
 /** How a tile is being fed — `{t:'state'}`'s `mode`. A different axis from the execution mode. */
 export type Feed = 'snapshot' | 'live' | 'error';

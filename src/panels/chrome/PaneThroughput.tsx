@@ -19,7 +19,7 @@
 import { memo, useEffect, useState, type MutableRefObject } from 'react';
 
 import { Spark } from '../../components/Spark';
-import { push } from '../../components/spark';
+import { push } from '@kontra/console-core/components/spark';
 
 /** One second. Slower and a burst of output is averaged into invisibility; faster and the chart is
  *  measuring the poll rather than the pane. */

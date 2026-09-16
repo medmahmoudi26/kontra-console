@@ -18,7 +18,7 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { Handle, Position, useUpdateNodeInternals, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Boxes, Database, FileCode2, Trash2 } from 'lucide-react';
-import type { ScratchNode, ScratchNote } from '../run/api';
+import type { ScratchNode, ScratchNote } from '@kontra/console-core/run/api';
 import {
   NODE_H,
   NODE_W,
@@ -26,8 +26,8 @@ import {
   type ScratchNodeType,
   type ScratchNoteData,
 } from './scratchFlow';
-import { fieldHandle, inHandle, outHandle, type ScratchHandleKind } from './scratchHandles';
-import { shortType, type NodePorts, type PortSide, type ScratchPort } from './scratchPorts';
+import { fieldHandle, inHandle, outHandle, type ScratchHandleKind } from '@kontra/console-core/panels/scratchHandles';
+import { shortType, type NodePorts, type PortSide, type ScratchPort } from '@kontra/console-core/panels/scratchPorts';
 
 /**
  * What a node can ask the page to do.

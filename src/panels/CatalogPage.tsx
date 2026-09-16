@@ -30,9 +30,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, X } from 'lucide-react';
 
-import { fetchPollers, fetchWorkflows, type WorkflowDescriptor, type WorkflowFile } from '../run/api';
-import type { PollerReport } from '../run/workflowState';
-import { useAppStore } from '../state/store';
+import { fetchPollers, fetchWorkflows, type WorkflowDescriptor, type WorkflowFile } from '@kontra/console-core/run/api';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { CatalogCard, type CardLayout } from './CatalogCard';
 import {
   NO_FILTER,
@@ -45,7 +45,7 @@ import {
   type CatalogFilter,
   type EntryState,
   type Place,
-} from './catalog';
+} from '@kontra/console-core/panels/catalog';
 import { useRegisteredFolders } from './RegisteredFolders';
 import { Button } from '@/components/ui/button';
 

@@ -15,7 +15,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { WorkbenchFiles } from './WorkbenchPanes';
-import type { FileRow } from './folderWorkbench';
+import type { FileRow } from '@kontra/console-core/panels/folderWorkbench';
 
 const draw = (rows: FileRow[], selected = 'actor.py'): string =>
   renderToStaticMarkup(createElement(WorkbenchFiles, { rows, selected, onSelect: () => {} }));

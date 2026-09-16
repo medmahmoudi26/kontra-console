@@ -31,7 +31,7 @@
 
 import { FileDrop } from './FileDrop';
 import type { SchemaField } from './MethodContract';
-import type { UploadedBlob } from '../run/api';
+import type { UploadedBlob } from '@kontra/console-core/run/api';
 
 export function FieldInput({
   field,

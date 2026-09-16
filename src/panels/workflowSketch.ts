@@ -33,14 +33,14 @@
  * `yet to be built` is an assertion and this module may only make it from evidence.
  */
 
-import type { ScratchDocument, ScratchNode, ScratchNote } from '../run/api';
+import type { ScratchDocument, ScratchNode, ScratchNote } from '@kontra/console-core/run/api';
 import { nodeSlot, noteSlot } from './scratchFlow';
 import {
   nodeLabel,
   readScratchNode,
   type ScratchCatalogue,
   type ScratchReading,
-} from './scratchInspect';
+} from '@kontra/console-core/panels/scratchInspect';
 
 /* ───────────────────────────── what the tab is looking at ───────────────────────────── */
 

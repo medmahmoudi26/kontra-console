@@ -24,7 +24,7 @@
  */
 
 import { memo, useEffect, useState } from 'react';
-import { ageWords, byteWords } from './format';
+import { ageWords, byteWords } from '@kontra/console-core/panels/chrome/format';
 
 export interface WallStats {
   /** Tiles on the wall, which is the Terminals this page is SUBSCRIBED to — panes an operator hid

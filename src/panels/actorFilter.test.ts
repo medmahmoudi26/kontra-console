@@ -23,7 +23,7 @@ import {
   type ActorFilter,
   type ActorStanding,
   type FilterableActor,
-} from './actorFilter';
+} from '@kontra/console-core/panels/actorFilter';
 import { ActorFilterBar } from './ActorFilterBar';
 
 function actor(over: Partial<FilterableActor> = {}): FilterableActor {

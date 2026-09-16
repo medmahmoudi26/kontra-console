@@ -25,7 +25,7 @@ import {
   serializeWall,
   syncWall,
   type WallTile,
-} from './wall';
+} from '@kontra/console-core/panels/grid/wall';
 
 export interface WallApi {
   tiles: WallTile[];

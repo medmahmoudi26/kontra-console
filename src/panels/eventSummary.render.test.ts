@@ -21,12 +21,12 @@ import { categorize } from '@kontra/core/history';
 import { nameTranscript, type NamedTurn } from '@kontra/core/vocabulary';
 import { readTranscript, type Turn } from '@kontra/core/transcript';
 
-import type { RunEvent, RunHistory } from '../run/api';
-import { readRunTurns } from '../run/turns';
+import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
+import { readRunTurns } from '@kontra/console-core/run/turns';
 import { TranscriptDrill, type DrillLevelView, type TranscriptDrillProps } from './TranscriptDrill';
 import { TranscriptView, clockOf } from './Transcript';
-import { rootLevel, type DrillLevel } from './eventDrill';
-import { rowsFor, subjectOf } from './transcriptDrill';
+import { rootLevel, type DrillLevel } from '@kontra/console-core/panels/eventDrill';
+import { rowsFor, subjectOf } from '@kontra/console-core/panels/transcriptDrill';
 
 const BASE = 1_786_787_691_000;
 const RUN = 'probedemo-1787787691';

@@ -36,10 +36,10 @@ import {
   workerReadings,
   type ActorServeState,
   type WorkerReading,
-} from './actorWorkers';
-import { formatAge } from './widgets/format';
-import type { PollerReport } from '../run/workflowState';
-import type { Terminal } from './panelsClient';
+} from '@kontra/console-core/panels/actorWorkers';
+import { formatAge } from '@kontra/console-core/panels/widgets/format';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 
 /**
  * FOUR STATES, FOUR LOOKS — three of them the chips' own, and one that has to be added.

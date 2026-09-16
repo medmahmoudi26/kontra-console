@@ -13,13 +13,10 @@
  * `<details>` element should have to delete a test that explains why they must not.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { sourceOf, sourcesUnder } from '../../testing/consoleSource';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PANELS = path.dirname(HERE);
 
 /** Sources OUTSIDE this directory that also feed the widget path, named by hand because no walk
  *  would find them. Every entry is a filename nothing type-checks — see `sources()`. */
@@ -40,14 +37,14 @@ const HAND_ADDED = ['DetailDrawer.tsx'] as const;
  * it. Anything added back here is a filename nothing type-checks — keep the list short. */
 function sources(): Array<{ file: string; source: string }> {
   const out: Array<{ file: string; source: string }> = [];
-  const add = (file: string): void => {
-    out.push({ file, source: readFileSync(file, 'utf8') });
-  };
-  for (const entry of readdirSync(HERE).sort()) {
-    if (entry.endsWith('.test.ts') || entry.endsWith('.test.tsx')) continue;
-    if (entry.endsWith('.ts') || entry.endsWith('.tsx')) add(path.join(HERE, entry));
+  // BOTH ROOTS. The widgets split across `src/` and `@kontra/console-core` when the core package
+  // was extracted (ADR 0048 §2), and a walk of one directory silently stopped seeing half of them —
+  // which is a scan for forbidden code that passes because it is no longer looking.
+  for (const { name, text } of sourcesUnder('panels/widgets')) {
+    if (name.endsWith('.test.ts') || name.endsWith('.test.tsx')) continue;
+    out.push({ file: name, source: text });
   }
-  for (const name of HAND_ADDED) add(path.join(PANELS, name));
+  for (const name of HAND_ADDED) out.push({ file: name, source: sourceOf(`panels/${name}`) });
   return out;
 }
 
@@ -80,9 +77,11 @@ describe('nothing in the widget path can render markup or make a request', () =>
     // cover the directory". A floor cannot tell a directory that shrank from a walk that silently
     // returned nothing, which is the failure the assertion is FOR: `readdirSync` on the wrong path
     // yields `[]`, every loop below passes vacuously, and the boundary is unguarded and green.
-    const onDisk = readdirSync(HERE).filter(
-      (e) => /\.tsx?$/.test(e) && !/\.test\.tsx?$/.test(e)
-    );
+    // BOTH ROOTS, for the same reason `sources()` reads both: the widgets split across `src/` and
+    // `@kontra/console-core`, so counting one directory would assert that a HALF-scan was complete.
+    const onDisk = sourcesUnder('panels/widgets')
+      .map((f) => f.name)
+      .filter((e) => /\.tsx?$/.test(e) && !/\.test\.tsx?$/.test(e));
     expect(onDisk.length).toBeGreaterThan(0);
     expect(files.length).toBe(onDisk.length + HAND_ADDED.length);
   });

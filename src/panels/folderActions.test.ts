@@ -19,7 +19,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Source } from '../run/api';
+import type { Source } from '@kontra/console-core/run/api';
 import { FolderAbsent, FolderActions } from './RegisteredFolders';
 
 function registered(name: string, dir: string, over: Partial<Source> = {}): Source {

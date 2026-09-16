@@ -13,7 +13,7 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { MAX_FONT_SIZE, MIN_FONT_SIZE, PALETTES, PALETTE_ORDER, type PaletteName } from '../theme';
+import { MAX_FONT_SIZE, MIN_FONT_SIZE, PALETTES, PALETTE_ORDER, type PaletteName } from '@kontra/console-core/panels/theme';
 import type { TerminalStyleApi } from './useTerminalStyle';
 
 export default function StyleControls({ style }: { style: TerminalStyleApi }): JSX.Element {

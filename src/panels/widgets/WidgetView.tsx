@@ -18,8 +18,8 @@
  */
 
 import Markdown from './Markdown';
-import { getWidgetTitle } from './getWidgetTitle';
-import type { Widget } from './parseWidget';
+import { getWidgetTitle } from '@kontra/console-core/panels/widgets/getWidgetTitle';
+import type { Widget } from '@kontra/console-core/panels/widgets/parseWidget';
 
 export interface WidgetViewProps {
   widget: Widget;

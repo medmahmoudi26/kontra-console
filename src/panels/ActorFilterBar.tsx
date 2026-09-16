@@ -11,7 +11,7 @@
  * that lost eight Actors — and saying both numbers always is the only defence.
  */
 
-import { ANY, actorFilterActive, EMPTY_ACTOR_FILTER, type ActorFilter } from './actorFilter';
+import { ANY, actorFilterActive, EMPTY_ACTOR_FILTER, type ActorFilter } from '@kontra/console-core/panels/actorFilter';
 
 export interface ActorFilterBarProps {
   filter: ActorFilter;

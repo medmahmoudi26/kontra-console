@@ -29,7 +29,7 @@ import {
   reconcileOrder,
   toggleFolded,
   type PaneOrder,
-} from './paneOrder';
+} from '@kontra/console-core/panels/chrome/paneOrder';
 
 export interface StackedPane {
   /** Stable across renders AND across releases — it is what the stored order is keyed by. */

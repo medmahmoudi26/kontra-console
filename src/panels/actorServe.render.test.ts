@@ -17,7 +17,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ServeConsole } from './WorkbenchPanes';
 import { actorSession } from '@kontra/core/panels/tmux';
-import type { ActorServeResult, Source } from '../run/api';
+import type { ActorServeResult, Source } from '@kontra/console-core/run/api';
 
 const PROBE: Source = {
   id: 'actor:probe:1f3k',

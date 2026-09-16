@@ -27,15 +27,15 @@
  * re-flow the line beside it.
  */
 
-import type { DatasetInfo } from '../run/api';
+import type { DatasetInfo } from '@kontra/console-core/run/api';
 import {
   accrualPhase,
   accrualWords,
   type AccrualPhase,
-} from '../datasets/accrual';
+} from '@kontra/console-core/datasets/accrual';
 import { ROW_TAIL_START, useRowTail, type RowTailState } from '../datasets/rowTail';
-import { countText, listingScope, scopeWords, type CountScope, type DatasetKind } from '../datasets/scope';
-import { datasetState } from '../datasets/state';
+import { countText, listingScope, scopeWords, type CountScope, type DatasetKind } from '@kontra/console-core/datasets/scope';
+import { datasetState } from '@kontra/console-core/datasets/state';
 import { RowTailReadout, useNow } from './LiveRowTail';
 
 export interface AccrualLineProps {

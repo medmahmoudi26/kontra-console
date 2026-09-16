@@ -22,7 +22,7 @@
 
 import type { ReactNode } from 'react';
 
-import { useAppStore, type Theme } from '../state/store';
+import { useAppStore, type Theme } from '@kontra/console-core/state/store';
 import { Button } from '@/components/ui/button';
 
 export interface SettingsSection {

@@ -18,17 +18,16 @@
  * into a folder (§6). An absent control leaves no trace in a diff, so it is asserted.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+
+import { sourceOf } from '../testing/consoleSource';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { callerFor } from '@kontra/core/caller';
 import { MethodCallPanel, type ServeReading, runStopper } from './MethodCallPanes';
-import { draftFor, setCell, setJson, unitsOf, type BatchDraft } from './methodCall';
-import type { GeneratedCaller, ProbeReading, ProbeStarted } from '../run/api';
-import type { ActorOperation, CatalogActor } from '../types';
+import { draftFor, setCell, setJson, unitsOf, type BatchDraft } from '@kontra/console-core/panels/methodCall';
+import type { GeneratedCaller, ProbeReading, ProbeStarted } from '@kontra/console-core/run/api';
+import type { ActorOperation, CatalogActor } from '@kontra/console-core/types';
 
 /**
  * `import.meta.url` RESOLVED THROUGH NODE, NEVER THROUGH THE GLOBAL `URL`.
@@ -39,7 +38,6 @@ import type { ActorOperation, CatalogActor } from '../types';
  * `http://localhost:3000/src/…`, `readFileSync` took the pathname, and the read failed with
  * `ENOENT /src/panels/MethodCall.tsx`. `fileURLToPath` is `node:url`'s own parser and is unaffected.
  */
-const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const PROBE: CatalogActor = {
   key: 'probe@0.1.0',
@@ -451,8 +449,10 @@ describe('what this panel cannot do', () => {
   it('never writes anything to disk', () => {
     // `saveSourceFile` is gone from `run/api.ts` along with its route (ADR 0033 §6); this is the
     // half of that removal a diff cannot show, because what is asserted is an import nobody makes.
+    // `sourceOf`, NOT a sibling path: `methodCall.ts` moved to @kontra/console-core while its two
+    // components stayed here, so the three are no longer in one directory.
     for (const file of ['MethodCall.tsx', 'MethodCallPanes.tsx', 'methodCall.ts']) {
-      const src = readFileSync(path.join(HERE, file), 'utf8');
+      const src = sourceOf(`panels/${file}`);
       // THE IMPORT, not the word: `methodCall.ts` still NAMES what it dropped, in the comment that
       // explains why an unused surface was removed outright rather than left behind. A test that
       // banned the string would ban the record of the decision along with the code.
@@ -467,7 +467,7 @@ describe('what this panel cannot do', () => {
     // Actors page must not reach it: a probe is started by its own route, which is what bounds it
     // to one Method.
     for (const file of ['MethodCall.tsx', 'MethodCallPanes.tsx', 'methodCall.ts']) {
-      const src = readFileSync(path.join(HERE, file), 'utf8');
+      const src = sourceOf(`panels/${file}`);
       expect(src).not.toContain('startRun');
       expect(src).not.toContain('stopRun');
     }

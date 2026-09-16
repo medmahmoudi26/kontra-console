@@ -19,7 +19,7 @@
  * the hole. Naming it is also the only way to clear it.
  */
 
-import { parseTileRef } from './tileRef';
+import { parseTileRef } from '@kontra/console-core/panels/chrome/tileRef';
 
 export interface HiddenPanesProps {
   /** In the order they were hidden — most recent last, so undoing reads backwards. */

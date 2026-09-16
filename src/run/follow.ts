@@ -35,8 +35,8 @@
 
 import { useEffect, useState } from 'react';
 
-import { fetchRunTurns, type RunTurns, type RunTurnsRead } from './turns';
-import type { RunHistory } from './api';
+import { fetchRunTurns, type RunTurns, type RunTurnsRead } from '@kontra/console-core/run/turns';
+import type { RunHistory } from '@kontra/console-core/run/api';
 
 /**
  * How often an open Run is re-read.

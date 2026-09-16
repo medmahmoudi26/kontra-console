@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { fmtDuration, runDuration } from './api';
+import { fmtDuration, runDuration } from '@kontra/console-core/run/api';
 
 describe('runDuration', () => {
   it('measures an OPEN run to now, not to its zero closedAt', () => {

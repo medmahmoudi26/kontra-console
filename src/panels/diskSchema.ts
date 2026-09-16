@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { actorDiskSchemaStream, fetchActorDiskSchema, type DiskSchema } from '@/run/api';
+import { actorDiskSchemaStream, fetchActorDiskSchema, type DiskSchema } from '@kontra/console-core/run/api';
 
 export interface DiskSchemaState {
   /** The derived schema, or null when it has not been read or would not derive. */

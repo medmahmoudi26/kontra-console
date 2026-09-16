@@ -1,6 +1,6 @@
 # 01 — `@kontra/console-core`, extracted and guarded
 
-Status: ready-for-agent
+Status: done
 
 Type: AFK
 
@@ -36,3 +36,38 @@ logic from somewhere else.
 ## Blocked by
 
 None — can start immediately.
+
+## Comments
+
+**Done.** 77 modules and 60 tests in `@kontra/console-core`; app 71 files / 1239 tests green, core
+59 / 1079, and the entry bundle is **byte-identical** at 472,705 bytes across 85 chunks — a move,
+not a duplication.
+
+**Two modules were reaching a framework-free value THROUGH a component.** `runState.ts` imported
+`StreakBar` from `components/Spark` when it is defined in `components/spark`, and `scratchInspect.ts`
+imported `schemaFields` from `MethodContract` when it comes from `schemaTree`. The first is also one
+of this repo's ten case-collision pairs, so on a case-insensitive filesystem that import was
+genuinely ambiguous. Both now point at the real source, which is what made the cut clean: 2
+crossings out of 79, not a tangle.
+
+**Seven files came back.** Five tests that inspect `.tsx` sources, `workflowSketch.ts` (transitively
+React Flow), and its test. The loop that returns them iterates, because sending one file back can
+strand another.
+
+**The guard is proven, not asserted.** All five banned patterns — static `react`, `svelte`, dynamic
+`import('react')`, `require('react-dom')`, and a `.tsx` specifier — each exit 1 when introduced;
+clean exits 0. **An empty walk exits 1**, so a renamed directory cannot turn this into a green tick
+over nothing. My first attempt at proving that reported exit 0 for the `.tsx` case and the guard was
+fine — I had piped through `head`, so `$?` was head's.
+
+**`environment: 'node'` was the wrong assertion** and the first version of `vitest.config.ts` made
+it. Core is FRAMEWORK-free, not DOM-free: `session.ts` reads browser storage and `hostBridge.ts`
+talks to the embedding host through the document. Both belong here, neither imports a framework.
+
+**The failure mode worth remembering for the next slice:** `vi.mock('../run/api')` does not error
+when the path no longer resolves — it silently does not mock. 44 tests failed with "expected spy to
+be called 1 times, got 0" and none of them said why.
+
+`src/testing/consoleSource.ts` is new: it resolves a source file across both roots and THROWS on a
+miss, because a reader that answered `''` would turn every `toContain` into a silent pass. Fourteen
+suites broke on hardcoded paths during this move; the next move will not break them.

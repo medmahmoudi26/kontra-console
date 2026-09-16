@@ -22,8 +22,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { Shell, SurfacePending } from './Shell';
-import { SURFACES, type View } from '../state/surfaces';
-import { useAppStore } from '../state/store';
+import { SURFACES, type View } from '@kontra/console-core/state/surfaces';
+import { useAppStore } from '@kontra/console-core/state/store';
 
 const REAL = globalThis.localStorage;
 

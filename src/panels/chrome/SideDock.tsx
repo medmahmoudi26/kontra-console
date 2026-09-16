@@ -30,7 +30,7 @@ import {
   type DockSide,
   type SideBounds,
   type SideDockState,
-} from './sideDock';
+} from '@kontra/console-core/panels/chrome/sideDock';
 
 export interface SideDock extends SideDockState {
   setWidth(px: number): void;

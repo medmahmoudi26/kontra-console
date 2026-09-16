@@ -27,8 +27,8 @@
  */
 
 import { Play } from 'lucide-react';
-import type { ActorOperation, JsonSchema } from '../types';
-import { schemaFields } from './schemaTree';
+import type { ActorOperation, JsonSchema } from '@kontra/console-core/types';
+import { schemaFields } from '@kontra/console-core/panels/schemaTree';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -188,5 +188,5 @@ export {
   joinPath,
   whyJson,
   declaredValue,
-} from './schemaTree';
-export type { SchemaField, FieldNode, FieldKind } from './schemaTree';
+} from '@kontra/console-core/panels/schemaTree';
+export type { SchemaField, FieldNode, FieldKind } from '@kontra/console-core/panels/schemaTree';

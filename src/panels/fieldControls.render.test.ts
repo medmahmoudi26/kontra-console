@@ -23,9 +23,9 @@ import { describe, expect, it } from 'vitest';
 
 import { FieldInput } from './FieldInput';
 import { FileDrop, readRef, sizeWords } from './FileDrop';
-import { INPUT_MARKER, schemaControl, schemaTree } from './schemaTree';
+import { INPUT_MARKER, schemaControl, schemaTree } from '@kontra/console-core/panels/schemaTree';
 import type { SchemaField } from './MethodContract';
-import type { JsonSchema } from '../types';
+import type { JsonSchema } from '@kontra/console-core/types';
 
 function field(over: Partial<SchemaField> & Pick<SchemaField, 'name' | 'type'>): SchemaField {
   return { required: false, ...over };

@@ -33,7 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { useTileGhosts } from '../chrome/useTileGhosts';
 import '../chrome/chrome.css';
-import type { Terminal } from '../panelsClient';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 import {
   WALL_COLUMNS,
   WALL_GAP_PX,
@@ -46,7 +46,7 @@ import {
   tileRect,
   wallRows,
   type WallTile,
-} from './wall';
+} from '@kontra/console-core/panels/grid/wall';
 import type { WallApi } from './useWall';
 
 export interface TileWallProps {

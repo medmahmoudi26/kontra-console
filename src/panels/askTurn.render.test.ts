@@ -24,15 +24,15 @@ import { describe, expect, it } from 'vitest';
 
 import { categorize } from '@kontra/core/history';
 
-import type { RunEvent, RunHistory } from '../run/api';
-import { readRunTurns, type RunAsk } from '../run/turns';
+import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
+import { readRunTurns, type RunAsk } from '@kontra/console-core/run/turns';
 import { AskTurn, type AskDeck } from './AskTurn';
-import { askForm, readAsk } from './ask';
+import { askForm, readAsk } from '@kontra/console-core/panels/ask';
 import { NavRail, type NavRailProps } from './SideNav';
-import { readPulse, type PulsePark } from './chrome/pulse';
+import { readPulse, type PulsePark } from '@kontra/console-core/panels/chrome/pulse';
 import { TranscriptView } from './Transcript';
-import { setField } from './workflowInput';
-import type { View } from '../state/surfaces';
+import { setField } from '@kontra/console-core/panels/workflowInput';
+import type { View } from '@kontra/console-core/state/surfaces';
 
 const BASE = 1_786_831_339_151;
 const RUN = 'dnssweep-1786831339';

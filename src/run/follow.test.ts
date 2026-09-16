@@ -16,14 +16,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { categorize } from '@kontra/core/history';
 
-import type { RunEvent, RunHistory } from './api';
+import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
 import {
   TranscriptHub,
   transcriptFingerprint,
   type Following,
   type FollowPhase,
 } from './follow';
-import { readRunTurns, type RunTurnsRead } from './turns';
+import { readRunTurns, type RunTurnsRead } from '@kontra/console-core/run/turns';
 
 const BASE = 1_786_831_339_151;
 

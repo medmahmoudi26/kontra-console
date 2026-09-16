@@ -16,9 +16,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { POLL_FRESH_MS, type PollerReport } from '../run/workflowState';
+import { POLL_FRESH_MS, type PollerReport } from '@kontra/console-core/run/workflowState';
 import { ActorWorkers } from './ActorWorkers';
-import type { Terminal } from './panelsClient';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 
 const NOW = 1_800_000_000_000;
 const QUEUE = 'probe-0.1.0';

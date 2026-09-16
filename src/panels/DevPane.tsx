@@ -32,15 +32,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { useAppStore } from '@/state/store';
-import { fetchPollers } from '@/run/api';
-import type { PollerReport } from '@/run/workflowState';
-import { announceReady } from './hostBridge';
+import { useAppStore } from '@kontra/console-core/state/store';
+import { fetchPollers } from '@kontra/console-core/run/api';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
+import { announceReady } from '@kontra/console-core/panels/hostBridge';
 
 import { MethodCall } from './MethodCall';
 import { useRegisteredFolders } from './RegisteredFolders';
 import { methodFromDisk, shapeSig, useDiskSchema } from './diskSchema';
-import { folderForActor } from './sourceFolders';
+import { folderForActor } from '@kontra/console-core/panels/sourceFolders';
 
 /** What the host asked for, read once from the address. */
 export interface DevRequest {

@@ -45,8 +45,8 @@ import {
   type RunEvent,
   type RunHeartbeat,
   type RunHistory,
-} from '../run/api';
-import { eventAside, eventName, eventSummary, withoutBookkeeping } from './workflowEvents';
+} from '@kontra/console-core/run/api';
+import { eventAside, eventName, eventSummary, withoutBookkeeping } from '@kontra/console-core/panels/workflowEvents';
 import { usePersistedFlag } from './chrome/persistedFlag';
 import { Button } from '@/components/ui/button';
 

@@ -5,7 +5,7 @@
  * nicety: an empty series must not render as a flat line, because a flat line is a measurement.
  */
 
-import { SPARK_MIN, areaPoints, sparkPoints, streakBars, type StreakBar } from './spark';
+import { SPARK_MIN, areaPoints, sparkPoints, streakBars, type StreakBar } from '@kontra/console-core/components/spark';
 
 /** Colours by meaning, so a caller names the reading rather than a hex value. `idle` is deliberately
  *  the muted foreground: a series with no movement should recede. */

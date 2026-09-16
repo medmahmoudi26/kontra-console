@@ -11,8 +11,8 @@
  */
 
 import { TerminalSquare } from 'lucide-react';
-import type { ActorServeResult, Source } from '../run/api';
-import { fmtBytes, type FileRow } from './folderWorkbench';
+import type { ActorServeResult, Source } from '@kontra/console-core/run/api';
+import { fmtBytes, type FileRow } from '@kontra/console-core/panels/folderWorkbench';
 import { Button } from '@/components/ui/button';
 
 /**

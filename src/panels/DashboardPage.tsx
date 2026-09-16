@@ -41,9 +41,9 @@ import StyleControls from './chrome/StyleControls';
 import SidebarTree from './chrome/SidebarTree';
 import PaneFilterBar from './chrome/PaneFilterBar';
 import HiddenPanes from './chrome/HiddenPanes';
-import { EMPTY_FILTER, hiddenPanes, paneOptions, type PaneFilter } from './paneFilter';
+import { EMPTY_FILTER, hiddenPanes, paneOptions, type PaneFilter } from '@kontra/console-core/panels/paneFilter';
 import { useHiddenPanes, wantedSubscriptions } from './paneHiding';
-import { disconnectedNotice, reconnectDelay, resubscribePlan } from './reconnect';
+import { disconnectedNotice, reconnectDelay, resubscribePlan } from '@kontra/console-core/panels/reconnect';
 import { Button } from '@/components/ui/button';
 import StatusBar, { type WallStats } from './chrome/StatusBar';
 /**
@@ -61,7 +61,7 @@ import StatusBar, { type WallStats } from './chrome/StatusBar';
  */
 const DetailDrawer = lazy(() => import('./DetailDrawer'));
 import { useTerminalStyle } from './chrome/useTerminalStyle';
-import { useAppStore } from '../state/store';
+import { useAppStore } from '@kontra/console-core/state/store';
 import {
   decodeTagged,
   fetchTerminals,
@@ -72,7 +72,7 @@ import {
   type ServerMessage,
   type Terminal,
   type TerminalHealth,
-} from './panelsClient';
+} from '@kontra/console-core/panels/panelsClient';
 
 type Phase = 'idle' | 'connecting' | 'streaming' | 'error' | 'reconnecting';
 

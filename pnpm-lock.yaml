@@ -32,6 +32,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.8
         version: 6.43.8
+      '@kontra/console-core':
+        specifier: workspace:*
+        version: link:packages/core
       '@kontra/core':
         specifier: link:../kontra/shared/core
         version: link:../kontra/shared/core
@@ -125,6 +128,15 @@ importers:
         version: 5.4.21(@types/node@22.20.1)(lightningcss@1.32.0)
       vitest:
         specifier: ^2.0.5
+        version: 2.1.9(@types/node@22.20.1)(jsdom@30.0.1)(lightningcss@1.32.0)
+
+  packages/core:
+    devDependencies:
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
+      vitest:
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.20.1)(jsdom@30.0.1)(lightningcss@1.32.0)
 
 packages:

@@ -31,7 +31,7 @@ import {
   TERMINAL_THEME_STORAGE_KEY,
   type PaletteName,
   type TerminalStyle,
-} from '../theme';
+} from '@kontra/console-core/panels/theme';
 
 export interface TerminalStyleApi extends TerminalStyle {
   /** The resolved xterm palette — what a tile passes to `new XTerm({ theme })`. */

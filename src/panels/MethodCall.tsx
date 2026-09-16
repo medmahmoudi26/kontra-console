@@ -37,12 +37,12 @@ import {
   type ProbeReading,
   type ProbeStarted,
   type Source,
-} from '../run/api';
-import { useAppStore } from '../state/store';
-import type { PollerReport } from '../run/workflowState';
-import type { ActorOperation, CatalogActor } from '../types';
-import { actorServeState, serveWords, workerReadings, dispatchTargets } from './actorWorkers';
-import { draftFor, unitsOf, type BatchDraft } from './methodCall';
+} from '@kontra/console-core/run/api';
+import { useAppStore } from '@kontra/console-core/state/store';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
+import type { ActorOperation, CatalogActor } from '@kontra/console-core/types';
+import { actorServeState, serveWords, workerReadings, dispatchTargets } from '@kontra/console-core/panels/actorWorkers';
+import { draftFor, unitsOf, type BatchDraft } from '@kontra/console-core/panels/methodCall';
 import { MethodCallPanel, type ServeReading } from './MethodCallPanes';
 
 /**

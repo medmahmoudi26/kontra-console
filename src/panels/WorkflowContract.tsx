@@ -19,8 +19,8 @@
  * load, and the suite runs in node with no DOM. Same reason `ActorCard.tsx` is not in `ActorsPage`.
  */
 
-import type { WorkflowDescriptor } from '../run/api';
-import { readSchema, sayNothing, type SchemaReading } from './workflowContract';
+import type { WorkflowDescriptor } from '@kontra/console-core/run/api';
+import { readSchema, sayNothing, type SchemaReading } from '@kontra/console-core/panels/workflowContract';
 
 export function WorkflowContract({
   type,

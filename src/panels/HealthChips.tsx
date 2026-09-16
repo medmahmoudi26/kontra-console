@@ -59,7 +59,7 @@ import {
   type HealthEntry,
   type HealthSignal,
   type TerminalHealth,
-} from './panelsClient';
+} from '@kontra/console-core/panels/panelsClient';
 
 /**
  * The five, in the order a tile shows them: the three an SSH round trip answers, then the two that

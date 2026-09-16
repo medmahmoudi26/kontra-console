@@ -30,7 +30,7 @@
  */
 
 import { FieldGroup } from './FieldGroup';
-import { setInputJson, setValues, type InputDraft } from './workflowInput';
+import { setInputJson, setValues, type InputDraft } from '@kontra/console-core/panels/workflowInput';
 import {
   answerOf,
   askForm,
@@ -43,7 +43,7 @@ import {
   ATTRIBUTION_NOTE,
   type AskReading,
   type AskStanding,
-} from './ask';
+} from '@kontra/console-core/panels/ask';
 
 /**
  * How each standing is painted.

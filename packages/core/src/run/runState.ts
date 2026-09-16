@@ -20,7 +20,7 @@ import {
   type RunDetail,
   type RunRow,
 } from './api';
-import type { StreakBar } from '../components/Spark';
+import type { StreakBar } from '../components/spark';
 import {
   counted,
   datasetTotal,

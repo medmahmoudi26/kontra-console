@@ -33,7 +33,7 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const example = (name: string) =>
-  readFileSync(path.resolve(here, '../../testdata/workflows', name), 'utf8');
+  readFileSync(path.resolve(here, '../../../../testdata/workflows', name), 'utf8');
 
 // `nscheck/workflow.py`, not `nscheck.py`: it moved into the folder layout registration expects,
 // so it can carry a `workflow.json` — which is where its queue is now derived from.

@@ -24,8 +24,8 @@
 
 import { Plus, X } from 'lucide-react';
 import { FieldInput } from './FieldInput';
-import { elementAt, whyJson, type FieldNode } from './schemaTree';
-import { addRow, removeRow, rowCount, setPath, type FieldValues } from './formFields';
+import { elementAt, whyJson, type FieldNode } from '@kontra/console-core/panels/schemaTree';
+import { addRow, removeRow, rowCount, setPath, type FieldValues } from '@kontra/console-core/panels/formFields';
 import { Button } from '@/components/ui/button';
 
 /**

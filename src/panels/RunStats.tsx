@@ -25,7 +25,7 @@
  */
 
 import { Spark, SPARK_COLORS, Streak } from '../components/Spark';
-import type { Reading, RunStats, StatGroup } from './runStats';
+import type { Reading, RunStats, StatGroup } from '@kontra/console-core/panels/runStats';
 
 /**
  * The bar, or nothing at all.

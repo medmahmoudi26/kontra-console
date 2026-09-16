@@ -28,8 +28,8 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
-import { fetchDatasetPreview, type DatasetInfo } from '../run/api';
-import { datasetState, type DatasetBadgeState } from '../datasets/state';
+import { fetchDatasetPreview, type DatasetInfo } from '@kontra/console-core/run/api';
+import { datasetState, type DatasetBadgeState } from '@kontra/console-core/datasets/state';
 import {
   TAIL_START,
   columnSignature,
@@ -44,8 +44,8 @@ import {
   tailSummaryWords,
   tailWords,
   type TailState,
-} from '../datasets/tailRows';
-import type { RunDataset } from './runDatasets';
+} from '@kontra/console-core/datasets/tailRows';
+import type { RunDataset } from '@kontra/console-core/panels/runDatasets';
 
 export interface TailBodyProps {
   /** The read, in whatever state it is in. */

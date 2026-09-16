@@ -21,7 +21,7 @@ import {
   type TerminalSink,
 } from './TerminalTile';
 import { CHIP_SIGNALS } from './HealthChips';
-import type { TerminalHealth } from './panelsClient';
+import type { TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 /**
  * The one rule a tile cannot get wrong: a snapshot REPAINTS and a live frame APPENDS.

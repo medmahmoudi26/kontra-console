@@ -25,7 +25,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { NamedTurn } from '@kontra/core/vocabulary';
 
-import { readHistory, type RunEvent, type RunHistory } from '../run/api';
+import { readHistory, type RunEvent, type RunHistory } from '@kontra/console-core/run/api';
 import { FOLLOW_MAX_MISSES, FOLLOW_POLL_MS } from '../run/follow';
 import {
   drillInto,
@@ -36,9 +36,9 @@ import {
   shortId,
   spanMs,
   type DrillLevel,
-} from './eventDrill';
-import { openerFor, rowsFor, subjectOf, turnKey, type DrillSubject } from './transcriptDrill';
-import { eventAside, eventSummary } from './workflowEvents';
+} from '@kontra/console-core/panels/eventDrill';
+import { openerFor, rowsFor, subjectOf, turnKey, type DrillSubject } from '@kontra/console-core/panels/transcriptDrill';
+import { eventAside, eventSummary } from '@kontra/console-core/panels/workflowEvents';
 
 /** What one level of the drill has to draw. */
 export interface DrillLevelView {

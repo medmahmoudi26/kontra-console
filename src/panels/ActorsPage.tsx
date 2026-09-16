@@ -67,20 +67,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { sharedQueue } from '@kontra/core/queues';
-import { useAppStore } from '../state/store';
-import { fetchPollers, fetchSlots, type ActorSlots } from '../run/api';
-import type { PollerReport } from '../run/workflowState';
-import type { Terminal as PaneTerminal } from './panelsClient';
-import { terminalIsHealthy } from './chrome/tileRef';
+import { useAppStore } from '@kontra/console-core/state/store';
+import { fetchPollers, fetchSlots, type ActorSlots } from '@kontra/console-core/run/api';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
+import type { Terminal as PaneTerminal } from '@kontra/console-core/panels/panelsClient';
+import { terminalIsHealthy } from '@kontra/console-core/panels/chrome/tileRef';
 import { ActorCard } from './ActorCard';
 import { RegisterFolder } from './RegisterFolder';
 import { useRegisteredFolders } from './RegisteredFolders';
 import { FolderWorkbench } from './FolderWorkbench';
 import { MethodCall } from './MethodCall';
 import { methodFromDisk, shapeSig, useDiskSchema } from './diskSchema';
-import { catalogForFolder, folderForActor, workspaceOf } from './sourceFolders';
+import { catalogForFolder, folderForActor, workspaceOf } from '@kontra/console-core/panels/sourceFolders';
 import { ActorFilterBar } from './ActorFilterBar';
-import { actorNames, matchActor, EMPTY_ACTOR_FILTER, type ActorFilter } from './actorFilter';
+import { actorNames, matchActor, EMPTY_ACTOR_FILTER, type ActorFilter } from '@kontra/console-core/panels/actorFilter';
 import { Button } from '@/components/ui/button';
 
 /**

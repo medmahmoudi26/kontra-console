@@ -16,7 +16,7 @@ import {
   renameDataset,
   resetDatasetName,
   type DatasetDeviation,
-} from './api';
+} from '@kontra/console-core/run/api';
 
 function reply(status: number, body: unknown): Response {
   const text = typeof body === 'string' ? body : JSON.stringify(body);

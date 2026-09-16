@@ -30,9 +30,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { NavRail, type NavRailProps } from './SideNav';
-import { readPulse, type PulseReading } from './chrome/pulse';
+import { readPulse, type PulseReading } from '@kontra/console-core/panels/chrome/pulse';
 import { NAV_COLLAPSED_KEY, readFlag, writeFlag } from './chrome/persistedFlag';
-import { SURFACES, type View } from '../state/surfaces';
+import { SURFACES, type View } from '@kontra/console-core/state/surfaces';
 
 /** `localStorage` in node, for the flag the container reads. */
 function fakeStorage(seed: Record<string, string> = {}): Storage {

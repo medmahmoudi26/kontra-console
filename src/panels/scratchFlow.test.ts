@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 // answer to "what did the drawing say" (ADR 0026), so the round trip is only worth testing against
 // the real one.
 import { parseScratchDocument, renderScratch, resolveScratch } from '@kontra/core/scratch';
-import type { ScratchDocument } from '../run/api';
+import type { ScratchDocument } from '@kontra/console-core/run/api';
 import {
   isNoteNode,
   nodeSlot,

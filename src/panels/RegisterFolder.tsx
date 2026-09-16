@@ -18,7 +18,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { FolderPlus } from 'lucide-react';
-import { registerSource, type Source, type SourceKind } from '../run/api';
+import { registerSource, type Source, type SourceKind } from '@kontra/console-core/run/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 

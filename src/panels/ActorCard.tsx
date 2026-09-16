@@ -63,15 +63,15 @@
 
 import { ChevronDown, ChevronRight, Code2 } from 'lucide-react';
 import { sharedQueue } from '@kontra/core/queues';
-import type { Terminal as PaneTerminal } from './panelsClient';
-import { terminalIsHealthy } from './chrome/tileRef';
+import type { Terminal as PaneTerminal } from '@kontra/console-core/panels/panelsClient';
+import { terminalIsHealthy } from '@kontra/console-core/panels/chrome/tileRef';
 import { MethodRow } from './MethodContract';
 import { ActorWorkers } from './ActorWorkers';
 import { SlotStrip } from './SlotStrip';
 import { FolderActions } from './RegisteredFolders';
-import type { ActorSlots, Source } from '../run/api';
-import type { PollerReport } from '../run/workflowState';
-import type { CatalogActor } from '../types';
+import type { ActorSlots, Source } from '@kontra/console-core/run/api';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
+import type { CatalogActor } from '@kontra/console-core/types';
 import { Button } from '@/components/ui/button';
 
 /** What the card SAYS about an Actor's code is the contract, and it is markup rather than a value

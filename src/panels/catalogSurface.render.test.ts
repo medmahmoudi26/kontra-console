@@ -17,7 +17,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { CatalogSurface, type CatalogSurfaceProps } from './CatalogPage';
-import { NO_FILTER, type CatalogEntry } from './catalog';
+import { NO_FILTER, type CatalogEntry } from '@kontra/console-core/panels/catalog';
 
 function entry(over: Partial<CatalogEntry> & Pick<CatalogEntry, 'id' | 'name'>): CatalogEntry {
   return {

@@ -35,7 +35,7 @@ import {
   serveActorSource,
   type ActorServeResult,
   type Source,
-} from '../run/api';
+} from '@kontra/console-core/run/api';
 import { actorSession } from '@kontra/core/panels/tmux';
 import { WorkerPane } from './WorkerPane';
 import { SourceProvenance } from './SourceProvenance';
@@ -52,11 +52,11 @@ import {
   refused,
   selectFile,
   type WorkbenchState,
-} from './folderWorkbench';
+} from '@kontra/console-core/panels/folderWorkbench';
 import { ServeConsole, WorkbenchFiles } from './WorkbenchPanes';
-import { editorMode } from './workbenchEditor';
+import { editorMode } from '@kontra/console-core/panels/workbenchEditor';
 import Markdown from './widgets/Markdown';
-import { useAppStore } from '../state/store';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { Button } from '@/components/ui/button';
 
 /** The file list's range. Wider at the top than the shared default, because the thing it has to be

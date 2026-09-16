@@ -20,8 +20,8 @@
  */
 
 import { FieldGroup } from './FieldGroup';
-import type { InputDraft, InputResult } from './workflowInput';
-import { setInputJson, setValues } from './workflowInput';
+import type { InputDraft, InputResult } from '@kontra/console-core/panels/workflowInput';
+import { setInputJson, setValues } from '@kontra/console-core/panels/workflowInput';
 
 export function WorkflowInputForm({
   draft,

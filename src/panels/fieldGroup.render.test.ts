@@ -19,11 +19,11 @@ import { describe, expect, it } from 'vitest';
 import { FieldGroup } from './FieldGroup';
 import { MethodCallPanel } from './MethodCallPanes';
 import { WorkflowInputForm } from './WorkflowInputForm';
-import { schemaTree, type FieldNode } from './schemaTree';
-import { addRow, initialValues, type FieldValues } from './formFields';
-import { draftFor, toggleUnit, unitsOf, type BatchDraft } from './methodCall';
-import { draftForInput, inputOf } from './workflowInput';
-import type { ActorOperation, CatalogActor } from '../types';
+import { schemaTree, type FieldNode } from '@kontra/console-core/panels/schemaTree';
+import { addRow, initialValues, type FieldValues } from '@kontra/console-core/panels/formFields';
+import { draftFor, toggleUnit, unitsOf, type BatchDraft } from '@kontra/console-core/panels/methodCall';
+import { draftForInput, inputOf } from '@kontra/console-core/panels/workflowInput';
+import type { ActorOperation, CatalogActor } from '@kontra/console-core/types';
 
 const NESTED = {
   type: 'object',

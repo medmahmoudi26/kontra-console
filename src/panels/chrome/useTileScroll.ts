@@ -39,7 +39,7 @@ import {
   pushSample,
   wheelPixels,
   type TouchSample,
-} from './scroll';
+} from '@kontra/console-core/panels/chrome/scroll';
 
 export interface UseTileScrollOptions {
   /** The tile's non-scrolling wrapper — where the listeners go. Non-scrolling on purpose: if this

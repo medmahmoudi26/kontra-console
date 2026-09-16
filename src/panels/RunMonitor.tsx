@@ -39,13 +39,13 @@
 import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
 
-import { datasetBadge, datasetState } from '../datasets/state';
-import type { DatasetInfo, RunRow } from '../run/api';
+import { datasetBadge, datasetState } from '@kontra/console-core/datasets/state';
+import type { DatasetInfo, RunRow } from '@kontra/console-core/run/api';
 import { DatasetTail } from './DatasetTail';
-import { modeStakes, terminalHealthReading, tileRefFor } from './chrome/tileRef';
-import type { Terminal } from './panelsClient';
-import { attributionWords, type RunDatasets } from './runDatasets';
-import { scopeNames, type RunMachine, type RunMachines } from './runMachines';
+import { modeStakes, terminalHealthReading, tileRefFor } from '@kontra/console-core/panels/chrome/tileRef';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
+import { attributionWords, type RunDatasets } from '@kontra/console-core/panels/runDatasets';
+import { scopeNames, type RunMachine, type RunMachines } from '@kontra/console-core/panels/runMachines';
 
 /** The word one Machine's rollup reads as. `null` is NOT `down` — see `panelsClient.healthReading`:
  *  "we never measured this pane" and "this pane's handler is down" are different next actions. */

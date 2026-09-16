@@ -36,8 +36,8 @@ import {
   type DatasetProvenance as Provenance,
   type ProvenanceDimension,
   type ProvenanceEntry,
-} from '../datasets/provenance';
-import { asOfText, countText } from '../datasets/scope';
+} from '@kontra/console-core/datasets/provenance';
+import { asOfText, countText } from '@kontra/console-core/datasets/scope';
 
 export interface DatasetProvenanceProps {
   /** `null` while the request is in flight. A Dataset with nothing recorded is a VALUE, not null. */

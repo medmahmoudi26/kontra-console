@@ -18,14 +18,14 @@
 import { createElement } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ActorServeResult, Source, SourceFile } from '../run/api';
+import type { ActorServeResult, Source, SourceFile } from '@kontra/console-core/run/api';
 
 const fetchSourceFiles = vi.fn();
 const fetchSourceFile = vi.fn();
 const serveActorSource = vi.fn();
 
-vi.mock('../run/api', async (actual) => {
-  const real = await actual<typeof import('../run/api')>();
+vi.mock('@kontra/console-core/run/api', async (actual) => {
+  const real = await actual<typeof import('@kontra/console-core/run/api')>();
   return {
     ...real,
     fetchSourceFiles: (...a: unknown[]) => fetchSourceFiles(...a),
@@ -57,7 +57,7 @@ vi.mock('./WorkerPane', () => ({
     }),
 }));
 
-const { AlreadyServingError } = await import('../run/api');
+const { AlreadyServingError } = await import('@kontra/console-core/run/api');
 const { FolderWorkbench } = await import('./FolderWorkbench');
 
 function folder(over: Partial<Source> = {}): Source {

@@ -26,7 +26,7 @@ import {
   PANE_BOUNDS,
   type PaneBounds,
   type PaneGrow,
-} from './paneHeight';
+} from '@kontra/console-core/panels/chrome/paneHeight';
 
 /**
  * One pane's height, persisted.

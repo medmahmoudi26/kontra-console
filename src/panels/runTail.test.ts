@@ -20,14 +20,14 @@
 import { createElement } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RunDetail, RunEvent, RunHistory } from '../run/api';
+import type { RunDetail, RunEvent, RunHistory } from '@kontra/console-core/run/api';
 
 const fetchRun = vi.fn<(runId: string) => Promise<RunDetail>>();
 const fetchRunHistory = vi.fn<(runId: string) => Promise<RunHistory | null>>();
 const fetchRunHeartbeats = vi.fn<(runId: string) => Promise<Record<string, { done?: number; total?: number }>>>();
 
-vi.mock('../run/api', async (actual) => ({
-  ...(await actual<typeof import('../run/api')>()),
+vi.mock('@kontra/console-core/run/api', async (actual) => ({
+  ...(await actual<typeof import('@kontra/console-core/run/api')>()),
   fetchRun: (id: string) => fetchRun(id),
   fetchRunHistory: (id: string) => fetchRunHistory(id),
   fetchRunHeartbeats: (id: string) => fetchRunHeartbeats(id),

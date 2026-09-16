@@ -24,8 +24,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TileWall from './TileWall';
 import { useWall } from './useWall';
-import { WALL_GAP_PX, WALL_ROW_PX, columnPx, type WallTile } from './wall';
-import type { Terminal, TerminalHealth } from '../panelsClient';
+import { WALL_GAP_PX, WALL_ROW_PX, columnPx, type WallTile } from '@kontra/console-core/panels/grid/wall';
+import type { Terminal, TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 const HEALTH: TerminalHealth = { reachable: 'ok', session: 'present', poller: 'live', loads: 'ok' };
 

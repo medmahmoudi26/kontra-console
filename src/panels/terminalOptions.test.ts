@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { readOnlyTerminalOptions } from './terminalOptions';
+import { readOnlyTerminalOptions } from '@kontra/console-core/panels/terminalOptions';
 
 const CHROME = { fontSize: 12, fontFamily: 'mono', scrollback: 2_000, theme: { background: '#000' } };
 

@@ -3,36 +3,44 @@
 @custom-variant dark (&:is(.dark *));
 
 /* shadcn/ui theme tokens — light is the default, `.dark` on <html> flips the palette.
-   Brand primary stays the old accent blue (#3b82f6-ish) in both modes. */
+
+   LIGHT IS SPECIFIED, NOT INVENTED — and it used to say the opposite here. This block read "v2
+   specifies dark only; light is kept working rather than invented", so it held generic shadcn
+   oklch defaults while the dark block below carried the design's exact hexes. The design does ship
+   a light palette: `KontraConsole.dc.html` declares it under `[data-k="light"]`, beside the dark
+   `:root` the other block was copied from. All 24 tokens differed; every one of them is now the
+   design's own value, hex for hex, for the same reason the dark block gives — a conversion makes
+   "is this the design's colour?" un-answerable by comparison.
+
+   The accent is NOT the dark one dimmed. The design darkens it (#34d399 → #0f9d6b) and flips its
+   ink to white, because emerald-400 on white is under 2:1 and unreadable as a button face. */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.984 0.003 247.9);
-  --foreground: oklch(0.24 0.02 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.02 262);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.02 262);
-  /* THE BRAND FOLLOWS THE DESIGN IN BOTH MODES. v2 specifies dark only; light is kept working
-     rather than invented, but the accent moves with it so the theme toggle is not two brands. */
-  --primary: oklch(0.72 0.15 163);
-  --primary-foreground: oklch(0.16 0.03 165);
-  --secondary: oklch(0.96 0.004 258);
-  --secondary-foreground: oklch(0.24 0.02 262);
-  --muted: oklch(0.955 0.004 258);
-  --muted-foreground: oklch(0.551 0.023 264.4);
-  --accent: oklch(0.95 0.008 258);
-  --accent-foreground: oklch(0.24 0.02 262);
-  --destructive: oklch(0.577 0.245 27.3);
-  --border: oklch(0.92 0.007 262);
-  --input: oklch(0.92 0.007 262);
-  --ring: oklch(0.72 0.15 163);
-  --ok: oklch(0.627 0.17 149.2);
-  --warn: oklch(0.75 0.14 62);
-  --stall: oklch(0.62 0.17 295);
-  --park: oklch(0.78 0.15 85);
-  --author: oklch(0.68 0.13 232);
-  --line2: oklch(0.86 0.01 262);
-  --shadow-panel: 0 8px 26px rgba(16, 24, 20, 0.10);
+  --background: #f5f6f4;
+  --foreground: #111614;
+  --card: #ffffff;
+  --card-foreground: #111614;
+  --popover: #ffffff;
+  --popover-foreground: #111614;
+  --primary: #0f9d6b;
+  --primary-foreground: #ffffff;
+  --secondary: #eff2ef;
+  --secondary-foreground: #111614;
+  --muted: #eff2ef;
+  --muted-foreground: #525d58;
+  --accent: #eef1ee;
+  --accent-foreground: #111614;
+  --destructive: #be123c;
+  --border: #e1e5e0;
+  --input: #e1e5e0;
+  --ring: #0f9d6b;
+  --ok: #059669;
+  --warn: #b45309;
+  --stall: #6d28d9;
+  --park: #a16207;
+  --author: #0369a1;
+  --line2: #ccd3cd;
+  --shadow-panel: 0 6px 20px rgba(16, 24, 20, 0.10);
 }
 
 /* ── v2: the dark palette IS the design (KontraConsole v2) ────────────────────────────────────

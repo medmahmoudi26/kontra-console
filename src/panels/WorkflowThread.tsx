@@ -45,13 +45,13 @@
 
 import type { ReactNode } from 'react';
 import { SideResizer, useSideDock } from './chrome/SideDock';
-import type { SideBounds } from './chrome/sideDock';
+import type { SideBounds } from '@kontra/console-core/panels/chrome/sideDock';
 
 import type { NamedTurn } from '@kontra/core/vocabulary';
 
-import { fmtDuration, runDuration, type RunRow } from '../run/api';
+import { fmtDuration, runDuration, type RunRow } from '@kontra/console-core/run/api';
 import type { FollowPhase } from '../run/follow';
-import type { RunTurns } from '../run/turns';
+import type { RunTurns } from '@kontra/console-core/run/turns';
 import type { AskDeck } from './AskTurn';
 import { StatePill } from './StatePill';
 import { TranscriptView } from './Transcript';
@@ -63,7 +63,7 @@ import {
   type MissingRun,
   type TabId,
   type Thread,
-} from './workflowThread';
+} from '@kontra/console-core/panels/workflowThread';
 
 /** Why the open run has no account, when it has none. Kept apart from "there is no run open": a
  *  run nobody selected and a run whose log could not be read are different sentences. */

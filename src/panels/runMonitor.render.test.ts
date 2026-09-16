@@ -17,12 +17,12 @@ import { describe, expect, it } from 'vitest';
 
 import { categorize } from '@kontra/core/history';
 
-import type { DatasetInfo, RunEvent, RunHistory, RunRow } from '../run/api';
-import { readRunTurns, type RunTurns } from '../run/turns';
-import type { Terminal } from './panelsClient';
+import type { DatasetInfo, RunEvent, RunHistory, RunRow } from '@kontra/console-core/run/api';
+import { readRunTurns, type RunTurns } from '@kontra/console-core/run/turns';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 import { RunDataTab, RunMonitor } from './RunMonitor';
-import { runDatasets } from './runDatasets';
-import { focusedMachine, runMachines } from './runMachines';
+import { runDatasets } from '@kontra/console-core/panels/runDatasets';
+import { focusedMachine, runMachines } from '@kontra/console-core/panels/runMachines';
 
 const T0 = 1_787_084_868_000;
 

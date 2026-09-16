@@ -32,9 +32,9 @@ import {
   visiblePresets,
   type SqlPreset,
 } from './DatasetPage';
-import { listingRows, type DatasetListingRow } from '../datasets/listing';
-import { groupDatasets } from '../datasets/grouped';
-import type { DatasetInfo } from '../run/api';
+import { listingRows, type DatasetListingRow } from '@kontra/console-core/datasets/listing';
+import { groupDatasets } from '@kontra/console-core/datasets/grouped';
+import type { DatasetInfo } from '@kontra/console-core/run/api';
 
 describe('schemaSignature — what the grid rebuilds on', () => {
   const schema = [

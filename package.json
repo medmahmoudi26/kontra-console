@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
-    "test": "vitest run",
+    "test": "pnpm --filter @kontra/console-core run guard && vitest run",
     "test:e2e": "node e2e/run.mjs",
     "test:e2e:serve": "KONTRA_E2E_SERVE=1 node e2e/run.mjs"
   },
@@ -29,6 +29,7 @@
     "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/language": "^6.12.4",
     "@codemirror/view": "^6.43.8",
+    "@kontra/console-core": "workspace:*",
     "@kontra/core": "link:../kontra/shared/core",
     "@uiw/react-codemirror": "^4.25.11",
     "@xterm/addon-fit": "^0.10.0",

@@ -33,7 +33,7 @@
 import { Boxes, Workflow } from 'lucide-react';
 
 import { StatePill } from './StatePill';
-import type { CatalogEntry } from './catalog';
+import type { CatalogEntry } from '@kontra/console-core/panels/catalog';
 
 export type CardLayout = 'roomy' | 'compact' | 'list';
 

@@ -84,10 +84,10 @@ export {
   EMPTY_FILTER,
   filterActive,
   paneOptions,
-} from './src/panels/paneFilter';
-export type { PaneFilter } from './src/panels/paneFilter';
-export { PANE_BOUNDS, PANE_STEP, clampPaneHeight } from './src/panels/chrome/paneHeight';
-export type { PaneBounds, PaneGrow } from './src/panels/chrome/paneHeight';
+} from '@kontra/console-core/panels/paneFilter';
+export type { PaneFilter } from '@kontra/console-core/panels/paneFilter';
+export { PANE_BOUNDS, PANE_STEP, clampPaneHeight } from '@kontra/console-core/panels/chrome/paneHeight';
+export type { PaneBounds, PaneGrow } from '@kontra/console-core/panels/chrome/paneHeight';
 
 export { default as PaneThroughput } from './src/panels/chrome/PaneThroughput';
 
@@ -103,16 +103,16 @@ export {
   dragWidth,
   flipSide,
   keyWidth,
-} from './src/panels/chrome/sideDock';
-export type { DockSide, SideBounds, SideDockState } from './src/panels/chrome/sideDock';
+} from '@kontra/console-core/panels/chrome/sideDock';
+export type { DockSide, SideBounds, SideDockState } from '@kontra/console-core/panels/chrome/sideDock';
 
 // A column of panes an operator can drag into a different order and fold individually.
 // The order is stored BY KEY, never by index — a stored `[2,0,1]` silently permutes a
 // different set of panes the moment one is added or renamed.
 export { PaneStack, usePaneOrder } from './src/panels/chrome/PaneStack';
 export type { StackedPane } from './src/panels/chrome/PaneStack';
-export { moveBefore, nudge, reconcileOrder } from './src/panels/chrome/paneOrder';
-export type { PaneOrder } from './src/panels/chrome/paneOrder';
+export { moveBefore, nudge, reconcileOrder } from '@kontra/console-core/panels/chrome/paneOrder';
+export type { PaneOrder } from '@kontra/console-core/panels/chrome/paneOrder';
 
 // ── Grid: the tile wall ─────────────────────────────────────────────────────
 export { default as TileWall, WallEmpty } from './src/panels/grid/TileWall';
@@ -137,8 +137,8 @@ export { ActorCard } from './src/panels/ActorCard';
 // hides eight cards must not read as a page that lost eight.
 export { ActorFilterBar } from './src/panels/ActorFilterBar';
 export type { ActorFilterBarProps } from './src/panels/ActorFilterBar';
-export { EMPTY_ACTOR_FILTER, actorNames, matchActor } from './src/panels/actorFilter';
-export type { ActorFilter, ActorStanding, FilterableActor } from './src/panels/actorFilter';
+export { EMPTY_ACTOR_FILTER, actorNames, matchActor } from '@kontra/console-core/panels/actorFilter';
+export type { ActorFilter, ActorStanding, FilterableActor } from '@kontra/console-core/panels/actorFilter';
 
 // One Method row: name, description, and the `takes → emits` summary, with the
 // field tables under a disclosure. `schemaFields`/`schemaType`/`summarise` are
@@ -234,7 +234,7 @@ export { Spark, Streak, SPARK_COLORS } from './src/components/Spark';
 // The app store. Anything that reads its data from the store rather than from
 // props has to be seeded by whatever renders it, including a preview card:
 //   useAppStore.setState({ catalog: [...], view: 'actors' })
-export { useAppStore } from './src/state/store';
+export { useAppStore } from '@kontra/console-core/state/store';
 
 // ── Design vocabulary (not components — the contracts the chrome reads) ─────
 // The Dataset lifecycle is a tracked contract: open / sealed / abandoned, plus
@@ -244,5 +244,5 @@ export {
   DATASET_STATES,
   datasetBadge,
   datasetState,
-} from './src/datasets/state';
-export type { DatasetState } from './src/datasets/state';
+} from '@kontra/console-core/datasets/state';
+export type { DatasetState } from '@kontra/console-core/datasets/state';

@@ -19,7 +19,7 @@ import { createElement } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SidebarTree from './SidebarTree';
-import type { Terminal, TerminalHealth } from '../panelsClient';
+import type { Terminal, TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 const OK: TerminalHealth = {
   reachable: 'ok',

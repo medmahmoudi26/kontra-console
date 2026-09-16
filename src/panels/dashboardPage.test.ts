@@ -23,15 +23,15 @@
 import { createElement, useEffect } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Terminal, TerminalHealth } from './panelsClient';
+import type { Terminal, TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 /* ── the seam ──────────────────────────────────────────────────────────────────────────────── */
 
 const fetchTerminals = vi.fn();
 const fetchTicket = vi.fn();
 
-vi.mock('./panelsClient', async (actual) => ({
-  ...(await actual<typeof import('./panelsClient')>()),
+vi.mock('@kontra/console-core/panels/panelsClient', async (actual) => ({
+  ...(await actual<typeof import('@kontra/console-core/panels/panelsClient')>()),
   fetchTerminals: (...a: unknown[]) => fetchTerminals(...a),
   fetchTicket: (...a: unknown[]) => fetchTicket(...a),
   panelBase: () => 'http://localhost:8090',
@@ -147,7 +147,7 @@ class FakeSocket {
   }
 }
 
-const { useAppStore } = await import('../state/store');
+const { useAppStore } = await import('@kontra/console-core/state/store');
 const DashboardPage = (await import('./DashboardPage')).default;
 const { LIVE_BUDGET, INVENTORY_REFRESH_MS } = await import('./DashboardPage');
 

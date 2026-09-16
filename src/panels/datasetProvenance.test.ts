@@ -16,7 +16,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import DatasetProvenance from './DatasetProvenance';
-import type { DatasetProvenance as Provenance } from '../datasets/provenance';
+import type { DatasetProvenance as Provenance } from '@kontra/console-core/datasets/provenance';
 
 function measured(
   groups: Array<[string | null, string | null, number, (string | null)?]>

@@ -17,8 +17,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { WorkflowContract } from './WorkflowContract';
-import { readSchema } from './workflowContract';
-import type { WorkflowDescriptor } from '../run/api';
+import { readSchema } from '@kontra/console-core/panels/workflowContract';
+import type { WorkflowDescriptor } from '@kontra/console-core/run/api';
 
 /** What `.kontra/workflows/ping` really registers: `dict | None` in, `dict` out. */
 const PING: WorkflowDescriptor = {

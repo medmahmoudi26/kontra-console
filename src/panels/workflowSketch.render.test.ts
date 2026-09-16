@@ -24,9 +24,9 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { ScratchDocument, ScratchNode } from '../run/api';
-import type { CatalogActor } from '../types';
-import type { ScratchCatalogue } from './scratchInspect';
+import type { ScratchDocument, ScratchNode } from '@kontra/console-core/run/api';
+import type { CatalogActor } from '@kontra/console-core/types';
+import type { ScratchCatalogue } from '@kontra/console-core/panels/scratchInspect';
 import { WorkflowSketch, type WorkflowSketchProps } from './WorkflowSketch';
 import type { SketchState } from './workflowSketch';
 

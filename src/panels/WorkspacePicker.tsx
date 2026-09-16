@@ -13,8 +13,8 @@ import {
   fetchWorkspaces,
   useWorkspace,
   type WorkspaceList,
-} from '../run/api';
-import { useAppStore } from '../state/store';
+} from '@kontra/console-core/run/api';
+import { useAppStore } from '@kontra/console-core/state/store';
 
 export function WorkspacePicker({ collapsed }: { collapsed: boolean }): JSX.Element {
   const [list, setList] = useState<WorkspaceList | null>(null);

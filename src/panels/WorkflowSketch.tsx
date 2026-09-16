@@ -58,13 +58,13 @@ import {
   type ScratchDocument,
   type WorkflowDescriptor,
   type WorkflowFile,
-} from '../run/api';
-import { fetchSchema, type SchemaEntry } from '../run/query';
-import { useAppStore } from '../state/store';
+} from '@kontra/console-core/run/api';
+import { fetchSchema, type SchemaEntry } from '@kontra/console-core/run/query';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { useRegisteredFolders } from './RegisteredFolders';
-import { registeredActors } from './sourceFolders';
+import { registeredActors } from '@kontra/console-core/panels/sourceFolders';
 import { ScratchActionsProvider, ScratchPortsProvider, scratchNodeTypes } from './ScratchNodes';
-import type { ScratchCatalogue } from './scratchInspect';
+import type { ScratchCatalogue } from '@kontra/console-core/panels/scratchInspect';
 import {
   NODE_W,
   normaliseScratchDocument,
@@ -73,7 +73,7 @@ import {
   type ScratchNodeType,
   type ScratchNoteData,
 } from './scratchFlow';
-import { documentPorts } from './scratchPorts';
+import { documentPorts } from '@kontra/console-core/panels/scratchPorts';
 import {
   mintSketchId,
   readSketch,

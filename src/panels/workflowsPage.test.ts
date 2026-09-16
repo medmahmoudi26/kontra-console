@@ -28,8 +28,8 @@ import type {
   StopResult,
   WorkflowDescriptor,
   WorkflowFile,
-} from '../run/api';
-import type { PollerReport } from '../run/workflowState';
+} from '@kontra/console-core/run/api';
+import type { PollerReport } from '@kontra/console-core/run/workflowState';
 
 /* ── the seam ──────────────────────────────────────────────────────────────────────────────── */
 
@@ -53,8 +53,8 @@ const fetchPulse = vi.fn();
 const fetchRunTurns = vi.fn();
 const fetchSchema = vi.fn();
 
-vi.mock('../run/api', async (actual) => ({
-  ...(await actual<typeof import('../run/api')>()),
+vi.mock('@kontra/console-core/run/api', async (actual) => ({
+  ...(await actual<typeof import('@kontra/console-core/run/api')>()),
   fetchWorkflows: (...a: unknown[]) => fetchWorkflows(...a),
   fetchWorkflowSource: (...a: unknown[]) => fetchWorkflowSource(...a),
   fetchExposure: (...a: unknown[]) => fetchExposure(...a),
@@ -74,13 +74,13 @@ vi.mock('../run/api', async (actual) => ({
   fetchPulse: (...a: unknown[]) => fetchPulse(...a),
 }));
 
-vi.mock('../run/turns', async (actual) => ({
-  ...(await actual<typeof import('../run/turns')>()),
+vi.mock('@kontra/console-core/run/turns', async (actual) => ({
+  ...(await actual<typeof import('@kontra/console-core/run/turns')>()),
   fetchRunTurns: (...a: unknown[]) => fetchRunTurns(...a),
 }));
 
-vi.mock('../run/query', async (actual) => ({
-  ...(await actual<typeof import('../run/query')>()),
+vi.mock('@kontra/console-core/run/query', async (actual) => ({
+  ...(await actual<typeof import('@kontra/console-core/run/query')>()),
   fetchSchema: (...a: unknown[]) => fetchSchema(...a),
 }));
 
@@ -97,7 +97,7 @@ vi.mock('./WorkerPane', () => ({
     createElement('div', { 'data-testid': `worker-pane-${terminal.id}` }),
 }));
 
-const { useAppStore } = await import('../state/store');
+const { useAppStore } = await import('@kontra/console-core/state/store');
 const WorkflowsPage = (await import('./WorkflowsPage')).default;
 
 /* ── fixtures ──────────────────────────────────────────────────────────────────────────────── */

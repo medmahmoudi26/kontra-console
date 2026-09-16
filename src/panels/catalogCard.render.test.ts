@@ -16,7 +16,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { CatalogCard, type CardLayout } from './CatalogCard';
-import type { CatalogEntry } from './catalog';
+import type { CatalogEntry } from '@kontra/console-core/panels/catalog';
 
 const LAYOUTS: CardLayout[] = ['roomy', 'compact', 'list'];
 

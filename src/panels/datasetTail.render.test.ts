@@ -16,7 +16,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { DatasetInfo, RunRow } from '../run/api';
+import type { DatasetInfo, RunRow } from '@kontra/console-core/run/api';
 import {
   TAIL_START,
   readTail,
@@ -24,11 +24,11 @@ import {
   tailReduce,
   type TailColumn,
   type TailState,
-} from '../datasets/tailRows';
-import { datasetState } from '../datasets/state';
+} from '@kontra/console-core/datasets/tailRows';
+import { datasetState } from '@kontra/console-core/datasets/state';
 import { DatasetTail, TailBody } from './DatasetTail';
 import { RunDataTab } from './RunMonitor';
-import { runDatasets } from './runDatasets';
+import { runDatasets } from '@kontra/console-core/panels/runDatasets';
 
 const T0 = 1_787_084_868_000;
 

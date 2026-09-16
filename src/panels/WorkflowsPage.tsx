@@ -70,49 +70,49 @@ import {
   type ServeResult,
   type WorkflowDescriptor,
   type WorkflowFile,
-} from '../run/api';
+} from '@kontra/console-core/run/api';
 import {
   stateWords,
   strandedRun,
   workflowState,
   type PollerReport,
   type WorkflowState,
-} from '../run/workflowState';
-import { parseWorkflow, queueDigest, typeFromSource } from './workflowSource';
+} from '@kontra/console-core/run/workflowState';
+import { parseWorkflow, queueDigest, typeFromSource } from '@kontra/console-core/panels/workflowSource';
 import {
   draftForInput,
   inputOf,
   type InputDraft,
-} from './workflowInput';
+} from '@kontra/console-core/panels/workflowInput';
 import { WorkflowInputForm } from './WorkflowInputForm';
-import { rowStatus } from './workflowRow';
-import { elidePath } from './elidePath';
-import { streakOf } from '../run/runState';
+import { rowStatus } from '@kontra/console-core/panels/workflowRow';
+import { elidePath } from '@kontra/console-core/panels/elidePath';
+import { streakOf } from '@kontra/console-core/run/runState';
 import { Streak } from '../components/Spark';
 import { RegisterFolder } from './RegisterFolder';
 import { FolderAbsent, FolderActions, useRegisteredFolders, type FolderShelf } from './RegisteredFolders';
-import { mergeWorkflowFolders, workspaceOf } from './sourceFolders';
+import { mergeWorkflowFolders, workspaceOf } from '@kontra/console-core/panels/sourceFolders';
 import { StatePill } from './StatePill';
 import { WorkflowThread, type TurnsFailure } from './WorkflowThread';
 import { WorkflowSketch, useWorkflowSketch } from './WorkflowSketch';
-import { DEFAULT_TAB, openDrill, threadOf, transcriptFor, type TabId } from './workflowThread';
+import { DEFAULT_TAB, openDrill, threadOf, transcriptFor, type TabId } from '@kontra/console-core/panels/workflowThread';
 import { RunDataTab, RunMonitor } from './RunMonitor';
 import { RunStatsBar } from './RunStats';
-import { runDatasets } from './runDatasets';
-import { runStats } from './runStats';
-import { focusedMachine, runMachines } from './runMachines';
-import { answerRunAsk, type RunTurns } from '../run/turns';
+import { runDatasets } from '@kontra/console-core/panels/runDatasets';
+import { runStats } from '@kontra/console-core/panels/runStats';
+import { focusedMachine, runMachines } from '@kontra/console-core/panels/runMachines';
+import { answerRunAsk, type RunTurns } from '@kontra/console-core/run/turns';
 import type { AskDeck } from './AskTurn';
-import { answerOf, askForm, parkedRun } from './ask';
+import { answerOf, askForm, parkedRun } from '@kontra/console-core/panels/ask';
 import { transcriptHub, useFollowedRun } from '../run/follow';
 import { TurnDrill } from './TranscriptDrill';
-import { turnKey } from './transcriptDrill';
+import { turnKey } from '@kontra/console-core/panels/transcriptDrill';
 import { SideDockControls, SideRail, SideResizer, useSideDock } from './chrome/SideDock';
 import { WorkerPane } from './WorkerPane';
 import { RunTail } from './RunTail';
 import { SourceProvenance } from './SourceProvenance';
-import { workflowSessionOf } from './workflowSession';
-import { useAppStore } from '../state/store';
+import { workflowSessionOf } from '@kontra/console-core/panels/workflowSession';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 

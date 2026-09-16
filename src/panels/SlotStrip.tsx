@@ -16,8 +16,8 @@
  * and says where the fix is.
  */
 
-import type { ActorSlots, SlotState } from '../run/api';
-import { SLOT_WORD, blocking, summariseSlots, versionDiff } from './slots';
+import type { ActorSlots, SlotState } from '@kontra/console-core/run/api';
+import { SLOT_WORD, blocking, summariseSlots, versionDiff } from '@kontra/console-core/panels/slots';
 
 const STATE_BADGE: Record<SlotState, string> = {
   bound: 'bg-emerald-500/15 text-emerald-300',

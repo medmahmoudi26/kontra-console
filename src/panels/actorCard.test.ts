@@ -15,8 +15,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Source } from '../run/api';
-import type { CatalogActor } from '../types';
+import type { Source } from '@kontra/console-core/run/api';
+import type { CatalogActor } from '@kontra/console-core/types';
 import { ActorCard } from './ActorCard';
 
 const PROBE: CatalogActor = {

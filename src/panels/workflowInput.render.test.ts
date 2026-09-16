@@ -16,7 +16,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { WorkflowInputForm } from './WorkflowInputForm';
-import { draftForInput, inputOf, setField, type InputDraft } from './workflowInput';
+import { draftForInput, inputOf, setField, type InputDraft } from '@kontra/console-core/panels/workflowInput';
 import { schemaFields } from './MethodContract';
 
 const NSCHECK = {

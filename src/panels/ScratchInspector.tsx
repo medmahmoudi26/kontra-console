@@ -27,13 +27,13 @@
  * thing it writes back is a Method the author picked.
  */
 
-import type { ScratchNode } from '../run/api';
-import { asOfText, countText } from '../datasets/scope';
-import { dispatchText, versionText, wholeDataset } from '../datasets/grouped';
-import { datasetBadge, datasetState } from '../datasets/state';
+import type { ScratchNode } from '@kontra/console-core/run/api';
+import { asOfText, countText } from '@kontra/console-core/datasets/scope';
+import { dispatchText, versionText, wholeDataset } from '@kontra/console-core/datasets/grouped';
+import { datasetBadge, datasetState } from '@kontra/console-core/datasets/state';
 import { MethodRow } from './MethodContract';
 import { WorkflowContract } from './WorkflowContract';
-import type { ActorReading, DatasetReading, EdgeFallout, ScratchReading, WorkflowReading } from './scratchInspect';
+import type { ActorReading, DatasetReading, EdgeFallout, ScratchReading, WorkflowReading } from '@kontra/console-core/panels/scratchInspect';
 import { SideDockControls, SideRail, SideResizer, useSideDock } from './chrome/SideDock';
 import { Button } from '@/components/ui/button';
 

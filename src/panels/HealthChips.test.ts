@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import HealthChips, { CHIP_SIGNALS, chipState, detailLines } from './HealthChips';
-import type { TerminalHealth } from './panelsClient';
+import type { TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 function render(health: TerminalHealth, terminalId?: string, mode?: string): string {
   return renderToStaticMarkup(createElement(HealthChips, { health, terminalId, mode }));

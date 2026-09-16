@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { schemaEnum, schemaDefault, schemaFields } from './MethodContract';
-import { initialValues, coerceValues } from './formFields';
+import { initialValues, coerceValues } from '@kontra/console-core/panels/formFields';
 
 describe('a closed set is read from every spelling a deriver emits', () => {
   it('reads Go’s {type, enum}', () => {

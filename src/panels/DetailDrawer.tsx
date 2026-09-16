@@ -27,12 +27,12 @@
 
 import { SAFE, tryParseTerminalId, type ExecutionMode } from '@kontra/core/panels/ids';
 import { sharedQueue } from '@kontra/core/queues';
-import { modeStakes } from './chrome/tileRef';
+import { modeStakes } from '@kontra/console-core/panels/chrome/tileRef';
 import { SCROLLBACK_LINES } from './TerminalTile';
-import { healthEntries, inapplicableReason, type Terminal } from './panelsClient';
+import { healthEntries, inapplicableReason, type Terminal } from '@kontra/console-core/panels/panelsClient';
 import Markdown from './widgets/Markdown';
-import { formatAge, formatBytes, formatInstant } from './widgets/format';
-import { cell, definitionTable, fence, inlineCode, line } from './widgets/mdsource';
+import { formatAge, formatBytes, formatInstant } from '@kontra/console-core/panels/widgets/format';
+import { cell, definitionTable, fence, inlineCode, line } from '@kontra/console-core/panels/widgets/mdsource';
 
 /** How a tile is being fed — `{t:'state'}`'s `mode`, which is a DIFFERENT axis from the execution
  * mode below. Declared locally rather than imported from `TerminalTile`: slice 7a is restructuring

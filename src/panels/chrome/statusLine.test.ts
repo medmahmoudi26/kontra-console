@@ -25,9 +25,9 @@ import StatusLine, {
   STALE_FRAME_MS,
   type Feed,
 } from './StatusLine';
-import { parseTileRef } from './tileRef';
+import { parseTileRef } from '@kontra/console-core/panels/chrome/tileRef';
 import { leadingFinding } from '../HealthChips';
-import type { Terminal } from '../panelsClient';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 
 const ID = 'local:main-droplet/nscheck-0_1_0/actor';
 

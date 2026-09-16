@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { isSignedIn, login, loginEnabled, onSessionChange } from '@/run/session';
+import { isSignedIn, login, loginEnabled, onSessionChange } from '@kontra/console-core/run/session';
 
 type Gate = 'checking' | 'required' | 'open';
 

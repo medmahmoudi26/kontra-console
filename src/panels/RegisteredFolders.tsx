@@ -30,9 +30,9 @@ import {
   forgetSource,
   type Source,
   type SourceKind,
-} from '../run/api';
-import { canForget, withRegistered, withoutSource } from './sourceFolders';
-import { useAppStore } from '../state/store';
+} from '@kontra/console-core/run/api';
+import { canForget, withRegistered, withoutSource } from '@kontra/console-core/panels/sourceFolders';
+import { useAppStore } from '@kontra/console-core/state/store';
 import { Button } from '@/components/ui/button';
 
 /** What a page holds about its registered folders, and the three things it can do to them. */

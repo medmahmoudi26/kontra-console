@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DatasetInfo } from '../run/api';
-import { localDatasetName } from '../datasets/localName';
-import { groupDatasetName } from '../datasets/grouped';
+import type { DatasetInfo } from '@kontra/console-core/run/api';
+import { localDatasetName } from '@kontra/console-core/datasets/localName';
+import { groupDatasetName } from '@kontra/console-core/datasets/grouped';
 
 /**
  * The DERIVED, run-grain name on the Datasets page (ADR 0029 §2).

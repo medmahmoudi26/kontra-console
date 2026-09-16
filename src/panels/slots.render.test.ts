@@ -14,10 +14,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { ActorSlots, BindableSecret, Resolution, SlotBinding, SlotStatus } from '../run/api';
+import type { ActorSlots, BindableSecret, Resolution, SlotBinding, SlotStatus } from '@kontra/console-core/run/api';
 import { SlotBindingSurface, type SlotBindingSurfaceProps } from './SlotBindings';
 import { SlotStrip } from './SlotStrip';
-import { bindingGroups, resolutionRows } from './slots';
+import { bindingGroups, resolutionRows } from '@kontra/console-core/panels/slots';
 
 const SENTINEL = 'sk_live_SENTINEL_never_in_a_browser_c0de';
 const AUG = (day: number): number => Date.UTC(2026, 7, day, 9, 14, 0);

@@ -21,8 +21,8 @@ import type {
   ScratchNode,
   ScratchNote,
   ScratchPoint,
-} from '../run/api';
-import { fieldHandle, handleKind, inHandle, outHandle } from './scratchHandles';
+} from '@kontra/console-core/run/api';
+import { fieldHandle, handleKind, inHandle, outHandle } from '@kontra/console-core/panels/scratchHandles';
 
 /** A document with nothing in it. Shared so "new sketch" and "nothing loaded" are the same value. */
 export const EMPTY_SCRATCH: ScratchDocument = { nodes: [], edges: [], notes: [] };

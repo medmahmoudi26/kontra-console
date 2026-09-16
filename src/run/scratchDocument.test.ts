@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ScratchDocument, ScratchEdge, ScratchNode, ScratchNote } from './api';
+import type { ScratchDocument, ScratchEdge, ScratchNode, ScratchNote } from '@kontra/console-core/run/api';
 
 /**
  * The Scratch document, restated for the browser — pinned against what the server keeps.

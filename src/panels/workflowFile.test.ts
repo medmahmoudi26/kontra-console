@@ -17,7 +17,7 @@ import {
   parseInput,
   queueDigest,
   typeFromSource,
-} from './workflowSource';
+} from '@kontra/console-core/panels/workflowSource';
 
 describe('typeFromSource', () => {
   // Temporal accepts a start for ANY type name; only a worker that registered it will pick the

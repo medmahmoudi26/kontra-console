@@ -22,10 +22,10 @@ import { describe, expect, it } from 'vitest';
 
 import { categorize } from '@kontra/core/history';
 
-import type { RunEvent, RunHistory, RunRow } from '../run/api';
-import { readRunTurns, type RunAsk, type RunTurns } from '../run/turns';
+import type { RunEvent, RunHistory, RunRow } from '@kontra/console-core/run/api';
+import { readRunTurns, type RunAsk, type RunTurns } from '@kontra/console-core/run/turns';
 import { WorkflowThread, type WorkflowThreadProps } from './WorkflowThread';
-import { TABS, threadOf, type TabId } from './workflowThread';
+import { TABS, threadOf, type TabId } from '@kontra/console-core/panels/workflowThread';
 
 const T0 = 1_787_084_868_000;
 const NOW = T0 + 300_000;

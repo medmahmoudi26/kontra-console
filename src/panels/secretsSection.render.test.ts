@@ -15,8 +15,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { SecretsSurface, type SecretsSurfaceProps } from './SecretsSection';
-import { toRows } from './secrets';
-import type { Secret } from '../run/api';
+import { toRows } from '@kontra/console-core/panels/secrets';
+import type { Secret } from '@kontra/console-core/run/api';
 
 const SENTINEL = 'dop_v1_SENTINEL_never_in_the_clear_9f3c';
 const AUG = (day: number): number => Date.UTC(2026, 7, day, 12, 0, 0);

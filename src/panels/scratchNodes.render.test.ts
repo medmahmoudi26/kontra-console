@@ -22,11 +22,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ReactFlowProvider } from '@xyflow/react';
-import type { ScratchNode } from '../run/api';
-import type { CatalogActor } from '../types';
+import type { ScratchNode } from '@kontra/console-core/run/api';
+import type { CatalogActor } from '@kontra/console-core/types';
 import { ScratchPortsProvider, scratchNodeTypes } from './ScratchNodes';
-import { readScratchNode, type ScratchCatalogue } from './scratchInspect';
-import { documentPorts, nodePorts } from './scratchPorts';
+import { readScratchNode, type ScratchCatalogue } from '@kontra/console-core/panels/scratchInspect';
+import { documentPorts, nodePorts } from '@kontra/console-core/panels/scratchPorts';
 
 const PROBE: CatalogActor = {
   key: 'probe@0.1.0',

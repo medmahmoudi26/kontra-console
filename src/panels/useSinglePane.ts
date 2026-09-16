@@ -30,9 +30,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { decodeTagged, fetchTicket, panelBase, panelSocketUrl } from './panelsClient';
-import type { ServerMessage } from './panelsClient';
-import { reconnectDelay } from './reconnect';
+import { decodeTagged, fetchTicket, panelBase, panelSocketUrl } from '@kontra/console-core/panels/panelsClient';
+import type { ServerMessage } from '@kontra/console-core/panels/panelsClient';
+import { reconnectDelay } from '@kontra/console-core/panels/reconnect';
 import type { TileMode } from './TerminalTile';
 
 export interface SinglePane {

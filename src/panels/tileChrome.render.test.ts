@@ -28,7 +28,7 @@ vi.hoisted(() => {
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import TerminalTile, { type TerminalTileProps } from './TerminalTile';
-import type { Terminal } from './panelsClient';
+import type { Terminal } from '@kontra/console-core/panels/panelsClient';
 
 const ID = 'local:localhost/nscheck-0_1_0/actor';
 

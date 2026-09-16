@@ -7,9 +7,7 @@
  * one.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { sourceOf } from '../testing/consoleSource';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   AlreadyServingError,
@@ -23,7 +21,7 @@ import {
   runProbe,
   serveActorSource,
   type Source,
-} from './api';
+} from '@kontra/console-core/run/api';
 
 function reply(status: number, body: unknown): Response {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
@@ -133,7 +131,7 @@ describe('the workbench’s two calls', () => {
     /* THROUGH `fileURLToPath`, NOT `new URL(rel, import.meta.url)`. jsdom puts its own `URL` on the
        global and resolves a relative reference against the DOCUMENT base, so the second form comes
        back as `http://localhost:3000/src/run/api.ts` and the read fails with ENOENT on `/src/run`. */
-    const src = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'api.ts'), 'utf8');
+    const src = sourceOf('run/api.ts');
     expect(src).not.toMatch(/export async function saveSourceFile/);
     expect(src).not.toMatch(/method: 'PUT'[\s\S]{0,200}sources\//);
   });

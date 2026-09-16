@@ -21,7 +21,7 @@ import DatasetAccrual, { AccrualLine } from './DatasetAccrual';
 import { buildColumnDefs, resultsGridKey } from './DatasetPage';
 import { ROW_TAIL_START, rowTailReduce, type RowTailState } from '../datasets/rowTail';
 import type { DatasetState } from '@kontra/core/contract/datasets';
-import type { DatasetInfo } from '../run/api';
+import type { DatasetInfo } from '@kontra/console-core/run/api';
 
 const NOW = 2_000_000;
 

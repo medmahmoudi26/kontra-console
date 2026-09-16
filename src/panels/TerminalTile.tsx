@@ -39,13 +39,13 @@ import { Button } from '@/components/ui/button';
 import HealthChips from './HealthChips';
 import TileHeader from './chrome/TileHeader';
 import StatusLine from './chrome/StatusLine';
-import { copyText, visibleText } from './chrome/copy';
-import { tileRefFor } from './chrome/tileRef';
+import { copyText, visibleText } from '@kontra/console-core/panels/chrome/copy';
+import { tileRefFor } from '@kontra/console-core/panels/chrome/tileRef';
 import { useTileScroll } from './chrome/useTileScroll';
-import { TERMINAL_FONT_STACK, whenTerminalFontReady } from './theme';
-import { readOnlyTerminalOptions } from './terminalOptions';
-import { parseWidgetFrame, type Widget } from './widgets/parseWidget';
-import type { Terminal, TerminalHealth } from './panelsClient';
+import { TERMINAL_FONT_STACK, whenTerminalFontReady } from '@kontra/console-core/panels/theme';
+import { readOnlyTerminalOptions } from '@kontra/console-core/panels/terminalOptions';
+import { parseWidgetFrame, type Widget } from '@kontra/console-core/panels/widgets/parseWidget';
+import type { Terminal, TerminalHealth } from '@kontra/console-core/panels/panelsClient';
 
 /**
  * How many lines this pane's own scrollback ring keeps — xterm's `scrollback` option, named.
