@@ -1,6 +1,6 @@
 # PRD — the kontra console, rebuilt in Svelte
 
-Status: approved · ADR: `kontra/docs/adr/0048-the-console-migrates-to-svelte-one-surface-at-a-time.md`
+Status: slices 01–09 done; slice 10 awaiting a decision · ADR: `kontra/docs/adr/0048-the-console-migrates-to-svelte-one-surface-at-a-time.md`
 · Glossary: `CONTEXT.md` at this repo's root
 
 ---
@@ -89,14 +89,14 @@ is underneath is the only evidence that behaviour survived.
 
 ## 5. Success criteria
 
-| | today | target |
-|---|---|---|
-| Entry JS on a migrated surface | 472 KB | **< 150 KB** |
-| `setInterval` calls for data | 12 files | **0** |
-| SSE endpoints consumed | 0 of 2 | **2 of 2** |
-| Horizontal overflow at 390px | untested | **0px, asserted in CI** |
-| Smallest type a person reads | 9px | **12px** |
-| Time from `actor.py` save to form update | ∞ (refresh) | **< 2s, no refresh** |
+| | at the start | target | now |
+|---|---|---|---|
+| Entry JS on a migrated surface | 472 KB | < 150 KB | **69.2 KB** (5 surfaces, 26.4 gzipped) |
+| `setInterval` calls for data | 12 files | 0 | **0** in the Svelte bundle, guarded |
+| SSE endpoints consumed | 0 of 2 | 2 of 2 | **1 of 2** (schema stream; run stream is Workflows) |
+| Horizontal overflow at 390px | untested | 0px, asserted in CI | **0px**, 6 routes × 3 widths |
+| Smallest type a person reads | 9px | 12px | **12px**, guarded |
+| Time from `actor.py` save to form update | ∞ (refresh) | < 2s, no refresh | **no refresh** |
 
 ## 6. Plan
 
@@ -105,6 +105,10 @@ Ten slices, in `issues/`. Nine are agent-ready; one is a decision.
 `01` core extraction → `02` two bundles → `03` scale and shell → `04` `/dev` form → `05` `/dev` live
 → `06` Catalog → `07` Actors → `08` Secrets and Settings, with `09` (Svelte Flow spike) in parallel
 and `10` the checkpoint.
+
+**01–09 are done.** Five of seven surfaces serve from Svelte; the three left in React — Workflows,
+Datasets, Monitor — are exactly the three with a heavy library. Slice 10 has its numbers gathered and
+is waiting on a decision.
 
 **Workflows, Datasets and Monitor have no issues.** They are behind the checkpoint, and writing
 tickets for work that may not happen is how a backlog stops meaning anything.

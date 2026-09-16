@@ -1,6 +1,6 @@
 # 10 — The Datasets checkpoint
 
-Status: needs-triage
+Status: ready-for-human
 
 Type: **HITL** — this is the decision the whole plan is gated on. An agent gathers the numbers; a
 person makes the call.
@@ -56,3 +56,52 @@ Whichever it is, record it. A gate that is passed silently is a gate that was no
 - `07-actors.md`
 - `08-secrets-and-settings.md`
 - `09-svelte-flow-spike.md`
+
+## The numbers, gathered
+
+Slices 01–09 are done. This is what they cost and what is left, measured rather than estimated.
+**The decision below is not made.**
+
+### What the five migrated surfaces took
+
+| | |
+|---|---|
+| Surfaces migrated | `/dev`, Catalog, Actors, Secrets, Settings — **5 of 7** |
+| Svelte source | 19 files, ~1,029 lines of component |
+| Svelte bundle, all five | **69.2 KB** (26.4 gzipped) |
+| React entry, still | **426 KB** |
+| Core extracted | 77 modules, 60 tests, framework-free and guarded |
+| Guards added | no-framework, type-scale, no-polling, overflow — each proven by breaking it |
+
+### What is left
+
+Three surfaces, and they are the three with a library problem.
+
+**Datasets** — `DatasetPage.tsx` is **1,978 lines** with **11 React cell renderers**, and its chunk
+is **1,156 KB**, the largest in the console. ag-grid's setup already lives in a framework-free
+`lib/agGrid.ts`, and **10 dataset logic modules are already in `@kontra/console-core`**, so the port
+is the renderers plus CodeMirror — not the grid's behaviour.
+
+**Workflows** — slice 09 answered this: Svelte Flow is a real replacement, ~181 KB, every needed API
+present, and `scratchFlow.ts` (508 lines) ports into core unchanged first. The canvas is not the
+risk; the surface is large for other reasons.
+
+**Monitor** — terminals and markdown, not spiked.
+
+### The thing the migration already bought, independent of finishing
+
+`@xyflow/react` is in the React console's **entry chunk** — everybody downloads the workflow canvas
+to open Secrets. Five surfaces now bypass that entirely. Whatever is decided below, that is banked.
+
+### Three options, unchanged
+
+- **Continue** — Datasets, then Workflows and Monitor, then delete React.
+- **Stop here** — Svelte keeps five surfaces, React keeps three, `@kontra/console-core` stays
+  framework-free permanently as a supported arrangement rather than a transitional one. Note this is
+  now a *stable* split: the three React surfaces are exactly the three with heavy libraries.
+- **Continue with a changed plan** — e.g. replace the grid rather than port it.
+
+### What to record
+
+Whichever is chosen, write it here with its reasoning, and if it is not "continue", ADR 0048 gets a
+superseding note rather than being quietly left wrong.
