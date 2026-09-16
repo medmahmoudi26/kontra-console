@@ -1,6 +1,6 @@
 # 12 — Workflows
 
-Status: ready-for-agent
+Status: in-progress
 
 Type: AFK
 
@@ -37,3 +37,32 @@ Svelte Flow needs `svelte@^5.25.0`; the package pins `^5.19.0`.
 ## Blocked by
 
 - `11-datasets.md` — not technically, but one heavy surface at a time
+
+## Comments
+
+**The timeline is in, and it is derived from real history rather than simulated.**
+`@kontra/console-core/run/timeline` turns `RunEvent[]` into lanes and bars; 11 tests.
+
+**A bar is an event that CLOSES something.** `RunEvent.dur` is already "seconds this event closes",
+so a bar is `[t - dur, t]` and nothing here re-pairs a `Scheduled` with its `Completed` — the server
+did that, and a second reconstruction is a second set of edge cases.
+
+**`dur === 0` is a MOMENT, not a one-pixel bar.** A timer fired at t=3 drawn as a bar looks like
+three seconds of work. They get a tick row under the lanes.
+
+**Lanes group by what an event is ABOUT, not by `cat`.** Grouping by category gives four lanes for
+any run, which says nothing about one with forty dispatches. The linked workflow id where there is
+one — that is exactly the set of rows that are navigable — and the detail's subject otherwise.
+
+**Open work is derived by subtraction.** A `Scheduled` with no closing event IS still running, so it
+draws open-ended to now. That is the row somebody opening this page is looking for, and the
+screenshot shows it: `redditapi/n4` running off the right edge while everything else has closed.
+
+**A retry reads correctly**: `webcrawl/n3` shows a red failed bar and its green retry side by side
+in one lane, which is the thing a percentage cannot say.
+
+Also fixed: the last gridline was drawn at 97% and its label clipped to `15` where the axis meant
+`15s` — a truncated number is worse than none, so a tick that crowds the edge is dropped.
+
+**Still to do for this slice:** the run list is not yet subscribed to `/api/runs/:runId/stream` — the
+second unconsumed SSE endpoint — and the canvas (Svelte Flow) is not ported.

@@ -14,6 +14,7 @@
   import Dev from './dev/Dev.svelte';
   import Shell from './lib/Shell.svelte';
   import Secrets from './secrets/Secrets.svelte';
+  import Workflows from './workflows/Workflows.svelte';
   import Settings from './secrets/Settings.svelte';
   import Skeleton from './lib/Skeleton.svelte';
   import { SURFACES, go } from './lib/surfaces';
@@ -46,12 +47,13 @@
   {#if live.contract.state === 'error'}
     <p class="err" role="alert">{live.contract.error}</p>
   {/if}
-{:else if first === 'catalog' || first === 'actors' || first === 'secrets' || first === 'settings'}
+{:else if first === 'catalog' || first === 'actors' || first === 'secrets' || first === 'settings' || first === 'workflows'}
   <!-- ONE SHELL, FOUR SURFACES. `first` is what the orchestrator already routed here; the shell
        renders all seven tabs and `go` decides which clicks are a document load. -->
   <Shell view={first} views={SURFACES} onnavigate={(id) => location.assign(go(id, first).href)}>
     {#if first === 'catalog'}<Catalog />
     {:else if first === 'actors'}<Actors />
+    {:else if first === 'workflows'}<Workflows />
     {:else if first === 'secrets'}<Secrets />
     {:else}<Settings />{/if}
   </Shell>
