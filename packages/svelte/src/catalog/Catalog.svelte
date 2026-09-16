@@ -76,9 +76,24 @@
       {#each shown as e (e.id)}
         <li>
           <button onclick={() => open(e)}>
-            <span class="kind {e.kind}">{e.kind}</span>
-            <span class="nm mono">{e.name}</span>
-            {#if e.version}<span class="ver mono">{e.version}</span>{/if}
+            <span class="top">
+              <span class="kind {e.kind}">{e.kind}</span>
+              <span class="nm mono">{e.name}</span>
+              {#if e.version}<span class="ver mono">{e.version}</span>{/if}
+              <!-- STATE, because the whole reason to look at this list is to find out what is
+                   runnable right now. `unserved` and `unknown` are different facts and are drawn
+                   differently — see Actors, where the same distinction has a sentence beside it. -->
+              <span class="state {e.state}">{e.state}</span>
+            </span>
+            {#if e.description}<span class="desc">{e.description}</span>{/if}
+            <span class="meta">
+              {#if e.queue}<span class="mono q" title="task queue">{e.queue}</span>{/if}
+              {#if e.place === 'elsewhere'}<span class="pl" title="this control plane cannot see the code">elsewhere</span>{/if}
+              <!-- `facts` ONLY. A hand-rolled `methods.length` beside it printed "1 method 1 method":
+                   core already decides which numbers a row prints and what each one means, and a
+                   second opinion here is a duplicate at best and a disagreement at worst. -->
+              {#each e.facts as f (f.label)}<span class="fact" title={f.title}>{f.value} {f.label}</span>{/each}
+            </span>
           </button>
         </li>
       {/each}
@@ -107,11 +122,25 @@
   }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
   li button {
-    width: 100%; display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap;
+    width: 100%; display: flex; flex-direction: column; gap: var(--s-1);
     text-align: left; cursor: pointer;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
     padding: var(--s-2) var(--s-3); color: var(--fg);
   }
+  .top { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; width: 100%; }
+  .desc { font-size: var(--t-small); color: var(--dim); line-height: var(--lh-body); }
+  .meta { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: baseline; font-size: var(--t-micro); color: var(--dim); }
+  .q { color: var(--dim); }
+  .fact, .pl { white-space: nowrap; }
+  .pl { color: var(--warn); }
+  .state {
+    margin-left: auto; font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim);
+  }
+  .state.running { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .state.serving { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .state.unserved, .state.idle { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .state.unknown { border-style: dashed; }
   .kind {
     font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em;
     padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim);

@@ -25,15 +25,19 @@ describe('/dev derives every control from the contract', () => {
   const nodes = schemaFields(schema);
   const by = (name: string) => nodes?.find((n) => n.name === name);
 
-  it('read the fixture', () => {
+  it('read the fixture, in DECLARATION order', () => {
     // The guard on the guard: a fixture that failed to parse satisfies every `?.` below.
     expect(nodes).not.toBeNull();
-    expect(nodes!.map((n) => n.name).sort()).toEqual([
-      'corpus',
-      'follow_redirects',
+    // NOT `.sort()`. The order pydantic emits is the order the author declared, and it is
+    // meaningful — `host` is the required field and belongs at the top of the form. This fixture
+    // was first captured with `sort_keys=True` and the form rendered alphabetically, which looked
+    // like a bug in the reader and was a bug in the fixture.
+    expect(nodes!.map((n) => n.name)).toEqual([
       'host',
       'mode',
+      'follow_redirects',
       'wordlist',
+      'corpus',
     ]);
   });
 

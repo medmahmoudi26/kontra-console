@@ -1,6 +1,6 @@
 # 10 — The Datasets checkpoint
 
-Status: ready-for-human
+Status: done
 
 Type: **HITL** — this is the decision the whole plan is gated on. An agent gathers the numbers; a
 person makes the call.
@@ -105,3 +105,21 @@ to open Secrets. Five surfaces now bypass that entirely. Whatever is decided bel
 
 Whichever is chosen, write it here with its reasoning, and if it is not "continue", ADR 0048 gets a
 superseding note rather than being quietly left wrong.
+
+## The decision
+
+**CONTINUE.** Port Datasets, then Workflows and Monitor, then delete React. Recorded 2026-09-16.
+
+The gate did its job: it was passed with numbers rather than momentum. What the numbers said —
+
+- **The remainder is smaller than it looked.** Ten dataset logic modules are already in
+  `@kontra/console-core` and ag-grid's setup is already framework-free, so Datasets is 11 cell
+  renderers and CodeMirror, not a grid rewrite.
+- **Svelte Flow is a real replacement** (slice 09), with every needed API and ~181 KB.
+- **Five surfaces cost 69.2 KB against a 426 KB entry**, which is the ratio the remaining three
+  would also get.
+
+ADR 0048 stands unamended: decision 7 said the goal is React deleted with a costed checkpoint, and
+this is that checkpoint answering yes.
+
+Issues `11`–`14` carry the rest.

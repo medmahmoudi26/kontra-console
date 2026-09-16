@@ -2,13 +2,21 @@
   "$defs": {
     "File": {
       "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
         "contentType": {
           "default": "",
           "title": "Contenttype",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
           "type": "string"
         },
         "path": {
@@ -22,14 +30,6 @@
           ],
           "default": null,
           "title": "Path"
-        },
-        "sha256": {
-          "title": "Sha256",
-          "type": "string"
-        },
-        "size": {
-          "title": "Size",
-          "type": "integer"
         }
       },
       "required": [
@@ -43,16 +43,16 @@
     },
     "Folder": {
       "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
         "files": {
           "items": {
             "$ref": "#/$defs/File"
           },
           "title": "Files",
           "type": "array"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
         }
       },
       "required": [
@@ -64,22 +64,6 @@
     }
   },
   "properties": {
-    "corpus": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/Folder"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "follow_redirects": {
-      "default": false,
-      "title": "Follow Redirects",
-      "type": "boolean"
-    },
     "host": {
       "title": "Host",
       "type": "string"
@@ -93,10 +77,26 @@
       "title": "Mode",
       "type": "string"
     },
+    "follow_redirects": {
+      "default": false,
+      "title": "Follow Redirects",
+      "type": "boolean"
+    },
     "wordlist": {
       "anyOf": [
         {
           "$ref": "#/$defs/File"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "corpus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Folder"
         },
         {
           "type": "null"
