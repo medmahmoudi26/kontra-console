@@ -73,6 +73,8 @@ export class Wall {
   #geometry = new Map<string, { cols: number; rows: number }>();
   /** Which ids this socket has already asked for. Cleared with the socket. */
   #subscribed = new Set<string>();
+  /** Is the out-of-order fallback already waiting? One at a time; see {@link Wall.prototype} below. */
+  #valveArmed = false;
   /** Where a tile's bytes go. One per mounted tile. */
   #sinks = new Map<string, (bytes: Uint8Array) => void>();
 
@@ -230,14 +232,41 @@ export class Wall {
    * is the one an operator sees paint first — and on a fleet under load it is the difference
    * between the tile you are looking at filling in now or in three seconds.
    */
-  #flush(): void {
+  #flush(strict = true): void {
     for (const t of this.terminals) {
       if (this.#subscribed.has(t.id)) continue;
       const size = this.#geometry.get(t.id);
-      if (!size) continue;
+      if (!size) {
+        // STOP AT THE FIRST GAP. Skipping an unmeasured tile and carrying on would subscribe in
+        // measurement order again — which is what the tiles race to decide, and the whole reason
+        // this method exists. The tile that has not measured yet is about to (it measures on mount
+        // and on every resize), so this is a wait of a frame or two, not a stall.
+        if (strict) {
+          this.#valve();
+          return;
+        }
+        continue;
+      }
       this.#subscribed.add(t.id);
       this.#send({ t: 'subscribe', id: t.id, ...size });
     }
+  }
+
+  /**
+   * ORDER IS A PREFERENCE, NOT A HOSTAGE.
+   *
+   * A tile that never measures — laid out at zero height, or mounted in a hidden container — would
+   * otherwise hold back every tile after it forever, and a wall where nothing streams is a worse
+   * failure than a wall that streamed out of order. One timer, armed once per gap, after which the
+   * remaining tiles go out in whatever order they have.
+   */
+  #valve(): void {
+    if (this.#valveArmed) return;
+    this.#valveArmed = true;
+    setTimeout(() => {
+      this.#valveArmed = false;
+      if (!this.#stopped) this.#flush(false);
+    }, 1_500);
   }
 
   /** Create the tmux session this Terminal names. The only other thing this socket ever writes. */

@@ -23,14 +23,21 @@
   import { mergeWorkflowFolders } from '@kontra/console-core/panels/sourceFolders';
   import { guessTypeFromFilename, workflowDefns } from '@kontra/console-core/panels/workflowSource';
   import {
+    fetchPollers,
     fetchSources,
     fetchWorkflowSource,
     fetchWorkflows,
+    serveWorkflow,
     startRun,
     type Source,
     type WorkflowDescriptor,
     type WorkflowFile,
   } from '@kontra/console-core/run/api';
+  import {
+    stateWords,
+    workflowState,
+    type PollerReport,
+  } from '@kontra/console-core/run/workflowState';
 
   import Field from '../dev/Field.svelte';
   import { missing, payloadOf, type FieldValue } from '../dev/payload';
@@ -56,6 +63,35 @@
   let sourceError = $state('');
   let starting = $state(false);
   let startError = $state('');
+
+  /**
+   * IS ANYTHING POLLING THIS WORKFLOW'S QUEUE.
+   *
+   * A Run against a queue with no live worker is refused by the server, and that refusal arrives
+   * after the press. Reading the pollers up front turns it into a state the operator can see and
+   * act on — which is what the Serve button is for.
+   *
+   * `null` means NOT ASKED (no queue to ask about, because nothing has ever served this folder).
+   * A report with `error` set means ASKED AND UNKNOWN, which `workflowState` keeps distinct from
+   * "nothing is serving"; the two send an operator to different places.
+   */
+  let pollers = $state<PollerReport | null>(null);
+  let serving = $state(false);
+  let serveError = $state('');
+  let served = $state('');
+
+  async function readPollers(queue: string | undefined): Promise<void> {
+    if (!queue) {
+      pollers = null;
+      return;
+    }
+    // ON DEMAND, NEVER ON A TIMER: opening a folder and serving one are the two moments this can
+    // change, and both are events this component already has.
+    pollers = await fetchPollers(queue).catch(() => null);
+  }
+
+  const serveState = $derived(workflowState([], pollers, Date.now()));
+  const words = $derived(stateWords(serveState));
 
   let values = $state<Record<string, FieldValue>>({});
 
@@ -85,6 +121,9 @@
     selected = name;
     sourceError = '';
     startError = '';
+    serveError = '';
+    served = '';
+    pollers = null;
     types = [];
     type = '';
     try {
@@ -93,6 +132,7 @@
       // `DockerLeakMonitor`, and starting `Dhmonitor` is a workflow nobody registered.
       types = workflowDefns(source);
       type = types[0] ?? guessTypeFromFilename(name);
+      await readPollers(registered.find((d) => d.name === type)?.queue);
     } catch (err) {
       sourceError = err instanceof Error ? err.message : String(err);
       // A file that cannot be read still has a startable guess, and saying so beats a dead form.
@@ -113,6 +153,45 @@
     const declared = new Set(leaves.map((n) => n.name));
     for (const k of Object.keys(values)) if (!declared.has(k)) delete values[k];
   });
+
+  /**
+   * Serve this folder: start a detached worker polling the queue its content digest names.
+   *
+   * IT IS THE OTHER HALF OF RUN, and the console had only one of them — so a folder nothing was
+   * serving offered a button whose only possible outcome was the server refusing it. The queue is
+   * NOT a parameter (GitHub #15): the server derives `wf-<name>-<digest12>` from the folder, which
+   * is the only string the worker will actually poll.
+   */
+  async function serve(): Promise<void> {
+    if (!selected) return;
+    serving = true;
+    serveError = '';
+    served = '';
+    try {
+      const result = await serveWorkflow(selected);
+      served = result.attach || result.session;
+      // THE DESCRIPTOR IS RE-READ, because serving is what publishes it: a folder nobody had served
+      // has no input schema, and the form that was empty a second ago is the one this call fills.
+      registered = (await fetchWorkflows()).registered;
+      const queue = registered.find((d) => d.name === type)?.queue ?? result.queue;
+      await readPollers(queue);
+      /**
+       * ONE LATE RE-READ, because a worker that has just started has not polled yet.
+       *
+       * MEASURED: the tmux session exists immediately and the first poll reaches Temporal a few
+       * seconds later, so reading once on return reported `idle` under a worker that was starting
+       * perfectly well — the console calling its own successful action a failure.
+       *
+       * A `setTimeout`, not an interval: this is one deferred read tied to one press, and it stops
+       * whether or not anything came of it. Nothing here repeats.
+       */
+      window.setTimeout(() => void readPollers(queue), 5_000);
+    } catch (err) {
+      serveError = err instanceof Error ? err.message : String(err);
+    } finally {
+      serving = false;
+    }
+  }
 
   async function go(): Promise<void> {
     if (!selected || !type.trim() || gaps.length > 0) return;
@@ -175,6 +254,7 @@
               {descriptor.queue}
             </span>
           {/if}
+          <span class="state {serveState}" class:live={words.live} title={words.title}>{words.label}</span>
         </header>
 
         {#if sourceError}<p class="err" role="alert">{sourceError}</p>{/if}
@@ -207,16 +287,39 @@
           </p>
         {/if}
 
+        {#if serveError}<p class="err" role="alert">{serveError}</p>{/if}
         {#if startError}<p class="err" role="alert">{startError}</p>{/if}
+        {#if served}
+          <p class="muted">
+            worker started — <code class="mono">{served}</code> attaches to it, and its pane is on
+            the Monitor.
+          </p>
+        {/if}
 
-        <button
-          class="run"
-          data-testid="run-button"
-          disabled={starting || !type.trim() || gaps.length > 0}
-          onclick={() => void go()}
-        >
-          {#if starting}starting…{:else if gaps.length}{gaps.join(', ')} required{:else}Run{/if}
-        </button>
+        <!-- SERVE AND RUN, IN THAT ORDER, because that is the order they have to happen in: a Run
+             aimed at a queue nothing polls is refused by the server. -->
+        <div class="acts">
+          <button class="serve" data-testid="serve-button" disabled={serving || !selected} onclick={() => void serve()}>
+            {serving ? 'serving…' : serveState === 'serving' ? 'Re-serve' : 'Serve'}
+          </button>
+          <button
+            class="run"
+            data-testid="run-button"
+            disabled={starting || !type.trim() || gaps.length > 0}
+            onclick={() => void go()}
+          >
+            {#if starting}starting…{:else if gaps.length}{gaps.join(', ')} required{:else}Run{/if}
+          </button>
+        </div>
+
+        {#if serveState === 'idle'}
+          <p class="muted">
+            Nothing is polling this queue, so Run will be refused. Serve starts a worker on the
+            control plane's host; <code class="mono">kontra workflow serve {selected}</code> does the
+            same thing from your own machine, which is what you want if the code is there and not
+            here.
+          </p>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -252,12 +355,23 @@
     background: var(--track); border: 1px solid var(--line); border-radius: var(--radius);
     color: var(--fg); padding: var(--s-1) var(--s-2); font-size: var(--t-small);
   }
+  .acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+  .state { font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+  .state.serving { color: var(--ok); }
+  .state.running { color: var(--accent); }
+  .state.unknown { color: var(--warn); }
+  .serve {
+    font-size: var(--t-small); padding: var(--s-2) var(--s-4); border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--track); color: var(--fg); cursor: pointer;
+  }
+  .serve:disabled { color: var(--dim); cursor: not-allowed; }
   .run {
     font-size: var(--t-small); padding: var(--s-2) var(--s-4); border-radius: var(--radius);
     border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
     background: color-mix(in srgb, var(--accent) 18%, transparent);
-    color: var(--accent); cursor: pointer; width: 100%;
+    color: var(--accent); cursor: pointer;
   }
   .run:disabled { border-color: var(--line); background: var(--track); color: var(--dim); cursor: not-allowed; }
-  @media (min-width: 720px) { .run { width: auto; align-self: flex-start; } }
+  .acts button { flex: 1; }
+  @media (min-width: 720px) { .acts button { flex: 0 0 auto; } }
 </style>

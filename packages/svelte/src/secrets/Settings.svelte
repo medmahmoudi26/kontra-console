@@ -63,6 +63,5 @@
   }
   .nm { flex: 1; }
   .b { font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
-  .b.svelte { color: var(--ok); }
   .bad { color: var(--bad); }
 </style>
