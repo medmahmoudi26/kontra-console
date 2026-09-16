@@ -33,7 +33,12 @@
   <nav aria-label="Surfaces">
     <span class="brand">kontra</span>
     {#each views as v (v.id)}
+      <!-- `data-testid` AND `data-active` ARE THE E2E SUITE'S GRIP. The specs predate this bundle
+           and must pass against it unedited — that is the only evidence a ported surface still
+           behaves like the one it replaced — so the hooks they reach for are part of the markup
+           rather than something React happened to have. -->
       <button class:on={view === v.id} aria-current={view === v.id ? 'page' : undefined}
+              data-testid="nav-{v.id}" data-active={view === v.id ? 'true' : 'false'}
               onclick={() => onnavigate?.(v.id)}>{v.label}</button>
     {/each}
     <span class="spacer"></span>

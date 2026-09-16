@@ -7,11 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { SURFACES, go } from './surfaces';
 
 /**
- * The nav and the orchestrator must agree about who serves what.
+ * The nav and the orchestrator must agree about what exists.
  *
- * A surface this file calls `svelte` while the server still serves it from React is a link that
- * navigates to itself and renders the other console — no error, no 404, just a page that does not
- * change. It is the exact failure the split makes possible and the one nothing else would catch.
+ * A surface in the nav that the server does not serve 404s on a cold load — and ONLY on a cold
+ * load, because in-app navigation never leaves the document. That is what let the same bug ride a
+ * release once: every click worked, and every pasted link was broken.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 const server = readFileSync(
@@ -21,6 +21,10 @@ const server = readFileSync(
 
 function setOf(name: string): Set<string> {
   const start = server.indexOf(`export const ${name}`);
+  // NOT FOUND IS AN ERROR, NOT AN EMPTY SET. `indexOf` answers -1 and a slice from there reads the
+  // whole file, which parsed as a set of every quoted string in it — and the assertions below then
+  // passed against nonsense. A renamed export must fail here, loudly.
+  if (start === -1) throw new Error(`${name} is not exported by the orchestrator's server.ts`);
   const open = server.indexOf('[', start);
   const close = server.indexOf(']', open);
   const body = server
@@ -32,32 +36,41 @@ function setOf(name: string): Set<string> {
 }
 
 describe('the nav agrees with the orchestrator', () => {
-  const svelte = setOf('SVELTE_SURFACES');
-  const react = setOf('SPA_SURFACES');
+  const served = setOf('SPA_SURFACES');
+  const routes = setOf('SVELTE_ROUTES');
 
-  it('read both sets', () => {
-    // The guard on the guard: two empty sets make every assertion below vacuous.
-    expect(react.size).toBeGreaterThan(0);
+  it('read the server', () => {
+    // The guard on the guard: an empty set makes every assertion below vacuous.
+    expect(served.size).toBeGreaterThan(0);
+    expect(routes.size).toBeGreaterThan(0);
     expect(SURFACES.length).toBe(7);
   });
 
-  it('every surface the nav claims for svelte is served by the svelte bundle', () => {
-    for (const s of SURFACES.filter((x) => x.bundle === 'svelte')) {
-      expect(svelte.has(s.id), `${s.id} is nav-svelte but not in SVELTE_SURFACES`).toBe(true);
-      expect(react.has(s.id), `${s.id} is in BOTH sets`).toBe(false);
+  it('every surface the nav offers is served', () => {
+    for (const s of SURFACES) {
+      expect(served.has(s.id), `${s.id} is in the nav and not in SPA_SURFACES`).toBe(true);
     }
   });
 
-  it('every surface the nav claims for react is served by the react bundle', () => {
-    for (const s of SURFACES.filter((x) => x.bundle === 'react')) {
-      expect(react.has(s.id), `${s.id} is nav-react but not in SPA_SURFACES`).toBe(true);
-      expect(svelte.has(s.id), `${s.id} is in BOTH sets`).toBe(false);
+  it('everything the server serves is either a surface or a retired address', () => {
+    const nav = new Set(SURFACES.map((s) => s.id));
+    // `runs` and `scratch` are retired: served so the shell can load and REDIRECT them, and
+    // deliberately absent from the nav. Anything else the server serves and the nav omits is a
+    // surface nobody can reach.
+    const retired = new Set(['runs', 'scratch']);
+    for (const id of served) {
+      expect(nav.has(id) || retired.has(id), `${id} is served and unreachable`).toBe(true);
     }
   });
 
-  it('a move within one bundle is not a document load, and across is', () => {
+  it('a move between surfaces is client-side; a move off them is a document load', () => {
     expect(go('catalog', 'catalog').kind).toBe('same-bundle');
-    expect(go('datasets', 'catalog').kind).toBe('document-load');
+    expect(go('datasets', 'catalog').kind).toBe('same-bundle');
     expect(go('datasets', 'catalog').href).toBe('/datasets');
+
+    // A retired address still resolves — the server serves it and the shell redirects — and it is
+    // not a view this app can mount, so going there leaves the document.
+    expect(go('runs', 'catalog').kind).toBe('document-load');
+    expect(go('runs', 'catalog').href).toBe('/runs');
   });
 });

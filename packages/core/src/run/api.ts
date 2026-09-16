@@ -22,7 +22,14 @@ import type { PollerReport } from './workflowState';
 
 export type { CatalogActor };
 
-const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
+/**
+ * Where the API is. EXPORTED, because it was copied.
+ *
+ * `rowTail.ts` had its own identical line and the Svelte row-tail subscriber was about to hardcode
+ * `/api` — three spellings of one fact, which is how a deployment under a path prefix breaks on
+ * exactly one surface and nobody can say why.
+ */
+export const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 
 /** The MATERIALIZATION dimension rolled up: how many of a run's Datasets reached each state, and
  *  how much landed. `complete` with `rows: 0` is a successful empty result, not a failure. */

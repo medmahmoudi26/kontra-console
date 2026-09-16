@@ -21,9 +21,16 @@
  * `/api` would otherwise swallow `/api/panels` and send it to the orchestrator API, which is not
  * running in a browser test.
  *
- * Everything else — the `@core`/`@contract`/`@` aliases, the tailwind and react plugins — is the
- * project's own config, imported rather than restated, so the page under test is built exactly the way
- * `pnpm dev` builds it.
+ * Everything else — the root, the Svelte plugin, the API proxy — is the project's own config,
+ * imported rather than restated, so the page under test is built exactly the way `pnpm dev` builds
+ * it.
+ *
+ * THE PROJECT CONFIG IS A FUNCTION AND HAS TO BE CALLED. `vite.config.ts` exports
+ * `defineConfig(({command, mode}) => …)`, so spreading the import copies a FUNCTION's own
+ * properties — which are none. This file did that, and what it produced was a config with no
+ * plugins and no root: the React app survived it because vite transforms `.tsx` with esbuild by
+ * default, so nothing looked wrong. Svelte has no such default, and `.svelte` files simply do not
+ * load. Calling it is what makes "the same config `pnpm dev` uses" true rather than nearly true.
  */
 
 import * as os from 'node:os';
@@ -37,11 +44,20 @@ const tag = process.env.KONTRA_E2E_VITE_CACHE ?? 'shared';
 const panelTarget = process.env.VITE_KONTRA_PANEL_BASE;
 const panelToken = process.env.VITE_KONTRA_PANEL_TOKEN;
 
-const baseServer = (base as { server?: Record<string, unknown> }).server ?? {};
+const resolved = (
+  typeof base === 'function'
+    ? (base as (env: { command: string; mode: string }) => Record<string, unknown>)({
+        command: 'serve',
+        mode: 'test',
+      })
+    : (base as Record<string, unknown>)
+) as Record<string, unknown>;
+
+const baseServer = (resolved.server as Record<string, unknown> | undefined) ?? {};
 const baseProxy = (baseServer.proxy ?? {}) as Record<string, unknown>;
 
 export default {
-  ...base,
+  ...resolved,
   cacheDir: path.join(os.tmpdir(), 'kontra-e2e-vite', tag),
   server: {
     ...baseServer,

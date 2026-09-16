@@ -10,7 +10,8 @@
   import type { FieldControl } from '@kontra/console-core/panels/schemaTree';
 
   import { cycle, label, type Tri } from './toggle';
-  import type { BlobRef, FieldValue } from './payload';
+  import type { FieldValue } from './payload';
+  import { fieldValueOf, filesFrom, uploadAll, type Upload } from './upload';
 
   interface Props {
     name: string;
@@ -24,13 +25,34 @@
   }
   let { name, title, control, options = [], required, placeholder = '', value, onchange }: Props = $props();
 
-  // A stand-in for the upload. Slice 04 proves the SHAPE that reaches the Method; the bytes go to
-  // /api/uploads and the field keeps the ref either way.
-  function pick(kind: 'file' | 'folder'): void {
-    const one: BlobRef = { name: 'wordlist.txt', sha256: '2c26b46b68e1', size: 41203 };
-    onchange(kind === 'folder'
-      ? { files: [{ ...one, name: 'a.txt', path: 'corpus/a.txt' }, { ...one, name: 'b.txt', path: 'corpus/b.txt' }] }
-      : one);
+  /**
+   * THE BYTES GO UP BEFORE THE RUN STARTS, and only a ref rides in the argument.
+   *
+   * A Method's input is a workflow argument, replayed on every worker that picks the run up — a
+   * dropped corpus in there is refused or offloaded by the claim-check codec. So the drop uploads
+   * to `/api/uploads` now and the field keeps `{name, sha256, size}`.
+   */
+  let up = $state<Upload>({ state: 'idle' });
+  let over = $state(false);
+  let input: HTMLInputElement | undefined = $state();
+
+  async function take(files: readonly File[]): Promise<void> {
+    if (files.length === 0) return;
+    const kind = control === 'folder' ? 'folder' : 'file';
+    up = await uploadAll(files, (u) => (up = u));
+    if (up.state === 'done') onchange(fieldValueOf(kind, up.refs));
+  }
+
+  async function dropped(e: DragEvent): Promise<void> {
+    e.preventDefault();
+    over = false;
+    if (e.dataTransfer) await take(await filesFrom(e.dataTransfer));
+  }
+
+  function clear(): void {
+    up = { state: 'idle' };
+    onchange(undefined);
+    if (input) input.value = '';
   }
 </script>
 
@@ -52,15 +74,49 @@
     </button>
 
   {:else if control === 'file' || control === 'folder'}
-    <button type="button" class="drop" class:filled={value !== undefined} onclick={() => pick(control)}>
-      {#if value && typeof value === 'object' && 'files' in value}
-        <b>{value.files.length} files</b><span class="mono dim">{value.files[0]?.sha256}…</span>
+    <!-- A DROP TARGET AND A PICKER, because a drop is not reachable from a keyboard. The zone takes
+         the drop; the same element opens the file dialog on click or Enter. -->
+    <div
+      class="drop"
+      class:filled={value !== undefined}
+      class:over
+      class:busy={up.state === 'uploading'}
+      role="button"
+      tabindex="0"
+      aria-label="{title}: drop a {control} here, or press Enter to choose"
+      ondragover={(e) => { e.preventDefault(); over = true; }}
+      ondragleave={() => (over = false)}
+      ondrop={(e) => void dropped(e)}
+      onclick={() => input?.click()}
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input?.click(); } }}
+    >
+      {#if up.state === 'uploading'}
+        <b>uploading {up.done + 1} of {up.total}</b><span class="mono dim">{up.name}</span>
+      {:else if value && typeof value === 'object' && 'files' in value}
+        <b>{value.files.length} files</b><span class="mono dim">{value.files[0]?.sha256?.slice(0, 12)}…</span>
       {:else if value && typeof value === 'object'}
-        <b>{value.name}</b><span class="mono dim">{value.sha256}… · {value.size} B</span>
+        <b>{value.name}</b><span class="mono dim">{value.sha256.slice(0, 12)}… · {value.size} B</span>
       {:else}
-        drop a {control} — or choose
+        drop a {control} here — or choose
       {/if}
-    </button>
+    </div>
+    <!-- `webkitdirectory` IS THE ONLY WAY a picker returns a tree. It is the non-standard spelling
+         every engine implements; `directory` is the standard one nobody does. -->
+    <input
+      bind:this={input}
+      class="sr"
+      type="file"
+      {name}
+      multiple={control === 'folder'}
+      webkitdirectory={control === 'folder' ? true : undefined}
+      onchange={(e) => void take([...(e.currentTarget.files ?? [])])}
+    />
+    {#if up.state === 'done' && up.error}
+      <!-- WHAT LANDED IS STILL THERE. A folder whose tenth file failed keeps its nine; saying only
+           the error would read as "nothing uploaded" when most of it did. -->
+      <p class="err" role="alert">{up.refs.length} uploaded, then: {up.error}</p>
+    {/if}
+    {#if value !== undefined}<button type="button" class="clear" onclick={clear}>clear</button>{/if}
 
   {:else}
     <input type="text" value={value ?? ''} {placeholder} {name}
@@ -100,7 +156,14 @@
     display: flex; gap: var(--s-2); align-items: baseline; justify-content: center; flex-wrap: wrap;
   }
   .drop.filled { border-style: solid; border-color: color-mix(in srgb, var(--ok) 40%, transparent); color: var(--fg); }
+  .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--fg); }
+  .drop.busy { border-style: solid; border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--fg); }
   .dim { color: var(--dim); }
+  .clear {
+    justify-self: start; background: none; border: 0; padding: 0; cursor: pointer;
+    font-size: var(--t-small); color: var(--dim); text-decoration: underline;
+  }
+  .err { margin: 0; font-size: var(--t-small); color: var(--bad); overflow-wrap: anywhere; }
 
   @media (min-width: 720px) {
     .field { grid-template-columns: 140px minmax(0, 1fr); align-items: center; gap: var(--s-3); }

@@ -106,7 +106,12 @@ test('mints a ticket and reaches OPEN through the 101 handshake', async ({ view,
 
   // The page's own report of `onopen`: `phase` becomes `streaming`, which the tile publishes.
   await expect(view.tile()).toHaveAttribute('data-mode', 'snapshot');
-  await expect(view.page.getByText('snapshots', { exact: true })).toBeVisible();
+  // SCOPED TO THIS TILE, and that is the wall arriving rather than a weakened assertion. The page
+  // pinned ONE Terminal when this was written, so a page-wide search for the word was unambiguous;
+  // the Monitor draws every Terminal the streamer serves now — the same change spec 225 was written
+  // to start proving — and four tiles each reporting their own feed is the correct page. The claim
+  // is unchanged: the tile whose socket reached OPEN says so in words, not only in an attribute.
+  await expect(view.tile().getByText('snapshots', { exact: true })).toBeVisible();
 
   const url = view.socketUrls[0] ?? '';
   expect(url, 'the page opened the streamer socket').toContain('/api/panels/ws?ticket=');

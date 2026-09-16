@@ -15,7 +15,10 @@
    * run with.
    */
   import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
+  import { parseAddress } from '@kontra/console-core/state/address';
 
+  import Launch from './Launch.svelte';
+  import RunTail from './RunTail.svelte';
   import Timeline from './Timeline.svelte';
   import { followRun, type Follow } from './runStream';
   import type { ScratchFlowEdge, ScratchFlowNode } from '@kontra/console-core/panels/scratchFlow';
@@ -38,11 +41,25 @@
 
   let runs = $state<RunRow[]>([]);
   let loading = $state(true);
-  let picked = $state<string | undefined>(undefined);
+  /**
+   * The run the ADDRESS names, if it names one.
+   *
+   * `/workflows/<workflow>/<run>` and `/workflows?run=<id>` are both live addresses — the second is
+   * what a redirected `/runs/<id>` becomes — and a run view that ignored them would make every link
+   * anybody has ever pasted land on the newest run instead of the one they meant.
+   */
+  const addressed = ((): string | undefined => {
+    const parsed = parseAddress(location.pathname + location.search);
+    return parsed?.view === 'workflows' ? (parsed.run ?? undefined) : undefined;
+  })();
+
+  let picked = $state<string | undefined>(addressed);
   let history = $state<RunHistory | undefined>(undefined);
   let historyError = $state('');
   let focus = $state<number | undefined>(undefined);
   let follow = $state<Follow<RunRow>>({ state: 'connecting' });
+  /** The run this session started, watched here rather than on a surface that replaced this one. */
+  let watching = $state('');
 
   // FOLLOW THE PICKED RUN, and tear the stream down when it changes. The server counts open
   // streams; an effect that opened one per click would exhaust them by browsing.
@@ -63,15 +80,29 @@
     if (r.ok) history = (await r.json()) as RunHistory;
   }
 
+  /**
+   * The run list.
+   *
+   * A FUNCTION RATHER THAN AN EFFECT BODY, because starting a run has to re-read it: the new run is
+   * not in a list fetched before it existed, and it is the one the operator is looking for. Nothing
+   * else re-reads — no timer, no interval — the stream is what says a run changed.
+   *
+   * IT NEVER MOVES THE SELECTION. `picked ??=` only fills an empty one: re-reading after a start
+   * must not yank the run somebody is reading out from under them.
+   */
+  async function loadRuns(): Promise<void> {
+    try {
+      const r = await fetch('/api/runs', { credentials: 'same-origin' });
+      const rows = r.ok ? await r.json() : [];
+      runs = Array.isArray(rows) ? (rows as RunRow[]) : [];
+      picked ??= runs[0]?.runId;
+    } finally {
+      loading = false;
+    }
+  }
+
   $effect(() => {
-    void fetch('/api/runs', { credentials: 'same-origin' })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => {
-        runs = Array.isArray(rows) ? (rows as RunRow[]) : [];
-        picked ??= runs[0]?.runId;
-        loading = false;
-      })
-      .catch(() => (loading = false));
+    void loadRuns();
   });
 
   $effect(() => {
@@ -108,6 +139,14 @@
 
 <section>
   <h1>Workflows</h1>
+
+  <!-- STARTING IS THE FIRST THING ON THE SURFACE, because it is what people open it to do. The run
+       list below answers "what happened"; this answers "run it again". -->
+  <Launch onstarted={(id) => { watching = id; void loadRuns(); }} />
+
+  {#if watching}
+    <RunTail runId={watching} onopen={(id) => { picked = id; focus = undefined; }} />
+  {/if}
 
   {#if loading}
     <p class="muted">reading runs…</p>

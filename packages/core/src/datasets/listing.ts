@@ -34,7 +34,7 @@
  */
 
 import { sumSeries } from '../components/spark';
-import { datasetKey } from '../state/store';
+import { datasetKey } from './key';
 import { datasetExpiry, type ExpiryReading } from './expiry';
 import { groupDatasetName, versionText, wholeDataset, type DatasetGroup } from './grouped';
 import { localDatasetName, type LocalNameOptions } from './localName';

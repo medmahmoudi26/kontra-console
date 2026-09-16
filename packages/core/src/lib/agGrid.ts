@@ -7,7 +7,7 @@ import {
   colorSchemeLight,
   themeQuartz,
 } from 'ag-grid-community';
-import type { Theme } from '../state/store';
+import type { Theme } from '../datasets/key';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 

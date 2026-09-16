@@ -1,6 +1,7 @@
 # PRD — the kontra console, rebuilt in Svelte
 
-Status: slices 01–09 done; slice 10 awaiting a decision · ADR: `kontra/docs/adr/0048-the-console-migrates-to-svelte-one-surface-at-a-time.md`
+Status: **all 14 slices done, 2026-09-16.** One bundle; React deleted. What is not ported is in §9.
+· ADR: `kontra/docs/adr/0048-the-console-migrates-to-svelte-one-surface-at-a-time.md`
 · Glossary: `CONTEXT.md` at this repo's root
 
 ---
@@ -91,27 +92,20 @@ is underneath is the only evidence that behaviour survived.
 
 | | at the start | target | now |
 |---|---|---|---|
-| Entry JS on a migrated surface | 472 KB | < 150 KB | **69.2 KB** (5 surfaces, 26.4 gzipped) |
-| `setInterval` calls for data | 12 files | 0 | **0** in the Svelte bundle, guarded |
-| SSE endpoints consumed | 0 of 2 | 2 of 2 | **1 of 2** (schema stream; run stream is Workflows) |
-| Horizontal overflow at 390px | untested | 0px, asserted in CI | **0px**, 6 routes × 3 widths |
+| Entry JS | 472 KB | < 150 KB | **60.9 KB** (23.6 gzipped) |
+| Built output, all chunks | 6.2 MB | — | **1.8 MB** |
+| `setInterval` calls for data | 12 files | 0 | **0**, guarded |
+| SSE endpoints consumed | 0 of 2 | 2 of 2 | **2 of 2** |
+| Horizontal overflow at 390px | untested | 0px, asserted in CI | **0px**, 10 routes × 3 widths |
 | Smallest type a person reads | 9px | 12px | **12px**, guarded |
 | Time from `actor.py` save to form update | ∞ (refresh) | < 2s, no refresh | **no refresh** |
+| Playwright specs | 19 passing | 19 passing | **19 passing**, one assertion scoped |
 
-## 6. Plan
-
-Ten slices, in `issues/`. Nine are agent-ready; one is a decision.
+## 6. Plan — all of it done
 
 `01` core extraction → `02` two bundles → `03` scale and shell → `04` `/dev` form → `05` `/dev` live
-→ `06` Catalog → `07` Actors → `08` Secrets and Settings, with `09` (Svelte Flow spike) in parallel
-and `10` the checkpoint.
-
-**01–09 are done.** Five of seven surfaces serve from Svelte; the three left in React — Workflows,
-Datasets, Monitor — are exactly the three with a heavy library. Slice 10 has its numbers gathered and
-is waiting on a decision.
-
-**Workflows, Datasets and Monitor have no issues.** They are behind the checkpoint, and writing
-tickets for work that may not happen is how a backlog stops meaning anything.
+→ `06` Catalog → `07` Actors → `08` Secrets and Settings → `09` Svelte Flow spike → `10` the
+checkpoint (CONTINUE) → `11` Datasets → `12` Workflows → `13` Monitor → `14` delete React.
 
 ## 7. Risks
 
@@ -141,3 +135,28 @@ labels, `onMount` for data — produce working code that throws away the reason 
 
 The prototype at `prototype/svelte/` predates the plugin and is a sketch, not a reference. Where it
 disagrees with the plugin's skills, the plugin wins.
+
+## 9. What is not ported, and what that means
+
+The seven surfaces exist and the console is usable end to end: sign in, find an Actor, call a Method
+from a form derived from its contract (with real file and folder uploads), start a workflow, watch
+its run as a timeline, read a dataset, watch a fleet's terminals.
+
+**It is not yet everything the React console did.** 49 of 80 framework-free modules in
+`@kontra/console-core` are unreachable from the app. Kept, not deleted: each is the derivation a port
+needs, already tested, framework-free. The largest missing pieces, in the order they will be missed:
+
+1. **The dataset SQL workbench** (`run/query`, `datasets/cells`) — query a Dataset from the console.
+2. **Calling a Method from Actors** (`panels/methodCall`) — `/dev` can do it; the Actors surface
+   cannot.
+3. **The workflow thread and turn drill** (`panels/workflowThread`, `panels/transcriptDrill`,
+   `panels/ask`) — including HITL asks, which have no other surface.
+4. **Per-run machines and datasets** (`panels/runMachines`, `panels/runDatasets`, `panels/runStats`).
+5. **The draggable tile wall and its chrome** (`panels/grid/wall`, `panels/chrome/*`) — the Monitor
+   is a responsive grid today, not a wall an operator arranges.
+6. **The folder workbench** (`panels/folderWorkbench`) — editing an actor's files in the console.
+
+The lesson worth keeping from slice 14: each of those surfaces passed review, passed its unit tests
+and passed a browser suite while missing capabilities the surface it replaced had — because the
+browser suite was driving the OLD app. A port is finished when the test that proves it is pointed at
+the new thing.

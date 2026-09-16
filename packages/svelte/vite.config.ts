@@ -2,29 +2,23 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 
 /**
- * The Svelte console's bundle.
+ * The console's bundle, as the package builds it.
  *
- * ── TWO BUNDLES, ONE `dist/`, AND THE TWO RULES THAT MAKES ──────────────────────────────────────
+ * ── ONE DOCUMENT, ONE OWNER ─────────────────────────────────────────────────────────────────────
  *
- * The orchestrator serves both SPAs from one origin (ADR 0048 §1), so they share `dist/` and
- * `dist/assets/`. Vite hashes every emitted name, so the two asset sets coexist without a prefix —
- * `svelte-Dr8LF2Ru.js` beside `index-B3WA71v4.js`. A `base` of `/s/` was the first attempt and it
- * only moved the URLs without moving the files.
+ * While the migration ran there were two bundles writing into one `dist/`, which is why this built
+ * `svelte.html` with `emptyOutDir: false` — the React build ran first and owned `index.html`. Both
+ * of those are gone with React: the document is `index.html`, the directory is emptied on build,
+ * and nothing has to know the order two builds run in.
  *
- * `emptyOutDir: false`, because the React build runs FIRST and owns the directory. Without this,
- * building Svelte deletes the React console. The order lives in the root `build` script — a build
- * tool cannot enforce the order of two builds it does not run.
- *
- * The document is `svelte.html` and not `index.html` for the same reason: one name, one owner.
+ * The ROOT config is the one the e2e harness imports; this one is what `pnpm --filter` builds. They
+ * produce the same artifact and the root one adds the dev proxy.
  */
 export default defineConfig({
   plugins: [svelte()],
   build: {
     target: 'es2022',
     outDir: '../../dist',
-    emptyOutDir: false,
-    // `svelte.html`, NOT `index.html`: both builds write into one `dist/` and the React build
-    // owns that name. Two entries called index.html means the second silently replaces the first.
-    rollupOptions: { input: 'svelte.html' },
+    emptyOutDir: true,
   },
 });

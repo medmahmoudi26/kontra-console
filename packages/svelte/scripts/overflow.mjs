@@ -55,21 +55,38 @@ function routes() {
       .join('\n');
     return [...body.matchAll(/'([^']+)'/g)].map((x) => x[1]);
   };
-  return [...grab('SVELTE_SURFACES'), ...grab('SVELTE_ROUTES')];
+  /**
+   * EVERY SEGMENT THE SERVER ANSWERS WITH THE DOCUMENT.
+   *
+   * This read `SVELTE_SURFACES` while the console was two bundles. That export is gone — one
+   * bundle, one list — and `grab` answers `[]` for a name it cannot find, so this kept passing
+   * while covering a single route. The empty-list guard below did not fire, because one route is
+   * not zero. A check that quietly shrinks from nine routes to one is the failure mode this whole
+   * file was written about, reproduced by the file itself.
+   */
+  return [...grab('SPA_SURFACES'), ...grab('SVELTE_ROUTES')];
 }
 
 const list = routes();
-if (list.length === 0) {
+/**
+ * THE FLOOR IS THE NUMBER OF SURFACES, NOT ONE.
+ *
+ * An empty list is zero assertions and a list of one is nearly as bad: it reports a green tick over
+ * a console whose other six surfaces were never opened. The console declares seven surfaces and two
+ * retired addresses; anything below that means this stopped reading the server's list correctly.
+ */
+const FLOOR = 8;
+if (list.length < FLOOR) {
   console.error(
-    'overflow: no Svelte routes found.\n' +
-      '  Zero routes times three widths is zero assertions — a green tick over nothing.\n' +
-      '  Check SVELTE_SURFACES / SVELTE_ROUTES in the orchestrator, which is where this reads them.'
+    `overflow: found ${list.length} route(s), expected at least ${FLOOR}.\n` +
+      '  A shrunken list is a check that passes while covering almost nothing.\n' +
+      '  Check SPA_SURFACES / SVELTE_ROUTES in the orchestrator, which is where this reads them.'
   );
   process.exit(1);
 }
 
-if (!existsSync(join(DIST, 'svelte.html'))) {
-  console.error(`overflow: no built document at ${join(DIST, 'svelte.html')} — run the build first.`);
+if (!existsSync(join(DIST, 'index.html'))) {
+  console.error(`overflow: no built document at ${join(DIST, 'index.html')} — run the build first.`);
   process.exit(1);
 }
 
@@ -78,7 +95,7 @@ const server = createServer((req, res) => {
   const url = (req.url ?? '/').split('?')[0];
   const file = join(DIST, url);
   // Any route the server would answer with the document, this fixture answers the same way.
-  const path = existsSync(file) && extname(file) ? file : join(DIST, 'svelte.html');
+  const path = existsSync(file) && extname(file) ? file : join(DIST, 'index.html');
   res.setHeader('content-type', TYPES[extname(path)] ?? 'text/html');
   res.end(readFileSync(path));
 });

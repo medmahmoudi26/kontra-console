@@ -43,7 +43,22 @@
 import { tryParseTerminalId } from '@kontra/core/panels/ids';
 
 import { DEFAULT_VIEW, PATHS, RETIRED, type View } from './surfaces';
-import type { DatasetFocus } from './store';
+
+/**
+ * Which Dataset to open, and — when the operator arrived from one — which **Run** to scope it to.
+ *
+ * It was declared on the React console's store. The store went with React; this is a shape of the
+ * ADDRESS (`/datasets/<name>?kind=&run=`), which is why it now lives beside the parser that reads
+ * and writes it.
+ */
+export interface DatasetFocus {
+  name: string;
+  kind?: 'output' | 'standalone';
+  version?: string;
+  dt?: string;
+  run?: string;
+}
+
 
 /**
  * Where the app is, as the bar says it.

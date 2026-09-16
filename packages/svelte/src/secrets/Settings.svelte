@@ -32,12 +32,13 @@
 
   <h2>Surfaces</h2>
   <p class="muted">
-    The console is being rebuilt one surface at a time (ADR 0048). Each is served by exactly one
-    bundle; moving between them is a page load.
+    The seven things this console is. Each is addressable — its first path segment names it — and
+    each is declared once, here and in the control plane, which is what stops a surface from being
+    built, tested and unreachable.
   </p>
   <ul>
     {#each SURFACES as s (s.id)}
-      <li><span class="nm">{s.label}</span><span class="b {s.bundle}">{s.bundle}</span></li>
+      <li><span class="nm">{s.label}</span><span class="b mono">/{s.id}</span></li>
     {/each}
   </ul>
 </section>
