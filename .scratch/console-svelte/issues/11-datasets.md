@@ -1,6 +1,6 @@
 # 11 — Datasets
 
-Status: ready-for-agent
+Status: done
 
 Type: AFK
 
@@ -36,3 +36,47 @@ plain DOM — whichever reads better per cell; several of these render a badge a
 ## Blocked by
 
 - `10-the-datasets-checkpoint.md` — passed
+
+## Comments
+
+**Done.** Datasets serves from the Svelte bundle on ag-grid's framework-agnostic core.
+
+**`createGrid`, not a wrapper.** ag-grid's React and Svelte packages are thin covers over
+`createGrid(element, options)`, and `lib/agGrid.ts` — module registration and theming — was already
+framework-free and already in core. The component is the element and the lifecycle.
+
+**The 11 React cell renderers became 7 plain functions.** ag-grid's vanilla API asks for an
+`HTMLElement`, and mounting a component per cell means an instance per visible row per column,
+recreated on every scroll, for cells that are a span and a class. Each function is three lines
+because the DECISIONS — what a state badge says, when a dataset expires, how a dispatch count reads
+— already live in `@kontra/console-core` and are shared with the React console.
+
+Asserted, including the ones that are about honesty rather than formatting: a renamed dataset says
+what it is STORED as (a copied display name fails elsewhere), a dataset with no run says `loaded`
+rather than blank (blank reads as missing data; a standalone dataset genuinely has no run), and no
+cell throws on an empty row — a cell that throws takes the grid's render loop with it.
+
+**The grid owns its scroll; the page never does.** This is the surface where panel-first is hardest,
+and the overflow check covers it at 320/390/1280.
+
+**I put ag-grid in the ENTRY and the measurement caught it.** A static import of `Datasets` in
+`App.svelte` took the entry from 93 KB to **1.18 MB** — exactly what this migration criticises the
+React console for, where `@xyflow/react` sits in the entry and everybody downloads the canvas to open
+Secrets. Every surface is a dynamic import now:
+
+| chunk | size |
+|---|---|
+| **entry** | **56 KB** |
+| Settings | 1.7 KB |
+| Actors | 3.9 KB |
+| DevPane | 8.3 KB |
+| Catalog | 8.9 KB |
+| Workflows | 11.4 KB |
+| Canvas (Svelte Flow) | 165.6 KB |
+| Datasets (ag-grid) | 1,088 KB |
+
+Nobody pays for a grid to read a secret. The React console's entry is 464 KB before you open
+anything.
+
+**`vitest.config.ts` needed `jsdom`** — the same correction core needed. A cell renderer returns an
+`HTMLElement` by design, and one that cannot be tested without a browser is one nobody tests.
