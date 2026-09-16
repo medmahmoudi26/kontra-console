@@ -17,6 +17,7 @@
   import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
   import { parseAddress } from '@kontra/console-core/state/address';
 
+  import Asks from './Asks.svelte';
   import Launch from './Launch.svelte';
   import RunTail from './RunTail.svelte';
   import Timeline from './Timeline.svelte';
@@ -48,10 +49,16 @@
    * what a redirected `/runs/<id>` becomes — and a run view that ignored them would make every link
    * anybody has ever pasted land on the newest run instead of the one they meant.
    */
-  const addressed = ((): string | undefined => {
-    const parsed = parseAddress(location.pathname + location.search);
-    return parsed?.view === 'workflows' ? (parsed.run ?? undefined) : undefined;
-  })();
+  const parsed = parseAddress(location.pathname + location.search);
+  const addressed = parsed?.view === 'workflows' ? (parsed.run ?? undefined) : undefined;
+  /**
+   * The workflow the ADDRESS names, if it names one.
+   *
+   * `/workflows/approve` is a scoped view and this surface ignored it — every run of every workflow
+   * was listed under a URL that named one. A link that shows somebody else's runs is worse than a
+   * 404: it looks like an answer.
+   */
+  const addressedWorkflow = $state(parsed?.view === 'workflows' ? (parsed.workflow ?? '') : '');
 
   let picked = $state<string | undefined>(addressed);
   let history = $state<RunHistory | undefined>(undefined);
@@ -60,6 +67,17 @@
   let follow = $state<Follow<RunRow>>({ state: 'connecting' });
   /** The run this session started, watched here rather than on a surface that replaced this one. */
   let watching = $state('');
+  /**
+   * Which workflow's runs to show — the address's, or whichever folder the launcher has open.
+   *
+   * THE JOIN IS TYPE-TO-TYPE. A run carries the `@workflow.defn` TYPE it was started as
+   * (`Approve`), and a folder carries a NAME (`approve`); the launcher knows both because it reads
+   * the source, so it hands the type down rather than making this end guess at the mapping.
+   */
+  /** Bumped whenever the stream says the picked run changed. Children re-read on it. */
+  let revision = $state(0);
+  let scopeType = $state('');
+  let scopeName = $state('');
 
   // FOLLOW THE PICKED RUN, and tear the stream down when it changes. The server counts open
   // streams; an effect that opened one per click would exhaust them by browsing.
@@ -67,11 +85,39 @@
     const id = picked;
     if (!id) return;
     follow = { state: 'connecting' };
+    let lastStatus = '';
     return followRun<RunRow>(id, (f) => {
       follow = f;
       // A RUNNING RUN'S HISTORY GROWS. The stream says the run changed; the history endpoint says
       // how. Re-read on a state frame rather than on a timer — this is the whole point.
       if (f.state === 'live' && f.run && !f.run.closedAt) void reread(id);
+      /**
+       * THE STREAM IS WHAT SAYS SOMETHING CHANGED, including for the two things beside the
+       * timeline: the run LIST's status badges and what the run is waiting for.
+       *
+       * Measured: answering an ask completed the run in Temporal while this page still showed the
+       * question and three `RUNNING` badges, because both had been re-read in the same tick as the
+       * POST — before the workflow had processed the signal. Re-reading on the stream's own word
+       * instead is both correct and free; re-reading on a timer would be the poll this console does
+       * not have.
+       */
+      /**
+       * EVERY FRAME BUMPS THE REVISION; only a STATUS CHANGE re-reads the list.
+       *
+       * These are two different questions and the first version conflated them. A run that parks on
+       * an `ask` does not change status — it is `running` before and after — so a revision tied to
+       * status meant the question was fetched once, a second after Run, before the workflow had
+       * reached it, and never again. Measured: press Run, watch nothing appear, forever.
+       *
+       * The frame cadence is the SERVER's, which is the same thing the history re-read beside this
+       * already rides on. Nothing here is a timer.
+       */
+      if (f.state === 'live' || f.state === 'ended') revision += 1;
+      const said = f.state === 'live' ? (f.run?.status ?? '') : f.state === 'ended' ? 'ended' : '';
+      if (said && said !== lastStatus) {
+        lastStatus = said;
+        void loadRuns();
+      }
     });
   });
 
@@ -95,7 +141,8 @@
       const r = await fetch('/api/runs', { credentials: 'same-origin' });
       const rows = r.ok ? await r.json() : [];
       runs = Array.isArray(rows) ? (rows as RunRow[]) : [];
-      picked ??= runs[0]?.runId;
+      const scoped = scopeType ? runs.filter((r) => r.type === scopeType) : runs;
+      picked ??= scoped[0]?.runId;
     } finally {
       loading = false;
     }
@@ -129,6 +176,14 @@
   });
 
   const events = $derived<readonly RunEvent[]>(history?.events ?? []);
+  /**
+   * The runs this view is about.
+   *
+   * Scoped to the open workflow's type when there is one — which is what makes `/workflows/approve`
+   * mean what it says — and the whole list when nothing is open, because a console with no workflow
+   * selected is still the place you go to see what ran.
+   */
+  const shown = $derived(scopeType ? runs.filter((r) => r.type === scopeType) : runs);
   const run = $derived(runs.find((r) => r.runId === picked));
   // Seconds the run has been going, for the open bars. A closed run draws to its last event.
   const nowSeconds = $derived(
@@ -142,7 +197,20 @@
 
   <!-- STARTING IS THE FIRST THING ON THE SURFACE, because it is what people open it to do. The run
        list below answers "what happened"; this answers "run it again". -->
-  <Launch onstarted={(id) => { watching = id; void loadRuns(); }} />
+  <Launch
+    open={addressedWorkflow}
+    onstarted={(id) => {
+      // PRESSING RUN SELECTS THE RUN. It used to only set the watch strip, so the timeline, the
+      // history and — the one that mattered — what the run is WAITING FOR all stayed on whichever
+      // run happened to be open. A workflow that parks on a question immediately then looked like
+      // a workflow where Run did nothing.
+      watching = id;
+      picked = id;
+      focus = undefined;
+      void loadRuns();
+    }}
+    onopened={(name, type) => { scopeName = name; scopeType = type; picked = undefined; }}
+  />
 
   {#if watching}
     <RunTail runId={watching} onopen={(id) => { picked = id; focus = undefined; }} />
@@ -150,13 +218,17 @@
 
   {#if loading}
     <p class="muted">reading runs…</p>
-  {:else if runs.length === 0}
+  {:else if shown.length === 0}
     <p class="muted">
-      No runs yet. <code class="mono">kontra workflow start &lt;folder&gt;</code> produces one.
+      {#if scopeName}
+        No runs of <code class="mono">{scopeName}</code> yet. Press Run above.
+      {:else}
+        No runs yet. <code class="mono">kontra workflow start &lt;folder&gt;</code> produces one.
+      {/if}
     </p>
   {:else}
     <div class="runs">
-      {#each runs.slice(0, 12) as r (r.runId)}
+      {#each shown.slice(0, 12) as r (r.runId)}
         <button class:on={picked === r.runId} onclick={() => { picked = r.runId; focus = undefined; }}>
           <span class="rid mono">{r.runId}</span>
           <span class="st {r.status}">{r.status}</span>
@@ -185,6 +257,10 @@
             <span class="arch" title="read from the ADR 0025 archive, not from Temporal">archived</span>
           {/if}
         </header>
+
+        <!-- WHAT THIS RUN NEEDS FROM A PERSON, first. A run parked on an `ask` looks exactly like a
+             run that is working, and the only difference visible anywhere is this. -->
+        <Asks runId={run.runId} {revision} />
 
         {#if historyError}
           <p class="err" role="alert">{historyError}</p>

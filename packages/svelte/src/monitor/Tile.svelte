@@ -85,7 +85,22 @@
 
     // LAZY, because xterm and its fit addon are ~250 KB and only the Monitor needs them. A static
     // import here would put them in every surface's entry.
-    void Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(([xterm, addon]) => {
+    void Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
+      /**
+       * xterm's OWN STYLESHEET, and leaving it out is why every pane was blank.
+       *
+       * The DOM renderer writes one absolutely-positioned `<div>` per row and depends entirely on
+       * this file for the metrics that place them: without it the rows exist, carry the right text,
+       * and are drawn at zero size on top of each other. Measured on the live wall — 116 of 180
+       * rows had text in the DOM and the screen showed nothing, which reads as "the stream is
+       * broken" and sent me looking at the socket.
+       *
+       * Imported HERE rather than in the entry so it travels with the chunk that needs it.
+       */
+      import('@xterm/xterm/css/xterm.css'),
+    ]).then(([xterm, addon]) => {
       if (disposed) return;
       term = new xterm.Terminal(
         readOnlyTerminalOptions({

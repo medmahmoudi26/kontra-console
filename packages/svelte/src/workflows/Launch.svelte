@@ -43,10 +43,20 @@
   import { missing, payloadOf, type FieldValue } from '../dev/payload';
 
   interface Props {
+    /** The folder the ADDRESS names, if it names one. `/workflows/approve` opens `approve`. */
+    open?: string;
     /** The run that was just started. The surface watches it; this component does not. */
     onstarted: (runId: string) => void;
+    /**
+     * Which folder is open and what `@workflow.defn` type it declares.
+     *
+     * THE TYPE TRAVELS WITH THE NAME because only this component knows both: it reads the source to
+     * find the type, and the run list upstream needs the type to scope itself. Passing the name
+     * alone would make the other end guess the mapping — `dhmonitor` declares `DockerLeakMonitor`.
+     */
+    onopened?: (name: string, type: string) => void;
   }
-  let { onstarted }: Props = $props();
+  let { open: openName = '', onstarted, onopened }: Props = $props();
 
   interface Row { name: string; folder: Source; file?: WorkflowFile }
 
@@ -104,11 +114,11 @@
         // A workflow is a FOLDER holding `workflow.py`, so the rows come from the folder listing and
         // the file listing only decorates them. Reading either alone renders half a page.
         rows = mergeWorkflowFolders(listed.workflows, folders.sources);
-        // ONE IS OPEN ON ARRIVAL. A surface whose primary action appears only after a click reads
-        // as "there is nothing to run here", and the first folder is the one an operator with a
-        // single workflow always means. Explicit rather than incidental: with no selection there is
-        // no type, and with no type there is no Run.
-        if (selected === '' && rows[0]) await open(rows[0].name);
+        // THE ADDRESS WINS, then the first folder. A surface whose primary action appears only
+        // after a click reads as "there is nothing to run here"; a surface that ignores the folder
+        // in its own URL is worse, because it answers a question nobody asked.
+        const wanted = rows.find((r) => r.name === openName || r.name === `${openName}.py`);
+        if (selected === '' && (wanted ?? rows[0])) await open((wanted ?? rows[0]!).name);
       } catch (err) {
         listError = err instanceof Error ? err.message : String(err);
       } finally {
@@ -132,11 +142,13 @@
       // `DockerLeakMonitor`, and starting `Dhmonitor` is a workflow nobody registered.
       types = workflowDefns(source);
       type = types[0] ?? guessTypeFromFilename(name);
+      onopened?.(name, type);
       await readPollers(registered.find((d) => d.name === type)?.queue);
     } catch (err) {
       sourceError = err instanceof Error ? err.message : String(err);
       // A file that cannot be read still has a startable guess, and saying so beats a dead form.
       type = guessTypeFromFilename(name);
+      onopened?.(name, type);
     }
   }
 
