@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "node scripts/type-scale.mjs && node scripts/overflow.mjs"
   },
   "dependencies": {
     "@kontra/console-core": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "playwright": "1.61.0",
     "svelte": "^5.19.0",
     "svelte-check": "^4.1.4",
     "typescript": "^5.5.0",

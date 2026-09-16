@@ -1,0 +1,89 @@
+/**
+ * The console's design tokens. One scale, one palette, one place.
+ *
+ * ── 14px BASE, 12px FLOOR (ADR 0048 §5) ─────────────────────────────────────────────────────────
+ *
+ * The React console has 273 of 378 type declarations at 10–11px and 27 at 9px, and 336 of them are
+ * arbitrary values against 48 scale tokens — which is to say it has no scale, only per-site sizes.
+ * In a 400px IDE panel or on a phone that is not dense, it is unreadable.
+ *
+ * So: nothing a person READS goes below 12px. `--t-micro` at 11px exists for uppercase labels only,
+ * where the caps and the letter-spacing carry legibility that lowercase at 11px does not.
+ * `scripts/type-scale.mjs` fails the build on a size that is not one of these.
+ *
+ * This costs density, deliberately. A table that fitted twelve rows fits nine.
+ *
+ * ── DARK BY COMMITMENT ──────────────────────────────────────────────────────────────────────────
+ *
+ * One palette, not two. A control plane is looked at for hours and the existing console is dark;
+ * a light theme is a product decision nobody has made. The ground is painted explicitly so the page
+ * holds whatever renders behind it, rather than borrowing a host's background and inverting.
+ *
+ * The neutrals lean blue rather than sitting at grey — chosen against the accent, so the chrome
+ * reads as considered rather than as an unstyled default.
+ */
+:root {
+  /* type: the whole scale, and there is nothing between these */
+  --t-micro: 11px;  /* UPPERCASE labels only — see the header */
+  --t-small: 12px;  /* the floor for anything read as prose */
+  --t-body: 14px;   /* base */
+  --t-lead: 16px;
+  --t-head: 20px;
+  --t-display: 24px;
+
+  --lh-tight: 1.25;
+  --lh-body: 1.55;
+
+  /* space: a 4px grid, named so a gap is chosen rather than typed */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  /* ground and chrome */
+  --bg: #0b0f14;
+  --panel: #111820;
+  --track: #18212c;
+  --line: #22303d;
+  --fg: #dbe5ef;
+  --dim: #7b8b9c;
+
+  /* accent, and semantic colour kept separate from it */
+  --accent: #4aa3ff;
+  --ok: #3fca7d;
+  --warn: #f0b429;
+  --bad: #ff5f56;
+
+  --radius: 6px;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 var(--t-body)/var(--lh-body) var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; }
+
+/* Digits that line up. Counts and durations change while you watch; proportional figures jitter. */
+.mono, .num, pre, code, table { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); }
+
+/* A visible keyboard path. On a control plane this is the path used when something is wrong. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
