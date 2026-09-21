@@ -43,7 +43,7 @@ describe('the nav agrees with the orchestrator', () => {
     // The guard on the guard: an empty set makes every assertion below vacuous.
     expect(served.size).toBeGreaterThan(0);
     expect(routes.size).toBeGreaterThan(0);
-    expect(SURFACES.length).toBe(7);
+    expect(SURFACES.length).toBe(8);
   });
 
   it('every surface the nav offers is served', () => {

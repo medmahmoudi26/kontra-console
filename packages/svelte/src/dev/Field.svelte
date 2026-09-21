@@ -20,10 +20,13 @@
     options?: readonly string[];
     required: boolean;
     placeholder?: string;
+    /** The author's own sentence about this field. Rendered BESIDE the control, not inside it. */
+    description?: string;
     value: FieldValue;
     onchange: (v: FieldValue) => void;
   }
-  let { name, title, control, options = [], required, placeholder = '', value, onchange }: Props = $props();
+  let { name, title, control, options = [], required, placeholder = '', description = '',
+        value, onchange }: Props = $props();
 
   /**
    * THE BYTES GO UP BEFORE THE RUN STARTS, and only a ref rides in the argument.
@@ -58,6 +61,13 @@
 
 <label class="field">
   <span class="lbl">{title}{#if required}<i aria-hidden="true">*</i><span class="sr">required</span>{/if}</span>
+  <!-- THE AUTHOR'S SENTENCE, BESIDE THE BOX AND NOT INSIDE IT.
+       The default used to be the only hint and it rode in the `placeholder`, which vanishes the
+       moment somebody types — so the one explanation of a field disappeared exactly when it was
+       being filled in. A description stays. The default is still shown as ghost text, because
+       "leave it blank and you get this" is a different fact from "here is what it means", and
+       both are worth saying. -->
+  {#if description}<span class="hint">{description}</span>{/if}
 
   {#if control === 'select'}
     <select value={value ?? ''} onchange={(e) => onchange(e.currentTarget.value || undefined)}>
@@ -130,6 +140,10 @@
   .field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
   .lbl { font-size: var(--t-small); color: var(--dim); font-family: var(--mono); }
   .lbl i { color: var(--warn); font-style: normal; margin-left: 3px; }
+  /* --t-micro is the floor for incidental text (ADR 0048 §5); the hint wraps rather than
+     truncating, because half a sentence is worse than none. */
+  .hint { font-size: var(--t-micro); color: var(--dim); line-height: var(--lh-body);
+          max-width: 62ch; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
   input, select {

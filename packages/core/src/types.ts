@@ -38,6 +38,16 @@ export interface ActorOperation {
   params?: JsonSchema;
   input?: JsonSchema;
   output?: JsonSchema;
+  /**
+   * What this Method STREAMS while it runs — `@actor.method(streams=…)`.
+   *
+   * Paired with a run's progress topic `<actor>/<method>`, it is what lets a pane draw TYPED
+   * fields for an actor it has never heard of. It is deliberately not part of the version
+   * signature the orchestrator's immutability gate compares (see `CARRIED` in
+   * `control/orchestrator/src/catalog.ts`): nothing is typed against it the way a caller is
+   * typed against `input`/`output`.
+   */
+  stream?: JsonSchema;
 }
 
 /** A catalogued actor, as served by GET /api/actors — auto-discovered from what's

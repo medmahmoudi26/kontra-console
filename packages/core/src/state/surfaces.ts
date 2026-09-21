@@ -38,6 +38,11 @@
  *    produced it were two different searches.
  *  - **Scratch is retired as a top level.** It comes back as a workflow's own design tab, where a
  *    drawing has a subject — ADR 0026 survives unchanged and is strengthened by it.
+ *  - **Logs is new**, and it sits under Monitor because the two are the same question at different
+ *    resolutions: Monitor is the SCREENS a fleet's machines are showing, Logs is the LINES they
+ *    wrote. It is not the run page's logs rail and does not replace it — the rail is one run,
+ *    searched beside what that run did; this is every actor at once, watched. See
+ *    `logs/Logs.svelte`.
  *  - **Secrets is its own surface**, because a write-only store with a binding lifecycle and a read
  *    audit is something an operator opens DURING a run, not something configured once.
  *  - **Settings is what is left**: which control plane, and how it is displayed.
@@ -75,7 +80,8 @@ interface SurfaceDecl {
  * Catalog first because it is where you arrive: the registry of everything this control plane
  * knows, and the way to the two surfaces under it. Workflows is the centre of the WORK — a workflow
  * is a thread and each of its runs is a conversation. Actors and Datasets are what a run calls and
- * what it produces. Monitor is the machines under all of it. Secrets and Settings are last because
+ * what it produces. Monitor is the machines under all of it and Logs is what those machines wrote —
+ * the same question at two resolutions, which is why they are adjacent. Secrets and Settings are last because
  * they are the two that are not about a running system, and they are in that order because a secret
  * is read while something runs and a setting is not.
  */
@@ -106,6 +112,11 @@ const DECLARED = [
     hint: 'the wall of read-only Terminals over tmux',
   },
   {
+    id: 'logs',
+    label: 'Logs',
+    hint: 'every actor writing at once, live — one line per record, coloured by who wrote it',
+  },
+  {
     id: 'secrets',
     label: 'Secrets',
     hint: 'named secrets, the actor slots they are bound to, and who read one — write-only, never readable back',
@@ -122,7 +133,7 @@ const DECLARED = [
  *
  * DERIVED FROM {@link DECLARED}, which is what closes the hole the file header describes: a surface
  * that is not in that list is not a `View`, so it cannot be half-added. The union is still what
- * makes every `Record<View, …>` in the app a compile-time guard — an eighth surface that nobody
+ * makes every `Record<View, …>` in the app a compile-time guard — a ninth surface that nobody
  * gives an icon, a count or a page fails to build the day it is added.
  */
 export type View = (typeof DECLARED)[number]['id'];

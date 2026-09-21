@@ -15,8 +15,10 @@
    * **1.18 MB** — precisely the thing this migration criticises the React console for, where
    * `@xyflow/react` sits in the entry and everybody downloads the canvas to open Secrets.
    *
-   * So the entry is the shell and the surface you asked for. Nobody pays for a grid to read a
-   * secret.
+   * THAT PARTICULAR 1.18 MB IS GONE: `Datasets` no longer uses ag-grid at all — it renders
+   * `DataTable.svelte`, which is a `<table>` styled from the same tokens as everything else. The
+   * dynamic import stays, because the argument was never about one dependency: the canvas is still
+   * behind one, and the rule is that nobody pays for a surface they did not open.
    */
   import { formatAddress, parseAddress } from '@kontra/console-core/state/address';
   import { DEFAULT_VIEW, RETIRED } from '@kontra/console-core/state/surfaces';
@@ -62,6 +64,7 @@
     secrets: () => import('./secrets/Secrets.svelte'),
     settings: () => import('./secrets/Settings.svelte'),
     monitor: () => import('./monitor/Monitor.svelte'),
+    logs: () => import('./logs/Logs.svelte'),
     dev: () => import('./dev/DevPane.svelte'),
   };
 
@@ -89,7 +92,15 @@
     <V actor={params.get('actor') ?? ''} method={params.get('method') ?? ''} />
   {:else}<p class="loading">loading…</p>{/if}
 {:else if LOADERS[first]}
-  <Shell view={first} views={SURFACES} onnavigate={(id) => location.assign(go(id, first).href)}>
+  <!-- DATASETS IS A TABLE, NOT PROSE, AND LOGS IS A TERMINAL. The 1180px cap protects line length,
+       which a nine-column grid does not have; the same cap is what made Datasets feel narrower than
+       the grid it replaced. Logs is the same argument from the other direction: a row there is
+       `time · actor · message`, and the first two columns cost 21 characters before the message
+       starts — capped at 1180px that is a third of the line spent on identity, and long lines wrap
+       that would not have to. Named here rather than inside either view, because the width belongs
+       to the SHELL. -->
+  <Shell view={first} views={SURFACES} wide={first === 'datasets' || first === 'logs'}
+         onnavigate={(id) => location.assign(go(id, first).href)}>
     {#if failed}<p class="err" role="alert">{failed}</p>
     {:else if View}
       {@const V = View as typeof import('./catalog/Catalog.svelte').default}

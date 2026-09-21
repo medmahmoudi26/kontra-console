@@ -104,6 +104,7 @@
           options={f.enum ?? []}
           required={f.required ?? false}
           placeholder={f.default ?? ''}
+          description={f.description ?? ''}
           value={values[f.name]}
           onchange={(v) => (values[f.name] = v)}
         />

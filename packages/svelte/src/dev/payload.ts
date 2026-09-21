@@ -10,6 +10,8 @@
  * the author's default is silently replaced by `''` — which for a `Literal` field is not even a
  * legal value. `undefined` and `''` are both absence; `false` is not.
  */
+import { coerceField } from '@kontra/console-core/panels/formFields';
+
 export interface BlobRef {
   name: string;
   sha256: string;
@@ -19,10 +21,42 @@ export interface BlobRef {
 
 export type FieldValue = string | boolean | BlobRef | { files: BlobRef[] } | undefined;
 
-export function payloadOf(values: Record<string, FieldValue>): Record<string, unknown> {
+/**
+ * The form's values as the payload a run is started with.
+ *
+ * ── TYPES ARE APPLIED HERE, AND LEAVING THEM OFF MADE EVERY NUMERIC WORKFLOW UNLAUNCHABLE ──────
+ *
+ * An HTML input holds a STRING. Passed through verbatim, a declared `machines: int` leaves the
+ * browser as `"2"`, and Temporal's converter refuses it on the way into the workflow:
+ *
+ *     TypeError: Failed converting value for key 'machines' in mapping <class 'SurfaceInput'>
+ *     RuntimeError: Failed decoding arguments
+ *
+ * which the worker reports as a failed workflow task — so the run sits at RUNNING, never advances,
+ * and a subscriber sees the thoroughly unhelpful `Workflow Update failed`. It applies to every
+ * workflow in the catalog with an `int` or `float` input, which is all of them.
+ *
+ * `coerceField` already existed and was already tested; it was wired into the actor DISPATCH path
+ * (`methodCall.ts`) and never into this one. `types` is optional so the dev pane's untyped use
+ * keeps working — absent, this behaves exactly as it did.
+ */
+export function payloadOf(
+  values: Record<string, FieldValue>,
+  types?: ReadonlyMap<string, string>
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(values)) {
     if (v === undefined || v === '') continue;
+    const declared = types?.get(k);
+    if (declared !== undefined && typeof v === 'string') {
+      const coerced = coerceField(declared, v);
+      // A VALUE THAT WILL NOT COERCE IS LEFT AS THE STRING IT IS, not dropped. `missing()` and the
+      // per-field error the form already renders are what tell somebody about it; silently
+      // omitting the key would start the run with the author's default instead of what was typed,
+      // which is the worse of the two wrong answers.
+      out[k] = 'value' in coerced ? coerced.value : v;
+      continue;
+    }
     out[k] = v;
   }
   return out;

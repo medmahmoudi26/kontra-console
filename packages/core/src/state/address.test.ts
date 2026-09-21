@@ -57,6 +57,7 @@ describe('the address of a surface', () => {
       'actors',
       'datasets',
       'monitor',
+      'logs',
       'secrets',
       'settings',
     ]);

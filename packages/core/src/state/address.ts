@@ -98,7 +98,12 @@ export type Address =
   // filter is not addressed because it is not an entity — a search box and three chips are how you
   // FIND the thing whose own address is the one worth pasting, and two ways to link one workflow is
   // a link that does not round-trip. The surface is addressable; a query within it is not.
-  | { view: 'actors' | 'catalog' | 'secrets' | 'settings' }
+  // `logs` joins them too, and for a third reason again: what it shows is a LIVE TAIL, so there is
+  // no position in it to address. A filter typed into it is a view of the last few thousand lines
+  // that happen to be in this tab's buffer; pasting it to somebody else would name lines they do
+  // not have. The address that survives being sent to another person is a `/api/logs/query`, which
+  // is a different tool. The surface is addressable; a moment in a stream is not.
+  | { view: 'actors' | 'catalog' | 'logs' | 'secrets' | 'settings' }
   | { view: 'monitor'; terminal: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 

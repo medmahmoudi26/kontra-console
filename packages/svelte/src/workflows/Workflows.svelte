@@ -16,11 +16,15 @@
    */
   import type { RunEvent, RunHistory } from '@kontra/console-core/run/api';
   import { parseAddress } from '@kontra/console-core/state/address';
+  import { fetchLogs, type LogRecord } from '@kontra/console-core/run/logs';
+  import LogsRail from './LogsRail.svelte';
+  import Transcript from './Transcript.svelte';
 
   import Asks from './Asks.svelte';
   import Launch from './Launch.svelte';
   import RunTail from './RunTail.svelte';
   import Timeline from './Timeline.svelte';
+  import RunStream from '../runs/RunStream.svelte';
   import { followRun, type Follow } from './runStream';
   import type { ScratchFlowEdge, ScratchFlowNode } from '@kontra/console-core/panels/scratchFlow';
 
@@ -65,6 +69,11 @@
   let historyError = $state('');
   let focus = $state<number | undefined>(undefined);
   let follow = $state<Follow<RunRow>>({ state: 'connecting' });
+  /* THE RAIL'S HALF OF THE RUN VIEW (ADR 0050 §1). Keyed off the SELECTED run, so the rail
+     follows the selection the way the timeline does rather than being a second navigation. */
+  let logs = $state<LogRecord[]>([]);
+  let logsLoading = $state(false);
+  let logsError = $state<string | null>(null);
   /** The run this session started, watched here rather than on a surface that replaced this one. */
   let watching = $state('');
   /**
@@ -211,6 +220,28 @@
   const runsOpen = $derived(touched ? openedByHand : shown.length <= OPEN_UP_TO);
 
   const run = $derived(runs.find((r) => r.runId === picked));
+
+  $effect(() => {
+    const id = picked;
+    if (!id) {
+      logs = [];
+      return;
+    }
+    logsLoading = true;
+    logsError = null;
+    void fetchLogs(id)
+      .then((r) => {
+        logs = r;
+      })
+      .catch((e: unknown) => {
+        // A SENTENCE, NOT AN EMPTY LIST — an unreachable backend and a Run that logged nothing
+        // are different facts and must not render the same.
+        logsError = String((e as Error)?.message ?? e);
+      })
+      .finally(() => {
+        logsLoading = false;
+      });
+  });
   // Seconds the run has been going, for the open bars. A closed run draws to its last event.
   const nowSeconds = $derived(
     run && !run.closedAt ? (Date.now() - run.startedAt) / 1000 : undefined
@@ -276,6 +307,7 @@
     </div>
 
     {#if run}
+      <div class="runwrap">
       <div class="run">
         <header>
           <h2 class="mono">{run.type}</h2>
@@ -329,7 +361,15 @@
             {/if}
           </div>
 
-          {#if focused}
+          {#key run.runId}
+          <!-- KEYED ON THE RUN, like `Transcript`, and for a sharper reason: `RunStream` holds an
+               open EventSource. Without the key, picking a different run would leave the previous
+               run's subscription attached and interleave two runs' progress into one pane. -->
+          <RunStream runId={run.runId} />
+          <Transcript runId={run.runId} />
+        {/key}
+
+        {#if focused}
             <dl class="pick">
               <dt>event</dt><dd class="mono">#{focused.id} {focused.type}</dd>
               <dt>at</dt><dd class="mono">{focused.t.toFixed(2)}s</dd>
@@ -340,6 +380,8 @@
             <p class="muted">Pick a bar to see the event behind it.</p>
           {/if}
         {/if}
+      </div>
+      <LogsRail records={logs} loading={logsLoading} error={logsError} />
       </div>
     {/if}
   {/if}
@@ -384,6 +426,24 @@
   .link.live { color: var(--ok); }
   .link.reconnecting { color: var(--warn); }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  /*
+   * TWO COLUMNS: the run, and the rail beside it (kontra-console#6, variant A).
+   *
+   * THE RAIL IS FIXED-WIDTH AND THE RUN FLEXES, and that asymmetry is measured rather than
+   * stylistic: a log line is ~80 mono characters, so a rail that re-wraps on every window drag is
+   * one nobody reads. `minmax(0, 1fr)` on the run column is what stops a wide timeline or a long
+   * mono id from pushing the PAGE sideways — the rail scrolls inside itself instead.
+   */
+  .runwrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 430px;
+    gap: var(--s-4);
+    align-items: start;
+  }
+  /* Under 900px a 430px column of mono under a timeline is worse than a block after it. */
+  @media (max-width: 900px) {
+    .runwrap { grid-template-columns: minmax(0, 1fr); }
+  }
   .run {
     display: flex; flex-direction: column; gap: var(--s-3);
     border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: var(--s-3);

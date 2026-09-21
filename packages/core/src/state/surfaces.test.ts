@@ -26,6 +26,7 @@ const EXPECTED: readonly string[] = [
   'actors',
   'datasets',
   'monitor',
+  'logs',
   'secrets',
   'settings',
 ];
@@ -105,6 +106,6 @@ describe('what the server has to serve', () => {
     // The number is here so adding a surface fails on BOTH sides of the boundary rather than
     // silently on neither.
     expect(SPA_SEGMENTS).toHaveLength(EXPECTED.length + 2);
-    expect(SPA_SEGMENTS).toHaveLength(9);
+    expect(SPA_SEGMENTS).toHaveLength(10);
   });
 });

@@ -40,6 +40,7 @@
   } from '@kontra/console-core/run/workflowState';
 
   import Field from '../dev/Field.svelte';
+  import { watchDescriptors } from './watchFolder';
   import { missing, payloadOf, type FieldValue } from '../dev/payload';
 
   interface Props {
@@ -105,6 +106,56 @@
 
   let values = $state<Record<string, FieldValue>>({});
 
+  /**
+   * RE-READ WHAT THE WORKFLOW DECLARES WHEN THE TAB COMES BACK.
+   *
+   * A worker served with `--watch` re-registers its contract on every save, so the descriptor the
+   * form is built from changes while you are in your editor. The console read it once, at mount —
+   * so an operator edited `approve`, came back, and saw the old form with nothing saying why.
+   *
+   * ON FOCUS, NOT ON A TIMER. Coming back to the tab is the moment the answer can have changed
+   * from the reader's point of view, and it is an event the browser already gives us. There is no
+   * stream for a workflow descriptor the way there is for an Actor's schema; when there is, this
+   * becomes a subscription.
+   */
+  function watchFocus(): () => void {
+    const again = (): void => void reload();
+    window.addEventListener('focus', again);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') again();
+    });
+    return () => window.removeEventListener('focus', again);
+  }
+
+  /** Re-read the descriptors, keeping the open folder and what has been typed into its form. */
+  async function reload(): Promise<void> {
+    try {
+      const listed = await fetchWorkflows();
+      registered = listed.registered;
+      if (selected) await readPollers(registered.find((d) => d.name === type)?.queue);
+    } catch {
+      /* a refused re-read leaves the last good descriptor on screen, which is still true */
+    }
+  }
+
+  $effect(watchFocus);
+
+  /**
+   * THE OPEN FOLDER IS WATCHED, so a save reaches this form without anything being reloaded.
+   *
+   * Torn down and re-subscribed when the selection changes: the server holds one file watcher per
+   * stream and caps how many it will hold, so a runner that left a stream open per folder it had
+   * ever shown would exhaust that cap by browsing.
+   */
+  /**
+   * ONE SUBSCRIPTION FOR THE SURFACE, opened once and kept.
+   *
+   * It carries every workflow's registrations, so clicking between folders does not resubscribe —
+   * and an effect that re-ran on `rows` used to tear the stream down on every re-read, which is
+   * every save.
+   */
+  $effect(() => watchDescriptors(() => void reload()));
+
   $effect(() => {
     void (async () => {
       try {
@@ -155,7 +206,10 @@
   const descriptor = $derived(registered.find((d) => d.name === type));
   const nodes = $derived(schemaFields(descriptor?.input) ?? []);
   const leaves = $derived(nodes.filter((n): n is FieldNode => n.kind === 'leaf'));
-  const payload = $derived(payloadOf(values));
+  // The declared type per field, so a text input's string becomes the int the workflow
+  // declares. Without this every numeric workflow fails to decode its own arguments.
+  const fieldTypes = $derived(new Map(leaves.map((n) => [n.name, n.type])));
+  const payload = $derived(payloadOf(values, fieldTypes));
   const gaps = $derived(missing(leaves.filter((n) => n.required).map((n) => n.name), payload));
 
   // A NEW SELECTION MUST NOT CARRY THE LAST FORM'S VALUES. Keys the current type does not declare
@@ -180,7 +234,9 @@
     serveError = '';
     served = '';
     try {
-      const result = await serveWorkflow(selected);
+      // RE-SERVE REPLACES; a first Serve does not. The state chip is what tells them apart, so the
+      // button's word and the request agree.
+      const result = await serveWorkflow(selected, { restart: serveState === 'serving' });
       served = result.attach || result.session;
       // THE DESCRIPTOR IS RE-READ, because serving is what publishes it: a folder nobody had served
       // has no input schema, and the form that was empty a second ago is the one this call fills.
@@ -284,6 +340,7 @@
               options={f.enum ?? []}
               required={f.required ?? false}
               placeholder={f.default ?? ''}
+              description={f.description ?? ''}
               value={values[f.name]}
               onchange={(v) => (values[f.name] = v)}
             />

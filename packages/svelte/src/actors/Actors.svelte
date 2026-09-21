@@ -63,29 +63,103 @@
   // The queue an actor's Method calls land on. Named here rather than guessed at each use.
   const queueOf = (a: ActorRow) => `${a.name}-${a.version}`;
   const stateOf = (a: ActorRow) => servingState(pollers[queueOf(a)], now);
-  const shown = $derived(actors.find((a) => a.key === open));
+  /**
+   * WHAT THE DETAIL PANEL IS ABOUT — a folder, or a registration, with one shape either way.
+   *
+   * A workspace row is a FOLDER, and it may have no catalog entry at all (nothing has served it);
+   * a catalog row has no folder. Resolving both to `{key, actor, folder?}` here is what keeps the
+   * panel from branching on which list was clicked.
+   */
+  const detail = $derived.by(() => {
+    const row = inWorkspace.find((r) => r.key === open);
+    if (row) {
+      return {
+        key: row.key,
+        folder: row.folder,
+        actor: row.entry ?? {
+          key: row.key,
+          name: row.folder.name,
+          version: row.folder.version,
+          // `undefined`, NOT `[]`: "nobody has published a contract" and "this Method takes
+          // nothing" are different facts and the panel says different things about them.
+          operations: undefined,
+        },
+      };
+    }
+    const a = actors.find((x) => x.key === open);
+    return a ? { key: a.key, folder: folderOf(a), actor: a } : undefined;
+  });
   /** The workspace folder that holds this Actor's code, if one does. */
   const folderOf = (a: ActorRow): Source | undefined => folders.find((f) => f.name === a.name);
 
   /**
-   * THE ONES YOU CAN SERVE COME FIRST, and they are the ones with a button.
+   * THE WORKSPACE SIDE IS ONE ROW PER FOLDER — not one per registration.
    *
-   * The catalog is every Actor a worker ever registered — 29 on a four-week-old install — and the
-   * workspace is the code on this disk. Sorted alphabetically together, the four you can act on sat
-   * among twenty-five you cannot, so the surface looked like it had no actions at all: the first
-   * row was `bbscope`, whose code is not here.
+   * This filtered the CATALOG by "has a folder with this name", and the catalog holds every version
+   * a worker ever registered: four `desync` rows — 0.1.0, 0.2.1, 0.2.2, 1.0.0 — all matched the one
+   * folder on disk, so the workspace section listed four actors where there is one, each with its
+   * own Serve button, all of which would serve the same directory. The operator's words: "there are
+   * 3 desync actors showing while there is only one in the code".
+   *
+   * The folder is the thing you can act on, so the folder is the row. Its version comes from its
+   * own manifest, which is what a Serve would actually publish.
    */
-  const inWorkspace = $derived(actors.filter((a) => folderOf(a) !== undefined));
-  const elsewhere = $derived(actors.filter((a) => folderOf(a) === undefined));
+  interface WorkspaceRow {
+    folder: Source;
+    /** The catalog entry for exactly this name AND version, when a worker has registered it. */
+    entry?: ActorRow;
+    key: string;
+  }
+  const inWorkspace = $derived<WorkspaceRow[]>(
+    folders.map((f) => ({
+      folder: f,
+      entry: actors.find((a) => a.name === f.name && a.version === f.version),
+      key: `folder:${f.id}`,
+    }))
+  );
 
-  async function serve(a: ActorRow, restart = false): Promise<void> {
-    const folder = folderOf(a);
-    if (!folder) return;
-    // PRESSING SERVE OPENS THAT ACTOR. The outcome — the session name, or the server's refusal —
-    // is drawn in the detail panel, and it appeared under whichever actor happened to be open:
+  /**
+   * Everything the catalog knows that this workspace cannot serve — including OTHER VERSIONS of an
+   * Actor whose code is here. `desync@0.2.1` is not the folder's `1.0.0`: it is what some worker
+   * registered from code that is not in front of you, and pretending the folder can serve it would
+   * be the same conflation in the other direction.
+   */
+  const elsewhere = $derived(
+    actors.filter((a) => !folders.some((f) => f.name === a.name && f.version === a.version))
+  );
+
+  /**
+   * THE CATALOG SIDE, COLLAPSED BY NAME — one row per Actor, its versions beside it.
+   *
+   * The catalog keeps every version anybody ever registered: six `cachebuster` rows, three
+   * `crawl4ai`, three older `desync`. Listed flat they read as twenty-five different Actors, which
+   * is the same confusion that made the workspace side look like it held four `desync`s. One row
+   * per name says what is actually true — one Actor, several registrations — and the versions stay
+   * visible because "which one is on the fleet" is a real question.
+   */
+  const elsewhereByName = $derived.by(() => {
+    const by = new Map<string, ActorRow[]>();
+    for (const a of elsewhere) by.set(a.name, [...(by.get(a.name) ?? []), a]);
+    return [...by.entries()]
+      .map(([name, rows]) => ({
+        name,
+        // Newest first: the version anybody is asking about is the last one registered.
+        rows: [...rows].sort((x, y) => y.version.localeCompare(x.version, undefined, { numeric: true })),
+      }))
+      .sort((x, y) => x.name.localeCompare(y.name));
+  });
+
+  /** Serve a WORKSPACE ROW — the folder is the thing that gets served. */
+  async function serveFolder(row: WorkspaceRow, restart = false): Promise<void> {
+    // PRESSING SERVE OPENS THAT ROW. The outcome — the session name, or the server's refusal — is
+    // drawn in the detail panel, and it appeared under whichever actor happened to be open:
     // `worker started` under `bbscope` for a worker started for `redditapi`.
-    open = a.key;
-    serving = a.key;
+    open = row.key;
+    await serveSource(row.folder, row.key, restart);
+  }
+
+  async function serveSource(folder: Source, key: string, restart = false): Promise<void> {
+    serving = key;
     serveError = '';
     served = '';
     try {
@@ -124,23 +198,24 @@
     {#if inWorkspace.length > 0}
       <h2 class="group">in this workspace</h2>
       <ul class="grid">
-        {#each inWorkspace as a (a.key)}
+        {#each inWorkspace as row (row.key)}
+          {@const a = row.entry ?? { key: row.key, name: row.folder.name, version: row.folder.version }}
           {@const s = stateOf(a)}
           <li>
-            <button class:open={open === a.key} onclick={() => (open = a.key)}>
-              <span class="nm mono">{a.name}</span>
-              <span class="ver mono">{a.version}</span>
+            <button class:open={open === row.key} onclick={() => (open = row.key)}>
+              <span class="nm mono">{row.folder.name}</span>
+              <span class="ver mono">{row.folder.version || 'no version'}</span>
               <span class="state {s}">{s === 'idle' ? 'no poller' : s}</span>
             </button>
             <!-- THE BUTTON IS ON THE ROW, not behind a click. An Actor nothing is polling is the
                  single most common reason a call sits there, and the fix is one press. -->
             <button
               class="serve"
-              data-testid="serve-actor-{a.name}"
-              disabled={serving === a.key}
-              onclick={() => void serve(a, s === 'serving')}
+              data-testid="serve-actor-{row.folder.name}"
+              disabled={serving === row.key}
+              onclick={() => void serveFolder(row, s === 'serving')}
             >
-              {#if serving === a.key}…{:else if s === 'serving'}re-serve{:else}serve{/if}
+              {#if serving === row.key}…{:else if s === 'serving'}re-serve{:else}serve{/if}
             </button>
           </li>
         {/each}
@@ -155,42 +230,51 @@
         </span>
       </h2>
       <ul class="grid quiet">
-        {#each elsewhere as a (a.key)}
-          {@const s = stateOf(a)}
-          <li>
-            <button class:open={open === a.key} onclick={() => (open = a.key)}>
-              <span class="nm mono">{a.name}</span>
-              <span class="ver mono">{a.version}</span>
-              <span class="state {s}">{s === 'idle' ? 'no poller' : s}</span>
-            </button>
+        {#each elsewhereByName as group (group.name)}
+          <!-- NOT A BUTTON WRAPPING BUTTONS. The versions are the actions here, and a nested button
+               is invalid markup whose inner control stops receiving clicks in some browsers — so
+               the row is a plain box and every version is its own button. -->
+          <li class="card" class:open={group.rows.some((r) => r.key === open)}>
+            <span class="nm mono">{group.name}</span>
+            <span class="vers">
+              {#each group.rows as r (r.key)}
+                <button class="ver mono" class:on={open === r.key} onclick={() => (open = r.key)}>
+                  {r.version}
+                </button>
+              {/each}
+            </span>
+            <span class="state {stateOf(group.rows[0]!)}">
+              {stateOf(group.rows[0]!) === 'idle' ? 'no poller' : stateOf(group.rows[0]!)}
+            </span>
           </li>
         {/each}
       </ul>
     {/if}
 
-    {#if shown}
-      {@const s = stateOf(shown)}
+    {#if detail}
+      {@const s = stateOf(detail.actor)}
       <div class="detail">
-        <h2 class="mono">{shown.name}@{shown.version}</h2>
+        <h2 class="mono">{detail.actor.name}@{detail.actor.version}</h2>
         <p class="hint {s}">{servingHint(s)}</p>
 
         <div class="acts">
-          {#if folderOf(shown)}
-            {@const folder = folderOf(shown)!}
+          {#if detail.folder}
+            {@const folder = detail.folder}
             <button
               data-testid="serve-actor"
-              disabled={serving === shown.key}
-              onclick={() => void serve(shown, s === 'serving')}
+              disabled={serving === detail.key}
+              onclick={() => void serveSource(folder, detail.key, s === 'serving')}
             >
-              {#if serving === shown.key}serving…{:else if s === 'serving'}Re-serve{:else}Serve{/if}
+              {#if serving === detail.key}serving…{:else if s === 'serving'}Re-serve{:else}Serve{/if}
             </button>
             <span class="where mono" title={folder.path}>{folder.path}</span>
           {:else}
             <!-- NOT IN THE WORKSPACE. The catalog remembers Actors a worker registered from
-                 anywhere; this console can only serve code it can see. -->
+                 anywhere — including OTHER VERSIONS of one whose code is here — and this console
+                 can only serve the code it can see. -->
             <span class="where">
-              no folder for <b>{shown.name}</b> in the workspace — this entry is what a worker
-              registered, and the code is not here to serve.
+              no folder for <b>{detail.actor.name}@{detail.actor.version}</b> in the workspace —
+              this entry is what a worker registered, and that code is not here to serve.
             </span>
           {/if}
         </div>
@@ -199,7 +283,16 @@
           <p class="muted">worker started — <code class="mono">{served}</code>, and its pane is on the Monitor.</p>
         {/if}
 
-        {#each shown.operations ?? [] as op (op.name)}
+        {#if detail.actor.operations === undefined}
+          <!-- A FOLDER NOBODY HAS SERVED HAS NO PUBLISHED CONTRACT. The methods come from a running
+               worker, not from the directory — so this says which state it is in rather than
+               drawing an empty method list. -->
+          <p class="muted">
+            Nothing has served <code class="mono">{detail.actor.name}@{detail.actor.version}</code>
+            yet, so it has published no Methods. Press Serve and they appear here.
+          </p>
+        {/if}
+        {#each detail.actor.operations ?? [] as op (op.name)}
           {@const fields = schemaFields(op.input) ?? []}
           <div class="op">
             <h3 class="mono">{op.name}</h3>
@@ -218,7 +311,7 @@
                 {/each}
               </ul>
             {/if}
-            <a class="call" href="/dev?actor={encodeURIComponent(shown.name)}&method={encodeURIComponent(op.name)}">
+            <a class="call" href="/dev?actor={encodeURIComponent(detail.actor.name)}&method={encodeURIComponent(op.name)}">
               call {op.name} →
             </a>
           </div>
@@ -238,6 +331,21 @@
   }
   .group .why { text-transform: none; letter-spacing: 0; font-weight: 400; }
   .grid.quiet li button { opacity: 0.72; }
+  .grid li.card {
+    display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: var(--s-2) var(--s-3); opacity: 0.72;
+  }
+  .grid li.card.open { opacity: 1; border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .vers { display: inline-flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+  /* SPECIFIC ENOUGH TO WIN. `.grid button:not(.serve) { width: 100% }` has the same specificity and
+     comes later in this sheet, so the chips rendered as a stack of full-width blocks — which is
+     why one `cachebuster` card was six rows tall. */
+  .grid li.card .vers button.ver {
+    background: var(--track); border: 1px solid var(--line); border-radius: var(--radius);
+    color: var(--dim); font-size: var(--t-micro); padding: 0 4px; cursor: pointer; width: auto;
+  }
+  .vers button.ver.on { color: var(--fg); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
   /* ONE ROW PER ACTOR: the card, then its action. The card grows; the button is as wide as its
      word. Both are buttons, so the card styling below has to exclude the second one — without
      that, `width: 100%` made `serve` a full-size card of its own and the list read as twice as

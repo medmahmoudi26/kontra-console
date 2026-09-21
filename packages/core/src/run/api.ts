@@ -957,11 +957,17 @@ export interface ServeResult {
  * field — a field that defaulted to the literal `'recon'`, so the button's out-of-the-box behaviour
  * was to serve every workflow onto one stale queue named after something else (GitHub #15).
  */
-export async function serveWorkflow(file: string): Promise<ServeResult> {
+export async function serveWorkflow(
+  file: string,
+  { restart = false }: { restart?: boolean } = {}
+): Promise<ServeResult> {
   const res = await fetch(`${BASE}/workflows/serve`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ file }),
+    // `restart` REPLACES the worker that is already there. A worker holds the contract it imported
+    // at boot, so re-serving is how edited code reaches the queue — and without this the button
+    // could only report `tmux session already exists` and print a command to run elsewhere.
+    body: JSON.stringify({ file, restart }),
   });
   if (!res.ok) return asError(res, 'serve the workflow');
   return (await res.json()) as ServeResult;

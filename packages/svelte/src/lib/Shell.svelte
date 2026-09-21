@@ -26,12 +26,22 @@
     views: readonly { id: string; label: string }[];
     tenant?: string;
     onnavigate?: (id: string) => void;
+    /**
+     * Let a data-dense view use the whole viewport.
+     *
+     * 1180px is the right cap for PROSE — a form, a run page, anything with paragraphs — because a
+     * line longer than about 90 characters is measurably harder to track back to the next one. It
+     * is the wrong cap for a TABLE: Datasets renders nine columns, and squeezing them into 1180px
+     * is what made the surface feel cramped next to the grid it replaced. A table has no line
+     * length to protect.
+     */
+    wide?: boolean;
     children: Snippet;
   }
-  let { view, views, tenant = 'default', onnavigate, children }: Props = $props();
+  let { view, views, tenant = 'default', onnavigate, wide = false, children }: Props = $props();
 </script>
 
-<div class="app">
+<div class="app" class:wide>
   <nav aria-label="Surfaces">
     <span class="brand">kontra</span>
     {#each views as v (v.id)}
@@ -87,6 +97,8 @@
   /* ── WIDER VIEWPORTS EARN THIS ───────────────────────────────────────────────────────────────── */
   @media (min-width: 720px) {
     .app { padding: var(--s-4) var(--s-5) var(--s-6); max-width: 1180px; margin: 0 auto; }
+    /* A table earns the viewport; 2200px still stops it becoming unreadable on an ultrawide. */
+    .app.wide { max-width: min(2200px, 96vw); }
     .brand { margin-right: var(--s-4); }
     nav button { padding: var(--s-1) var(--s-3); }
     .tenant { display: inline; }
