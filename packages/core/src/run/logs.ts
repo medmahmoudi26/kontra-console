@@ -37,6 +37,19 @@ export interface LogRecord {
   /** The systemd unit, e.g. `kontra-actor-desync`. */
   unit?: string;
   actor?: string;
+  /**
+   * WHICH WORKER WROTE THIS LINE — `<pid>@<host>@<queue>`, Temporal's own identity for the process.
+   *
+   * `machine` says which box and `actor` says which actor; on a packed Machine running four
+   * Workers, and on a Fleet where one Droplet is grinding an abandoned sweep while ten are idle,
+   * neither of those answers "which process". This is the string `Worker(identity=…)` was given,
+   * so it is also what `DescribeTaskQueue` lists and what Temporal records on
+   * `ActivityTaskStarted` — pasting it into `temporal task-queue describe` gets the process back.
+   *
+   * Absent on a line written before the identity work, and on one from a process that is not a
+   * Temporal Worker at all.
+   */
+  worker?: string;
   /** ADR 0050 §2 — the result is not what a reader would assume. See the module note. */
   incomplete?: boolean;
   fields?: Record<string, unknown>;
@@ -80,7 +93,11 @@ export function filterLogs<T extends LogRecord>(
       r.msg.toLowerCase().includes(needle) ||
       (r.unit ?? '').toLowerCase().includes(needle) ||
       (r.machine ?? '').toLowerCase().includes(needle) ||
-      (r.actor ?? '').toLowerCase().includes(needle)
+      (r.actor ?? '').toLowerCase().includes(needle) ||
+      // THE WORKER, so pasting an identity from `temporal task-queue describe` into this box
+      // narrows the rail to one process. That is the round trip the identity exists for, and a
+      // filter that matched everything BUT the worker would break it at the last step.
+      (r.worker ?? '').toLowerCase().includes(needle)
     );
   });
 }
@@ -136,6 +153,7 @@ export function parseRecord(line: Record<string, unknown>, runId: string): LogRe
     ...(line.machine ? { machine: String(line.machine) } : {}),
     ...(line._stream_unit || line.unit ? { unit: String(line._stream_unit ?? line.unit) } : {}),
     ...(line.actor ? { actor: String(line.actor) } : {}),
+    ...(line.worker ? { worker: String(line.worker) } : {}),
     // The string "true" as well as the boolean: it arrives as a stream field, and stream fields are
     // strings on the wire.
     ...(line.incomplete === true || line.incomplete === 'true' ? { incomplete: true } : {}),

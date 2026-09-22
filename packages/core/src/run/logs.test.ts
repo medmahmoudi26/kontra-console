@@ -122,3 +122,43 @@ describe('the fixture', () => {
     expect(fixtureLogs('r').filter((r) => r.level === 'debug').length).toBeGreaterThanOrEqual(6);
   });
 });
+
+describe('which worker wrote the line', () => {
+  /**
+   * THE ROUND TRIP THE IDENTITY EXISTS FOR.
+   *
+   * `<pid>@<host>@<queue>` is the string `Worker(identity=…)` was given, so it is also what
+   * `DescribeTaskQueue` lists and what Temporal records on `ActivityTaskStarted`. An operator who
+   * finds a suspicious line pastes it into the engine's own view, or pastes one from there into
+   * this rail. A parser that dropped the field would break that at the last step — and silently,
+   * because a missing field renders as nothing rather than as an error.
+   */
+  it('is carried off the wire', () => {
+    const r = parseRecord(
+      { _msg: 'x', worker: '4147627@kf-desync-01@desync-0.3.1-sessions' },
+      'hunt-1'
+    );
+    expect(r.worker).toBe('4147627@kf-desync-01@desync-0.3.1-sessions');
+  });
+
+  it('is absent rather than empty on a line that predates it', () => {
+    // Absent reads as "not recorded"; `""` reads as "recorded as nothing". The emitter draws the
+    // same distinction (`internals/logs.py::bind_run`), and the rail must not erase it.
+    expect(parseRecord({ _msg: 'x' }, 'hunt-1').worker).toBeUndefined();
+    expect(parseRecord({ _msg: 'x', worker: '' }, 'hunt-1').worker).toBeUndefined();
+  });
+
+  it('narrows the rail, so an identity pasted from Temporal finds its lines', () => {
+    const records = [
+      rec({ msg: 'one', worker: '11@kf-dns-01@nscheck-0.1.0' }),
+      rec({ msg: 'two', worker: '4147627@kf-desync-01@desync-0.3.1' }),
+    ];
+    const got = filterLogs(records, { floor: 'debug', text: 'kf-desync-01' });
+    expect(got.map((r) => r.msg)).toEqual(['two']);
+  });
+
+  it('matches on the whole identity, not only on the host inside it', () => {
+    const records = [rec({ msg: 'one', worker: '11@kf-dns-01@nscheck-0.1.0' })];
+    expect(filterLogs(records, { floor: 'debug', text: '11@kf-dns-01@nscheck-0.1.0' })).toHaveLength(1);
+  });
+});
