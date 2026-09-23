@@ -26,8 +26,14 @@ const at = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
 await page.goto(BASE, { waitUntil: 'domcontentloaded' });
 const userBox = page.locator('input[name="user"]');
 if (await userBox.count()) {
-  await userBox.fill(process.env.KONTRA_CONSOLE_USER || 'shotbot');
-  await page.locator('input[name="password"]').fill(process.env.KONTRA_CONSOLE_PASS || '');
+  // NO DEFAULT CREDENTIAL, not even a username. `kontra init` mints the console login once and
+  // prints it once; this script is run with that login in the environment, and a baked-in name is
+  // both useless to anybody else and a hint about an account on somebody's box.
+  const user = process.env.KONTRA_CONSOLE_USER;
+  const pass = process.env.KONTRA_CONSOLE_PASS;
+  if (!user || !pass) throw new Error('set KONTRA_CONSOLE_USER and KONTRA_CONSOLE_PASS');
+  await userBox.fill(user);
+  await page.locator('input[name="password"]').fill(pass);
   await page.locator('button[type="submit"]').click();
   await page.waitForSelector('[data-testid^="nav-"]', { timeout: 20_000 });
 }
