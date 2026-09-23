@@ -26,18 +26,22 @@
   <dl>
     <dt>control plane</dt>
     <dd>{#if reachable}reachable{:else}<span class="bad">not answering</span>{/if}</dd>
-    {#if health?.namespace}<dt>tenant</dt><dd class="mono">{health.namespace}</dd>{/if}
+    <!-- NAMED FOR WHAT IT IS. `/api/health` returns the TEMPORAL NAMESPACE; calling it "tenant"
+         made the install's one tenant look like a thing you could have several of, and it is the
+         workspace that varies. -->
+    {#if health?.namespace}<dt>temporal namespace</dt><dd class="mono">{health.namespace}</dd>{/if}
     {#if health?.version}<dt>version</dt><dd class="mono">{health.version}</dd>{/if}
   </dl>
 
   <h2>Surfaces</h2>
   <p class="muted">
-    The console is being rebuilt one surface at a time (ADR 0048). Each is served by exactly one
-    bundle; moving between them is a page load.
+    The seven things this console is. Each is addressable — its first path segment names it — and
+    each is declared once, here and in the control plane, which is what stops a surface from being
+    built, tested and unreachable.
   </p>
   <ul>
     {#each SURFACES as s (s.id)}
-      <li><span class="nm">{s.label}</span><span class="b {s.bundle}">{s.bundle}</span></li>
+      <li><span class="nm">{s.label}</span><span class="b mono">/{s.id}</span></li>
     {/each}
   </ul>
 </section>
@@ -62,6 +66,5 @@
   }
   .nm { flex: 1; }
   .b { font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
-  .b.svelte { color: var(--ok); }
   .bad { color: var(--bad); }
 </style>

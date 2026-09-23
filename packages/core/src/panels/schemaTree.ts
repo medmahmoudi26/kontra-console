@@ -71,6 +71,18 @@ export interface SchemaField {
   /** The author's declared default, as the string a text input holds. Absent when none. */
   default?: string;
   /**
+   * What this field is FOR, in the author's own words — a JSON Schema `description`.
+   *
+   * IT IS NOT THE PLACEHOLDER. The form rendered the DEFAULT as ghost text and nothing else, so
+   * an operator faced a column of labelled boxes and had to open the workflow's source to learn
+   * that `machines: 0` is how you ask for no fleet. A description belongs beside the box, where
+   * it can be read while the box is being filled; a placeholder disappears the moment you type.
+   *
+   * Absent when the author declared none — never "" — because undescribed and
+   * described-with-nothing render differently and only one of them is the author's silence.
+   */
+  description?: string;
+  /**
    * Which control collects this field. Derived, never authored on the console side.
    *
    * THE TYPE IS NOT THE CONTROL, which is why this is its own field. `boolean` and `string` are
@@ -264,6 +276,13 @@ export function schemaEnum(raw: unknown): string[] | null {
  * is why this tests for the KEY rather than for truthiness — at every depth, since a falsy default
  * two levels down is exactly as easy to lose as one at the top.
  */
+/** One property's declared `description`, or undefined when the author wrote none. */
+export function schemaDescription(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const d = (raw as { description?: unknown }).description;
+  return typeof d === 'string' && d.trim() !== '' ? d : undefined;
+}
+
 export function schemaDefault(raw: unknown): string | undefined {
   if (!raw || typeof raw !== 'object' || !('default' in raw)) return undefined;
   const value = (raw as { default: unknown }).default;
@@ -384,6 +403,9 @@ function nodeOf(
 ): FieldNode {
   const choices = schemaEnum(raw);
   const fallback = schemaDefault(raw);
+  // READ BEFORE THE `$ref` IS RESOLVED, like the file/folder markers below: a pydantic model's
+  // Annotated Field(description=…) lands on the property, not on the definition it points at.
+  const described = schemaDescription(raw);
   /* THE MARKER IS READ BEFORE THE `$ref` IS RESOLVED, and after it too. A pydantic model reaches
      here as `{"$ref":"#/$defs/File"}` — the keywords live on the DEFINITION, not on the reference —
      so the shape has to be resolved to find them. `kontra.File` inline (no `$ref`, which is what a
@@ -397,6 +419,7 @@ function nodeOf(
     required,
     ...(choices ? { enum: choices } : {}),
     ...(fallback === undefined ? {} : { default: fallback }),
+    ...(described === undefined ? {} : { description: described }),
     ...(control === null ? {} : { control }),
   };
 
@@ -439,6 +462,7 @@ function elementOf(
     required: true,
     ...(choices ? { enum: choices } : {}),
     ...(fallback === undefined ? {} : { default: fallback }),
+    ...(schemaDescription(items) === undefined ? {} : { description: schemaDescription(items)! }),
   };
   const shape = choices ? null : resolveShape(items, root, seen);
   if (shape && depth < MAX_DEPTH) {

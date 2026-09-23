@@ -44,7 +44,7 @@ import type { RunHistory, RunRow } from '../run/api';
 import { streakOf } from '../run/runState';
 import { greenStreak, sumSeries, type StreakBar } from '../components/spark';
 import { scopeWords } from '../datasets/scope';
-import { datasetKey } from '../state/store';
+import { datasetKey } from '../datasets/key';
 import { eventStats } from './workflowEvents';
 import type { RunDatasets } from './runDatasets';
 

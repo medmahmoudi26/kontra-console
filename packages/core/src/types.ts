@@ -38,6 +38,14 @@ export interface ActorOperation {
   params?: JsonSchema;
   input?: JsonSchema;
   output?: JsonSchema;
+  /*
+   * THERE IS NO `stream`, and there was — what a Method published WHILE IT RAN, which a pane
+   * paired with the run's topic `<actor>/<method>` to draw typed fields for an actor it had never
+   * heard of. The verb that produced it is gone: it published onto a Temporal Workflow Stream,
+   * which dies with the workflow, so the pane was empty for every reader who opened a finished
+   * run. Field 6 of `Method` in `catalog.proto` is RESERVED rather than reused, so the shape can
+   * come back when there is a durable store under it.
+   */
 }
 
 /** A catalogued actor, as served by GET /api/actors — auto-discovered from what's

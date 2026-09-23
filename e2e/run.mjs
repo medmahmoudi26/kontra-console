@@ -50,6 +50,25 @@ if (!SERVING && !(process.env.KONTRA_E2E_PANEL_PORT && process.env.KONTRA_E2E_WE
   process.env.KONTRA_E2E_WEB_PORT ??= String(web);
 }
 
+/**
+ * THE RUN API IS NOBODY'S IN THIS SUITE, AND THAT HAS TO BE SAID OUT LOUD.
+ *
+ * The dev server proxies `/api` to `VITE_API_TARGET`, defaulting to `localhost:8088` — which on a
+ * developer's machine is their own running orchestrator. So whether these specs passed depended on
+ * what happened to be listening: with an installation up, `GET /api/login` answers
+ * `{"enabled":true}` and the console correctly shows its sign-in form, and every spec here then
+ * times out against a page that is working exactly as designed.
+ *
+ * The specs that need an API stub it themselves (`runs.spec.ts` routes `**\/api/**`). The Dashboard
+ * specs need the STREAMER, which is started per run and proxied separately. So the run API is
+ * pointed at a port this run allocated and nothing is listening on: requests fail, which is a state
+ * the console handles and a machine-independent one.
+ */
+if (!SERVING) {
+  const [dead] = await allocate();
+  process.env.VITE_API_TARGET ??= `http://127.0.0.1:${dead}`;
+}
+
 // `pnpm test:e2e -- --project=real` hands us a bare `--` first; Playwright treats it as a filter and
 // silently runs everything, which is worse than an error.
 const args = process.argv.slice(2).filter((arg, i, all) => !(arg === '--' && i === 0 && all.length > 1));

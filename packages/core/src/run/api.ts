@@ -22,7 +22,14 @@ import type { PollerReport } from './workflowState';
 
 export type { CatalogActor };
 
-const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
+/**
+ * Where the API is. EXPORTED, because it was copied.
+ *
+ * `rowTail.ts` had its own identical line and the Svelte row-tail subscriber was about to hardcode
+ * `/api` — three spellings of one fact, which is how a deployment under a path prefix breaks on
+ * exactly one surface and nobody can say why.
+ */
+export const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 
 /** The MATERIALIZATION dimension rolled up: how many of a run's Datasets reached each state, and
  *  how much landed. `complete` with `rows: 0` is a successful empty result, not a failure. */
@@ -950,11 +957,17 @@ export interface ServeResult {
  * field — a field that defaulted to the literal `'recon'`, so the button's out-of-the-box behaviour
  * was to serve every workflow onto one stale queue named after something else (GitHub #15).
  */
-export async function serveWorkflow(file: string): Promise<ServeResult> {
+export async function serveWorkflow(
+  file: string,
+  { restart = false }: { restart?: boolean } = {}
+): Promise<ServeResult> {
   const res = await fetch(`${BASE}/workflows/serve`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ file }),
+    // `restart` REPLACES the worker that is already there. A worker holds the contract it imported
+    // at boot, so re-serving is how edited code reaches the queue — and without this the button
+    // could only report `tmux session already exists` and print a command to run elsewhere.
+    body: JSON.stringify({ file, restart }),
   });
   if (!res.ok) return asError(res, 'serve the workflow');
   return (await res.json()) as ServeResult;

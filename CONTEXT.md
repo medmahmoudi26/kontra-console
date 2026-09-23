@@ -63,3 +63,15 @@ addresses, the API client.
 
 Console core is a boundary, not a folder. Anything that needs a framework to run is not in it. The
 boundary exists so that what the console KNOWS is separable from what it DRAWS.
+
+It outlived the migration that created it. Two consoles needed one answer to "what is a Run"; one
+console still needs the separation, because a derivation with a test is a fact and a component is a
+drawing of one.
+
+## Ported
+
+A Surface that DOES what the one it replaced did — not one that looks like it.
+
+The distinction is not pedantry: three surfaces shipped, passed review and passed a browser suite
+while missing the capability that made them worth having, because the suite was driving the console
+they replaced. A Surface is ported when the test that proves it is pointed at the new one.

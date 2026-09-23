@@ -18,8 +18,9 @@
   import { schemaFields, type FieldNode } from '@kontra/console-core/panels/schemaTree';
   import type { JsonSchema } from '@kontra/console-core/types';
 
+  import { callMethod, type Call } from './call';
   import Field from './Field.svelte';
-  import { missing, payloadOf, type FieldValue } from './payload';
+  import { missing, payloadOf, syncDefaults, type FieldValue } from './payload';
 
   interface Props {
     actor: string;
@@ -42,16 +43,35 @@
   // A CONTRACT CHANGE MUST NOT WIPE WHAT SOMEBODY IS TYPING. Only keys the new schema no longer has
   // are dropped; everything still declared keeps its value. Slice 05 makes this happen live, and
   // without this that would clear the form on every save.
-  $effect(() => {
-    const declared = new Set(leaves.map((n) => n.name));
-    for (const k of Object.keys(values)) if (!declared.has(k)) delete values[k];
-  });
+  //
+  // IT ALSO PREFILLS, so a Method whose author declared defaults is callable without typing —
+  // the same two rules the workflow launcher needs, which is why they are one function.
+  $effect(() => syncDefaults(leaves, values));
 
   const payload = $derived(payloadOf(values));
   const required = $derived(leaves.filter((n) => n.required).map((n) => n.name));
   const gaps = $derived(missing(required, payload));
 
   const call = $derived({ actor, version, method, units: [payload] });
+
+  /**
+   * THE BUTTON CALLS THE METHOD. It used to be a disabled preview, which made this pane a form that
+   * described a call nobody could make — the one thing the embed exists for.
+   */
+  let run = $state<Call>({ state: 'idle' });
+  let stop: () => void = () => {};
+
+  function go(): void {
+    stop();
+    // `$state.snapshot` because the payload is a reactive proxy and it is about to be JSON-encoded
+    // and sent; a proxy crossing `structuredClone` inside `fetch` is a class of bug that only shows
+    // up on the wire.
+    stop = callMethod(actor, version, method, [$state.snapshot(payload)], (c) => (run = c));
+  }
+
+  // A PANE THAT CLOSES MID-CALL STOPS LISTENING. `EventSource` reconnects by itself, so a source
+  // left open against a finished run reopens forever — a poll, reinvented.
+  $effect(() => () => stop());
 </script>
 
 <div class="dev">
@@ -84,6 +104,7 @@
           options={f.enum ?? []}
           required={f.required ?? false}
           placeholder={f.default ?? ''}
+          description={f.description ?? ''}
           value={values[f.name]}
           onchange={(v) => (values[f.name] = v)}
         />
@@ -92,10 +113,36 @@
   {/if}
 
   <div class="go">
-    <button disabled={gaps.length > 0}>
-      {gaps.length ? `${gaps.join(', ')} required` : `call ${method}`}
+    <button disabled={gaps.length > 0 || run.state === 'starting' || run.state === 'running'} onclick={go}>
+      {#if gaps.length}{gaps.join(', ')} required
+      {:else if run.state === 'starting'}starting…
+      {:else if run.state === 'running'}{run.status.toLowerCase()}…
+      {:else}call {method}{/if}
     </button>
   </div>
+
+  {#if run.state === 'error'}
+    <p class="err" role="alert">{run.error}</p>
+  {:else if run.state === 'running' || run.state === 'done'}
+    <dl class="result">
+      <dt>run</dt><dd class="mono">{run.runId}</dd>
+      {#if run.state === 'done'}
+        <dt>status</dt>
+        <dd class="mono" class:bad={run.reading.status === 'FAILED'}>{run.reading.status.toLowerCase()}</dd>
+        {#if run.reading.result}
+          <dt>units</dt><dd class="mono">{run.reading.result.units}</dd>
+          <dt>rows</dt><dd class="mono">{run.reading.result.results}</dd>
+          <!-- ISOLATED IS ALWAYS SHOWN. Zero rows from a Method that dropped every Unit and zero
+               from one that found nothing look identical without it (ADR 0028 §4). -->
+          <dt>isolated</dt>
+          <dd class="mono" class:bad={run.reading.result.isolated > 0}>{run.reading.result.isolated}</dd>
+          <dt>machine</dt><dd class="mono">{run.reading.result.machine}</dd>
+          {#if run.reading.result.dataset}<dt>dataset</dt><dd class="mono">{run.reading.result.dataset}</dd>{/if}
+        {/if}
+        {#if run.reading.failure}<dt>failure</dt><dd class="bad">{run.reading.failure}</dd>{/if}
+      {/if}
+    </dl>
+  {/if}
 
   <details>
     <summary>what gets sent</summary>
@@ -126,6 +173,15 @@
     color: var(--accent); cursor: pointer; width: 100%;
   }
   .go button:disabled { border-color: var(--line); background: var(--track); color: var(--dim); cursor: not-allowed; }
+  .err { margin: 0; font-size: var(--t-small); color: var(--bad); line-height: var(--lh-body); overflow-wrap: anywhere; }
+  .result {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-1) var(--s-3);
+    margin: 0; padding: var(--s-3); background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius);
+  }
+  .result dt { font-size: var(--t-small); color: var(--dim); }
+  .result dd { margin: 0; font-size: var(--t-small); overflow-wrap: anywhere; }
+  .bad { color: var(--bad); }
   details { border-top: 1px solid var(--line); padding-top: var(--s-3); }
   summary { font-size: var(--t-small); color: var(--dim); cursor: pointer; }
   pre { margin: var(--s-2) 0; font-size: var(--t-small); background: var(--track); border-radius: var(--radius); padding: var(--s-3); overflow-x: auto; line-height: var(--lh-body); }

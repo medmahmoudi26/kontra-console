@@ -51,6 +51,14 @@ export interface Lane {
 
 /** A moment with no duration: drawn on the axis, never as a bar. */
 export interface Moment {
+  /**
+   * WHAT KIND OF EVENT THIS IS — `timer`, `signal`, `workflow`, `task`.
+   *
+   * Carried because a run with no dispatched work is not a run with no structure: `approve` is a
+   * timer, a signal and a completion, and drawing those as one undifferentiated row of ticks says
+   * "23 things happened" where the history says what they were.
+   */
+  cat: RunEvent['cat'];
   id: number;
   t: number;
   type: string;
@@ -70,6 +78,23 @@ export interface Timeline {
 
 /** Categories that are WORK. A timer or a marker has a time but is not a thing being done. */
 const WORK = new Set<RunEvent['cat']>(['activity', 'child']);
+
+/**
+ * WHAT COUNTS AS A FAILURE IN A HISTORY, and what emphatically does not.
+ *
+ * This was `/Failed|TimedOut|Terminated|Cancel/i`, and the `Cancel` half was wrong in the one place
+ * it fires most: `TimerCanceled`. A workflow that asks a person something starts a DEADLINE timer
+ * and cancels it when the answer arrives — so cancelling that timer is exactly what success looks
+ * like, and every answered `ask` rendered `1 failed` under a run that completed perfectly. Measured
+ * on a live run: 23 events, ending `WorkflowExecutionCompleted`, reported as a failure by this
+ * regex alone.
+ *
+ * `WorkflowExecutionCanceled` IS a failure — somebody stopped the run — and `ActivityTaskCancel*`
+ * is a dispatched Unit that did not finish. Both are named; the timer is not, because a timer is
+ * the only thing here that is routinely cancelled ON PURPOSE by the code that started it.
+ */
+const FAILURE_TYPE =
+  /(Failed|TimedOut|Terminated|WorkflowExecutionCancel|ActivityTaskCancel|ChildWorkflowExecutionCancel)/i;
 
 /**
  * What a row is about.
@@ -93,7 +118,7 @@ export function buildTimeline(events: readonly RunEvent[], nowSeconds?: number):
 
   for (const e of events) {
     maxT = Math.max(maxT, e.t);
-    const isFailure = e.cat === 'failure' || /Failed|TimedOut|Terminated|Cancel/i.test(e.type);
+    const isFailure = e.cat === 'failure' || FAILURE_TYPE.test(e.type);
 
     if (e.dur > 0 && WORK.has(e.cat)) {
       const key = laneKey(e);
@@ -120,6 +145,7 @@ export function buildTimeline(events: readonly RunEvent[], nowSeconds?: number):
     moments.push({
       id: e.id,
       t: e.t,
+      cat: e.cat,
       type: e.type,
       label: e.summary || e.detail || e.type,
       failed: isFailure,

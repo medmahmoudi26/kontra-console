@@ -8,12 +8,14 @@
     "build": "vite build",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
-    "check": "node scripts/type-scale.mjs && node scripts/no-polling.mjs && node scripts/overflow.mjs"
+    "guard": "node scripts/type-scale.mjs && node scripts/no-polling.mjs && node scripts/no-raw-html.mjs && node scripts/overflow.mjs"
   },
   "dependencies": {
     "@kontra/console-core": "workspace:*",
     "@xyflow/svelte": "1.6.6",
-    "ag-grid-community": "36.0.0"
+    "ag-grid-community": "36.2.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

@@ -1,43 +1,50 @@
 /**
- * The seven Surfaces, and which bundle draws each.
+ * The Surfaces, in the order the nav draws them.
  *
- * ── THE NAV IS THE SAME WHICHEVER BUNDLE RENDERED IT ────────────────────────────────────────────
+ * ── IT MUST MATCH THE ORCHESTRATOR'S LIST ───────────────────────────────────────────────────────
  *
- * A person navigating should not be able to tell which console they are on except by its speed.
- * So this lists all seven, and `bundle` decides whether a click is a client-side change or a
- * document load — which is the route split's sharp edge and the thing most likely to feel broken.
+ * `surfaces.test.ts` pins this against `SPA_SURFACES` in the server. A surface the nav offers that
+ * the server does not serve is a link that 404s on a cold load — and only on a cold load, because
+ * in-app navigation never leaves the document, which is what made the same bug invisible for a
+ * release once already.
  *
- * MUST MATCH THE ORCHESTRATOR'S TWO SETS. `surfaces.test.ts` pins it: a surface this file calls
- * `svelte` while the server still serves it from React would be a link that navigates to itself and
- * renders the other console, forever, with no error anywhere.
+ * ── THE `bundle` FIELD IS GONE, AND SO IS WHAT IT DESCRIBED ─────────────────────────────────────
+ *
+ * While the console migrated (ADR 0048) each entry said which of two bundles drew it, and a click
+ * across that line was a document load. There is one bundle now; what survives is the rule for a
+ * segment the nav does NOT know — a retired `/scratch`, or anything else the server serves — which
+ * is still a document load, because this app cannot render it. (`runs` used to be such a segment; it
+ * is a nav Surface again.)
  */
 export interface Surface {
   id: string;
   label: string;
-  bundle: 'svelte' | 'react';
 }
 
 export const SURFACES: readonly Surface[] = [
-  { id: 'catalog', label: 'Catalog', bundle: 'svelte' },
-  { id: 'workflows', label: 'Workflows', bundle: 'svelte' },
-  { id: 'actors', label: 'Actors', bundle: 'svelte' },
-  { id: 'datasets', label: 'Datasets', bundle: 'svelte' },
-  { id: 'monitor', label: 'Monitor', bundle: 'react' },
-  { id: 'secrets', label: 'Secrets', bundle: 'svelte' },
-  { id: 'settings', label: 'Settings', bundle: 'svelte' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'workflows', label: 'Workflows' },
+  { id: 'runs', label: 'Runs' },
+  { id: 'actors', label: 'Actors' },
+  { id: 'datasets', label: 'Datasets' },
+  { id: 'monitor', label: 'Monitor' },
+  { id: 'logs', label: 'Logs' },
+  { id: 'secrets', label: 'Secrets' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 /**
  * Go to a surface.
  *
- * A CROSS-BUNDLE MOVE IS A DOCUMENT LOAD AND IS SAID SO. `location.assign` rather than a history
- * push: the other bundle is a different document, and pushing state for it leaves a URL the current
- * app cannot render and a back button that half-works.
+ * A MOVE THIS APP CANNOT RENDER IS A DOCUMENT LOAD, said so rather than attempted: pushing history
+ * for an address the running app has no view for leaves a URL it cannot draw and a back button that
+ * half-works. Everything the nav offers is the same document.
  */
-export function go(id: string, from: string): { kind: 'same-bundle' | 'document-load'; href: string } {
-  const target = SURFACES.find((s) => s.id === id);
-  const here = SURFACES.find((s) => s.id === from);
-  const href = `/${id}`;
-  const kind = target && here && target.bundle === here.bundle ? 'same-bundle' : 'document-load';
-  return { kind, href };
+export function go(
+  id: string,
+  from: string,
+  among: readonly Surface[] = SURFACES
+): { kind: 'same-bundle' | 'document-load'; href: string } {
+  const known = (segment: string): boolean => among.some((s) => s.id === segment);
+  return { kind: known(id) && known(from) ? 'same-bundle' : 'document-load', href: `/${id}` };
 }

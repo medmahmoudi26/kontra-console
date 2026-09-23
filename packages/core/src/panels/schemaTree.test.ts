@@ -373,3 +373,36 @@ describe('an OPTIONAL model at the ROOT, which is what a workflow argument is', 
     expect(schemaTree(plain)?.map((n) => n.name)).toEqual(['name']);
   });
 });
+
+describe('description travels with the field', () => {
+  // THE BUG THIS PINS. The form rendered the DEFAULT as a placeholder and nothing else, so an
+  // operator faced a column of labelled boxes and had to open the workflow's source to learn what
+  // any of them meant — and a placeholder vanishes the moment you type, taking the only hint with
+  // it. `Annotated[int, Field(description=...)]` puts the sentence in the schema; this carries it
+  // to the field so the form can put it beside the box.
+  it('carries a declared description', () => {
+    const [f] = schemaFields({
+      type: 'object',
+      properties: {
+        units: { type: 'integer', default: 40, description: 'How many units of work to run.' },
+      },
+    })!;
+    expect(f.description).toBe('How many units of work to run.');
+    expect(f.default).toBe('40');
+  });
+
+  it('omits the key when the author wrote none, rather than sending empty', () => {
+    // Undescribed and described-with-nothing render differently, and only one of them is the
+    // author's silence.
+    const [f] = schemaFields({ type: 'object', properties: { a: { type: 'string' } } })!;
+    expect('description' in f).toBe(false);
+  });
+
+  it('treats a whitespace-only description as none', () => {
+    const [f] = schemaFields({
+      type: 'object',
+      properties: { a: { type: 'string', description: '   ' } },
+    })!;
+    expect(f.description).toBeUndefined();
+  });
+});
