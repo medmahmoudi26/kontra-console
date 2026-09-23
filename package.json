@@ -13,7 +13,8 @@
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "test": "pnpm --filter @kontra/console-core run guard && pnpm --filter @kontra/console-core run test && pnpm --filter @kontra/console-svelte run typecheck && pnpm --filter @kontra/console-svelte run test && pnpm run build && pnpm --filter @kontra/console-svelte run guard",
     "test:e2e": "node e2e/run.mjs",
-    "test:e2e:serve": "KONTRA_E2E_SERVE=1 node e2e/run.mjs"
+    "test:e2e:serve": "KONTRA_E2E_SERVE=1 node e2e/run.mjs",
+    "test:e2e:canary": "node e2e/canary.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

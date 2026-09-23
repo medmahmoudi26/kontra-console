@@ -231,7 +231,26 @@
   );
 
   const nodes = $derived(schemaFields(descriptor?.input) ?? []);
-  const leaves = $derived(nodes.filter((n): n is FieldNode => n.kind === 'leaf'));
+  /**
+   * THE FIELDS THIS FORM DRAWS — and a LIST or a nested OBJECT is one of them.
+   *
+   * This filtered to `kind === 'leaf'`, so every other shape was silently ABSENT. Measured on the
+   * canary: `targets: list[str]` is the first field the workflow declares, it carries a default and
+   * a description, and the form rendered seven fields and not it — no label, no box, no note. A
+   * field a schema declares and a form does not draw is worse than one drawn badly, because there
+   * is nothing on screen to be suspicious of.
+   *
+   * IT IS ONE JSON BOX, NOT REPEATABLE ROWS, and that is a smaller step rather than the right end
+   * state. `formFields.ts` already has the row machinery (`addRow`, `rowCount`, `elementAt`) that
+   * the React console's Batch builder uses, and a list of typed rows is the better UI. What makes
+   * the box honest in the meantime is that nothing has to be invented for it: `schemaDefault`
+   * already stringifies an array default to `["alpha","beta"]`, and `coerceField` already JSON-
+   * parses anything that is not string/integer/number/boolean — so the value round-trips through
+   * the form and reaches the workflow as the list it declared.
+   */
+  const leaves = $derived(
+    nodes.filter((n): n is FieldNode => n.kind === 'leaf' || n.kind === 'list' || n.kind === 'group')
+  );
   // The declared type per field, so a text input's string becomes the int the workflow
   // declares. Without this every numeric workflow fails to decode its own arguments.
   const fieldTypes = $derived(new Map(leaves.map((n) => [n.name, n.type])));
