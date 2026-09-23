@@ -38,16 +38,14 @@ export interface ActorOperation {
   params?: JsonSchema;
   input?: JsonSchema;
   output?: JsonSchema;
-  /**
-   * What this Method STREAMS while it runs — `@actor.method(streams=…)`.
-   *
-   * Paired with a run's progress topic `<actor>/<method>`, it is what lets a pane draw TYPED
-   * fields for an actor it has never heard of. It is deliberately not part of the version
-   * signature the orchestrator's immutability gate compares (see `CARRIED` in
-   * `control/orchestrator/src/catalog.ts`): nothing is typed against it the way a caller is
-   * typed against `input`/`output`.
+  /*
+   * THERE IS NO `stream`, and there was — what a Method published WHILE IT RAN, which a pane
+   * paired with the run's topic `<actor>/<method>` to draw typed fields for an actor it had never
+   * heard of. The verb that produced it is gone: it published onto a Temporal Workflow Stream,
+   * which dies with the workflow, so the pane was empty for every reader who opened a finished
+   * run. Field 6 of `Method` in `catalog.proto` is RESERVED rather than reused, so the shape can
+   * come back when there is a durable store under it.
    */
-  stream?: JsonSchema;
 }
 
 /** A catalogued actor, as served by GET /api/actors — auto-discovered from what's
