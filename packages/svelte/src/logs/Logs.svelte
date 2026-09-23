@@ -140,7 +140,7 @@
   </header>
 
   <p class="muted">
-    every actor on this tenant, interleaved, oldest first — times are UTC, the colour is the actor
+    every actor on this install, interleaved, oldest first — times are UTC, the colour is the actor
     and is the same colour in every tab. Scroll up to pause; the last {BACKFILL_LINES} lines are
     loaded on arrival so this is never an empty box waiting.
   </p>

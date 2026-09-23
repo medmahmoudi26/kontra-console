@@ -20,7 +20,7 @@
 
   import { callMethod, type Call } from './call';
   import Field from './Field.svelte';
-  import { missing, payloadOf, type FieldValue } from './payload';
+  import { missing, payloadOf, syncDefaults, type FieldValue } from './payload';
 
   interface Props {
     actor: string;
@@ -43,10 +43,10 @@
   // A CONTRACT CHANGE MUST NOT WIPE WHAT SOMEBODY IS TYPING. Only keys the new schema no longer has
   // are dropped; everything still declared keeps its value. Slice 05 makes this happen live, and
   // without this that would clear the form on every save.
-  $effect(() => {
-    const declared = new Set(leaves.map((n) => n.name));
-    for (const k of Object.keys(values)) if (!declared.has(k)) delete values[k];
-  });
+  //
+  // IT ALSO PREFILLS, so a Method whose author declared defaults is callable without typing —
+  // the same two rules the workflow launcher needs, which is why they are one function.
+  $effect(() => syncDefaults(leaves, values));
 
   const payload = $derived(payloadOf(values));
   const required = $derived(leaves.filter((n) => n.required).map((n) => n.name));
