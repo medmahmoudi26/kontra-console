@@ -43,7 +43,7 @@ describe('the nav agrees with the orchestrator', () => {
     // The guard on the guard: an empty set makes every assertion below vacuous.
     expect(served.size).toBeGreaterThan(0);
     expect(routes.size).toBeGreaterThan(0);
-    expect(SURFACES.length).toBe(8);
+    expect(SURFACES.length).toBe(9);
   });
 
   it('every surface the nav offers is served', () => {
@@ -54,10 +54,10 @@ describe('the nav agrees with the orchestrator', () => {
 
   it('everything the server serves is either a surface or a retired address', () => {
     const nav = new Set(SURFACES.map((s) => s.id));
-    // `runs` and `scratch` are retired: served so the shell can load and REDIRECT them, and
-    // deliberately absent from the nav. Anything else the server serves and the nav omits is a
-    // surface nobody can reach.
-    const retired = new Set(['runs', 'scratch']);
+    // `scratch` is retired: served so the shell can load and REDIRECT it, and deliberately absent
+    // from the nav. Anything else the server serves and the nav omits is a surface nobody can reach.
+    // (`runs` was retired here too; it is a nav Surface again, so it is in `nav`, not this set.)
+    const retired = new Set(['scratch']);
     for (const id of served) {
       expect(nav.has(id) || retired.has(id), `${id} is served and unreachable`).toBe(true);
     }
@@ -68,9 +68,13 @@ describe('the nav agrees with the orchestrator', () => {
     expect(go('datasets', 'catalog').kind).toBe('same-bundle');
     expect(go('datasets', 'catalog').href).toBe('/datasets');
 
+    // `runs` is a nav Surface now, so moving to it is client-side like any other.
+    expect(go('runs', 'catalog').kind).toBe('same-bundle');
+    expect(go('runs', 'catalog').href).toBe('/runs');
+
     // A retired address still resolves — the server serves it and the shell redirects — and it is
     // not a view this app can mount, so going there leaves the document.
-    expect(go('runs', 'catalog').kind).toBe('document-load');
-    expect(go('runs', 'catalog').href).toBe('/runs');
+    expect(go('scratch', 'catalog').kind).toBe('document-load');
+    expect(go('scratch', 'catalog').href).toBe('/scratch');
   });
 });

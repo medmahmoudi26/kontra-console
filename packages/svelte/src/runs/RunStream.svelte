@@ -223,12 +223,19 @@
   </header>
 
   {#if finished}
+    <!-- THE STATE MOST READERS ACTUALLY SEE. A run of this size outlives no browser: by the time
+         somebody has loaded the console and signed in, a 56-second run is over and its stream is
+         gone. So this paragraph is not an edge case — it is the pane, most of the time — and it
+         has to say what happened, what there is instead, and how to see the live thing. -->
     <p class="done" data-testid="stream-final">
       This run has finished, so its stream is closed — the log lives in the workflow, not in
       history, and ends with it.
       {finished.offset >= 0
         ? `It published ${finished.offset + 1} record(s) while it ran.`
         : 'It published nothing.'}
+      {#if finished.offset >= 0}
+        The transcript below is what survives; press <strong>Run</strong> to watch a new one live.
+      {/if}
     </p>
   {/if}
   {#if error}
@@ -277,9 +284,17 @@ the record's own keys rather than a declared schema.">no declared shape</span>
           <div><dt>at</dt><dd class="mono at">{t.at}</dd></div>
         {/if}
         {#each orderedFields(t.fields, schema) as [k, v] (k)}
+          {@const text = fmt(v)}
           <div title={describeField(schema, k)}>
             <dt>{k}</dt>
-            <dd class="mono accent">{fmt(v)}</dd>
+            <!-- ONE LINE WITH THE WHOLE VALUE ON HOVER, once it stops being a metric.
+                 `dd` is `--t-lead` with `overflow-wrap: anywhere`, which is right for `5` and
+                 `handshake` and wrong for a 45-character Temporal identity: MEASURED, the
+                 `worker` field `57@f36d372b886f@canary-1.0.0-s-4912e940fba8` wrapped to SEVEN
+                 lines and made its tile seven times the height of every other tile in the row.
+                 A stat tile is for a value you read at a glance; past ~18 characters this is an
+                 identifier you copy, so it truncates and carries the full string in `title`. -->
+            <dd class="mono accent" class:long={text.length > 18} title={text.length > 18 ? text : undefined}>{text}</dd>
           </div>
         {/each}
       </dl>
@@ -304,28 +319,42 @@ the record's own keys rather than a declared schema.">no declared shape</span>
       {/if}
     </article>
   {:else}
-    <p class="done">
-      {finished ? '' : 'Nothing has published yet on this run.'}
-    </p>
+    <!-- NOT AN EMPTY `<p>`. This branch used to render `finished ? '' : '…'`, so a run that had
+         finished got a blank paragraph under a "stream" heading with an empty list beneath it —
+         which is the shape of a broken pane, not of a closed one. A reader who opens a run after
+         it ends is the COMMON case (a 56-second run outlives no browser), so this is the state
+         most people see, and it was the one state that said nothing. -->
+    {#if !finished}
+      <p class="done">Nothing has published yet on this run.</p>
+    {/if}
   {/each}
 
-  <h4 class="feedhead">stream</h4>
-  <ol class="feed" data-testid="stream-feed">
-    {#each tail.slice(-40) as ev (ev.offset)}
-      <li class="row">
-        <span class="off mono">{ev.offset}</span>
-        <span class="mono topicname">{ev.topic}</span>
-        <!-- The raw record, whatever keys it carried. Rendering named fields here would hide
-             exactly the ones a new Method invented. -->
-        <span class="mono msg" class:actor={ev.topic !== WORKFLOW_TOPIC}>
-          {Object.entries(ev.data)
-            .filter(([k]) => k !== 'actor')
-            .map(([k, v]) => `${k}=${fmt(v)}`)
-            .join('  ')}
-        </span>
-      </li>
-    {/each}
-  </ol>
+  <!--
+    THE FEED IS HIDDEN WHEN THERE IS NOTHING IN IT, rather than drawn empty.
+
+    The records live in the workflow and end with it, so a finished run has no tail to show and
+    never will — `finished` above already says so, with the count. An empty `<ol>` under a heading
+    invites the reader to wait for something that cannot arrive.
+  -->
+  {#if tail.length > 0}
+    <h4 class="feedhead">stream</h4>
+    <ol class="feed" data-testid="stream-feed">
+      {#each tail.slice(-40) as ev (ev.offset)}
+        <li class="row">
+          <span class="off mono">{ev.offset}</span>
+          <span class="mono topicname">{ev.topic}</span>
+          <!-- The raw record, whatever keys it carried. Rendering named fields here would hide
+               exactly the ones a new Method invented. -->
+          <span class="mono msg" class:actor={ev.topic !== WORKFLOW_TOPIC}>
+            {Object.entries(ev.data)
+              .filter(([k]) => k !== 'actor')
+              .map(([k, v]) => `${k}=${fmt(v)}`)
+              .join('  ')}
+          </span>
+        </li>
+      {/each}
+    </ol>
+  {/if}
 </section>
 
 <style>
@@ -360,6 +389,10 @@ the record's own keys rather than a declared schema.">no declared shape</span>
   dt { color: var(--dim); font-size: var(--t-micro); text-transform: uppercase; letter-spacing: .08em; }
   dd { margin: 2px 0 0; font-size: var(--t-lead); font-variant-numeric: tabular-nums;
        overflow-wrap: anywhere; }
+  /* See the `long` note in the markup: an identifier is not a metric, so it gets one line, the
+     smaller size the rest of the console uses for mono identifiers, and an ellipsis. */
+  dd.long { font-size: var(--t-small); white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; overflow-wrap: normal; }
   .accent { color: var(--accent); } .warn { color: var(--bad); }
   .bar { height: 6px; border: 1px solid var(--line); border-radius: var(--radius);
          overflow: hidden; background: var(--bg); margin-top: var(--s-2); }

@@ -19,12 +19,13 @@
  * accident: a surface asks the store to go somewhere, and where the store went is what the bar
  * reports. Nothing in `panels/` learns that a URL exists.
  *
- * A RUN IS NO LONGER A SURFACE, IT IS A SEGMENT UNDER ITS WORKFLOW. `/runs/<id>` became
- * `/workflows/<workflow>/<id>` when the global Runs view was retired, because a run is reached
- * through the workflow that produced it. The old address still parses and still means that run —
- * it redirects (see {@link parseAddress}) rather than 404ing, and the id survives the move. What it
- * cannot carry across is which workflow produced the run, which nothing in the browser knows: that
- * lands as `/workflows?run=<id>`, a run whose thread has not been resolved yet.
+ * A RUN IS ADDRESSED BY ITS ID, ON TWO SURFACES. `/runs/<id>` is the run's own record — the surface
+ * that lists every run and shows one as the input it was started with over the output it produced.
+ * `/workflows/<workflow>/<id>` is the same run reached through the thread that produced it, watched
+ * live. Both are legal and both round-trip; `runs` keeps its own store field (`runsRun`) so opening
+ * one never disturbs which run the other has. (The global Runs view was retired once and folded into
+ * Workflows; the record earned its surface back — see `surfaces.ts`.) A run reached from somewhere
+ * that does not know its workflow still lands as `/workflows?run=<id>`, a thread not yet resolved.
  *
  * NO ROUTER LIBRARY, and that is an argument rather than an omission. Five surfaces and three
  * entity ids is one `switch` in each direction; react-router would add a dependency, a provider and
@@ -103,6 +104,11 @@ export type Address =
   // that happen to be in this tab's buffer; pasting it to somebody else would name lines they do
   // not have. The address that survives being sent to another person is a `/api/logs/query`, which
   // is a different tool. The surface is addressable; a moment in a stream is not.
+  // `runs` addresses a run by its id and nothing else: the record is the same wherever it is
+  // reached from, so the id is the whole address — `/runs` is the list, `/runs/<id>` is one run. It
+  // gets its OWN store field (`runsRun`) rather than sharing the Workflows surface's `runId`, so
+  // landing on `/runs/<id>` never silently reselects a run on the page the operator just left.
+  | { view: 'runs'; run: string | null }
   | { view: 'actors' | 'catalog' | 'logs' | 'secrets' | 'settings' }
   | { view: 'monitor'; terminal: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
@@ -125,6 +131,9 @@ export interface AddressedState {
   view: View;
   workflowName: string | null;
   runId: string | null;
+  /** The **Run** the Runs surface has open — its OWN field, not `runId`. `/runs/<id>` addresses a
+   *  run without touching which run the Workflows surface has selected. */
+  runsRun: string | null;
   /** The **Terminal** the open run's Monitor tab is showing. Named for the run rather than for the
    *  Monitor surface, which has its own {@link AddressedState.focusTerminal} and a different job:
    *  that one is a reveal that is consumed once, this one is a selection that persists. */
@@ -150,6 +159,8 @@ export function addressOf(s: AddressedState): Address {
       return { view: 'monitor', terminal: s.focusTerminal };
     case 'datasets':
       return { view: 'datasets', dataset: s.datasetFocus };
+    case 'runs':
+      return { view: 'runs', run: s.runsRun };
     default:
       return { view: s.view };
   }
@@ -178,6 +189,8 @@ export function stateFor(address: Address): Partial<AddressedState> {
       return { view: 'monitor', focusTerminal: address.terminal };
     case 'datasets':
       return { view: 'datasets', datasetFocus: address.dataset };
+    case 'runs':
+      return { view: 'runs', runsRun: address.run };
     default:
       return { view: address.view };
   }
@@ -234,6 +247,12 @@ export function formatAddress(address: Address): string {
       const search = query.toString();
       return `${PATHS.datasets}/${encodeURIComponent(address.dataset.name)}${search ? `?${search}` : ''}`;
     }
+    case 'runs':
+      // A run id is whatever `--id` was, so it is encoded rather than trusted — the server still
+      // matches on the first segment (`runs`), which is why a dotted id like `sweep-v1.2` survives.
+      return address.run === null
+        ? PATHS.runs
+        : `${PATHS.runs}/${encodeURIComponent(address.run)}`;
     default:
       return PATHS[address.view];
   }
@@ -337,6 +356,10 @@ export function parseAddress(url: string): Address | null {
     }
     case 'monitor':
       return second === null ? { view, terminal: first } : null;
+    case 'runs':
+      // One id, nothing under it: a run is addressed by its id and a second segment is no URL this
+      // app could mean. `/runs` is the list; `/runs/<id>` is one run's record.
+      return second === null ? { view, run: first } : null;
     case 'datasets': {
       if (second !== null) return null;
       if (first === null) return { view, dataset: null };

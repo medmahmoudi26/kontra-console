@@ -80,6 +80,14 @@ interface Stubs {
   detail?: Record<string, () => Promise<unknown> | unknown>;
   /** What `POST /api/runs` answers, if the test presses Run. */
   started?: { runId: string; type: string; queue: string };
+  /** Line-delimited log records `/api/logs/query` answers with (VictoriaLogs shape: `_time`,
+   *  `_msg`, `level`, `run_id`, plus whatever stream fields the emitter stamped). */
+  logs?: Record<string, unknown>[];
+  /** The output-dataset preview `/api/datasets/:name/preview` answers with. */
+  preview?: { columns: { name: string; type: string }[]; rows: unknown[][]; truncated: boolean };
+  /** The `registered` descriptors `/api/workflows` answers with — each may carry `input`/`output`
+   *  JsonSchema, which is what the typed input FORM and typed OUTPUT are drawn from. */
+  workflows?: unknown[];
 }
 
 /**
@@ -131,7 +139,7 @@ async function stub(page: import('@playwright/test').Page, s: Stubs): Promise<vo
         //
         // `name` is the workflow TYPE (`NsCheck`, from SOURCE), not the file name: the page joins
         // the descriptor on the type the open source declares.
-        registered: [{ name: 'NsCheck', queue: 'wf-nscheck-0a4be1b6cdea', description: '' }],
+        registered: s.workflows ?? [{ name: 'NsCheck', queue: 'wf-nscheck-0a4be1b6cdea', description: '' }],
       });
     }
     // THE FOLDER LISTING, without which the Workflows page has no rows at all.
@@ -163,6 +171,16 @@ async function stub(page: import('@playwright/test').Page, s: Stubs): Promise<vo
     // non-array here is a bad shape rather than an empty list — the Runs page reports that as an
     // error in its Fleet panel, which is correct behaviour and pure noise in these tests.
     if (path === '/api/fleet/operations') return json([]);
+    // A run's logs: VictoriaLogs answers line-delimited JSON, one record per line — `fetchLogs`
+    // reads `res.text()` and splits on newlines, so this must NOT be a JSON array.
+    if (path === '/api/logs/query' || path === '/api/logs/tail') {
+      const body = (s.logs ?? []).map((l) => JSON.stringify(l)).join('\n');
+      return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body });
+    }
+    // A run's output-dataset preview.
+    if (/^\/api\/datasets\/[^/]+\/preview$/.test(path)) {
+      return json(s.preview ?? { columns: [], rows: [], truncated: false });
+    }
     if (path === '/api/datasets') return json([]);
     if (path === '/api/actors') return json([]);
     return json({});
@@ -228,5 +246,142 @@ test('Run on the Workflows surface lands on the new run, and never shows the pre
 
   // …and once the run answers for itself, it says what IT is doing.
   await expect(page.getByTestId('run-tail-execution')).toHaveText('running', { timeout: 15_000 });
+  expect(errors).toEqual([]);
+});
+
+test('the Runs surface: prefilled typed input, typed output, and a run whose one error shows in full with its record', async ({
+  page,
+}) => {
+  const errors = watchErrors(page);
+  const RUN = 'hunt-2026-09-20T08-49-00';
+  // The actor's OWN error.message, verbatim, as `hunt`'s `_log_drops` writes it when a Unit is
+  // isolated — a socket failure, the kind that actually drops a desync Unit. Not composed here.
+  const DROP_ERROR = 'read tcp 10.0.0.14:41022->203.0.113.7:443: read: connection reset by peer';
+  // The real desync erratic string (main.go), verbatim — carried in the dataset's void_reason column.
+  const ROW_ERROR = 'baseline not reproducible — refusing to scan (statuses [200 200 200])';
+
+  // A run that FINISHED CLEANLY and wrote its output — mostly green, with one findable error, not a
+  // wall of red. Both dimensions agree here (completed + complete).
+  const HUNT = {
+    runId: RUN,
+    type: 'Hunt',
+    status: 'completed',
+    tenant: 'acme',
+    startedAt: Date.parse('2026-09-20T08:49:00Z'),
+    closedAt: Date.parse('2026-09-20T09:07:00Z'),
+    dispatches: 16,
+    materialization: { total: 1, pending: 0, running: 0, complete: 1, failed: 0, rows: 1796, bytes: 262144 },
+    lifecycle: 'completed',
+  };
+
+  // The workflow's declared input + output schemas — what the typed form and typed output draw from.
+  const HUNT_DESCRIPTOR = {
+    name: 'Hunt',
+    queue: 'wf-hunt-0a4be1b6cdea',
+    description: 'Attack the mapped surface for desyncs, two axes, and own the leads.',
+    input: {
+      type: 'object',
+      required: ['program'],
+      properties: {
+        program: { type: 'string', default: '8x8', description: 'Selects scope_<program> / exchanges_<program>; stamped on every row.' },
+        machines: { type: 'integer', default: 4, description: 'Fleet width — how many machines poll the desync actor.' },
+        rate_ms: { type: 'integer', default: 100, description: 'Per-HOST minimum gap between connections.' },
+        tier: { type: 'integer', default: 1, description: 'Fold vector tier ceiling: 1 quick, 2 standard, 3 full.' },
+        max_points: { type: 'integer', default: 40, description: 'Injection points probed per exchange.' },
+        backoff: { type: 'boolean', default: true, description: 'Let a host widen its own gap on 429/503/reset.' },
+      },
+    },
+    output: {
+      type: 'object',
+      properties: {
+        dataset: { type: 'string', description: 'The Dataset this run wrote observations to.' },
+        errors: { type: 'integer', description: 'Units the workflow could not test (erratic + voided), counted from its own dataset.' },
+        suggested_query: { type: 'string', description: 'A query to list the failed units — a plain string, copy it into the Datasets workbench.' },
+        note: { type: 'string', description: 'A free-text summary the workflow returns.' },
+      },
+    },
+  };
+
+  await stub(page, {
+    runs: [HUNT],
+    workflows: [HUNT_DESCRIPTOR],
+    detail: {
+      [RUN]: () =>
+        detailOf(HUNT, {
+          materializationRecords: [{ name: 'observations', kind: 'output', rows: 1796, state: 'complete' }],
+        }),
+    },
+    // The lines a real hunt run writes: progress via `note()`, and — when a Unit is isolated —
+    // `_log_drops` logging the actor's OWN error.message with the record in stream fields.
+    logs: [
+      { _time: Date.parse('2026-09-20T08:49:03Z'), level: 'info', _msg: 'corpus published: 12,330 technique(s) in 32 shard(s)', run_id: RUN },
+      { _time: Date.parse('2026-09-20T08:50:00Z'), level: 'info', _msg: 'screen complete: 1796 observation(s)', run_id: RUN },
+      {
+        _time: Date.parse('2026-09-20T08:58:41Z'),
+        level: 'error',
+        _msg: DROP_ERROR,
+        run_id: RUN,
+        phase: 'sweep',
+        category: 'host-loss',
+        host: 'pay.8x8.com',
+        endpoint: '/',
+        unit_id: '8x8:pay.8x8.com:/',
+      },
+      { _time: Date.parse('2026-09-20T09:06:59Z'), level: 'info', _msg: 'sweep complete: 1796 observation(s)', run_id: RUN },
+    ],
+    // Mostly-ok rows; ONE dataset-error whose void_reason column carries the whole text.
+    preview: {
+      columns: [
+        { name: 'host', type: 'VARCHAR' },
+        { name: 'endpoint', type: 'VARCHAR' },
+        { name: 'signals', type: 'INTEGER' },
+        { name: 'erratic', type: 'BOOLEAN' },
+        { name: 'void_reason', type: 'VARCHAR' },
+      ],
+      rows: [
+        ['vcc-eu.8x8.com', '/api/thankyou', 2, false, ''],
+        ['voapi.8x8.com', '/v2/session', 1, false, ''],
+        ['cc.8x8.com', '/status', 3, false, ''],
+        ['pay.8x8.com', '/', 0, true, ROW_ERROR],
+        ['web.8x8.com', '/login', 1, false, ''],
+      ],
+      truncated: true,
+    },
+  });
+
+  // Reached THROUGH THE NAV — Runs is a Surface, so it must be in the rail (the bug a screenshot
+  // caught that a typecheck could not: the route worked while the nav omitted it).
+  await page.goto('/');
+  await expect(page.getByTestId('nav-runs')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('nav-runs').click();
+  await expect(page.getByTestId('runs-list')).toBeVisible();
+  await expect(page.getByTestId(`run-row-${RUN}`)).toBeVisible();
+  await page.screenshot({ path: 'test-results/runs-list.png', fullPage: true });
+
+  await page.getByTestId(`run-row-${RUN}`).click();
+  await expect(page.getByTestId('run-detail')).toBeVisible();
+  await expect(page.getByTestId('run-detail-id')).toHaveText(RUN);
+
+  // THE PREFILLED TYPED INPUT FORM — every field by its declared type, prefilled with defaults.
+  await expect(page.getByTestId('input-field-program')).toContainText('8x8');
+  await expect(page.getByTestId('input-field-machines')).toContainText('4');
+  await expect(page.getByTestId('input-field-backoff')).toContainText('true'); // the boolean → toggle
+
+  // THE TYPED OUTPUT — declared fields with their descriptions; `suggested_query` is a plain string.
+  await expect(page.getByTestId('output-field-suggested_query')).toContainText('string');
+  await expect(page.getByTestId('output-field-errors')).toContainText('could not test');
+
+  // THE WORKFLOW-LOGGED DROP: the actor's own error message, verbatim, AND which record.
+  const logLine = page.getByTestId('log-line').filter({ hasText: 'connection reset by peer' });
+  await expect(logLine).toContainText(DROP_ERROR);
+  const record = logLine.getByTestId('log-record');
+  await expect(record).toContainText('host=pay.8x8.com');
+  await expect(record).toContainText('phase=sweep');
+
+  // THE ERROR, in the DATASET: the void_reason column carries the whole text on the failing record.
+  const errCell = page.getByTestId('dataset-error-cell').filter({ hasText: 'baseline not reproducible' });
+  await expect(errCell).toContainText(ROW_ERROR);
+
+  await page.screenshot({ path: 'test-results/runs-detail.png', fullPage: true });
   expect(errors).toEqual([]);
 });

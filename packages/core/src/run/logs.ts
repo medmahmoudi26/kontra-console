@@ -107,6 +107,27 @@ export function parseRecord(line: Record<string, unknown>, runId: string): LogRe
   const raw = String(line.level ?? line.LEVEL ?? 'info').toLowerCase();
   const level = (LEVELS as readonly string[]).includes(raw) ? (raw as Level) : 'info';
   const t = line._time ?? line.ts;
+  // THE EMITTER'S OWN STREAM FIELDS — WHICH RECORD a line is about (kontra-console#6). A dropped or
+  // errored unit is only debuggable if the reader sees both the full message AND the record it
+  // happened on; a workflow that logs a drop stamps `host`/`endpoint`/`point`/`record`… as ordinary
+  // stream fields, and VictoriaLogs carries them verbatim beside `_time`/`_msg`. Everything that is
+  // neither structural (parsed above) nor a VL internal (`_`-prefixed) IS the record, so it is
+  // collected here and the rail renders it under the message. Dropped before: `fields` was in the
+  // type and nothing filled it, so "which record" was unanswerable from a line.
+  // STRUCTURAL: parsed above. AMBIENT: on every line and NOT the record — the Temporal/runtime
+  // envelope (`node_id`, `actor_id`, `logger`, `task_queue`…). Skipping both leaves `fields` holding
+  // only what the emitter stamped with `extra={...}` (say.py) — the host/endpoint/point/record it is
+  // ABOUT, plus `error` (the full exception, JsonFormatter puts exc_info there). That is the record.
+  const SKIP = new Set([
+    'level', 'LEVEL', 'ts', 'msg', 'run_id', 'machine', 'unit', 'actor', 'incomplete',
+    'node_id', 'actor_id', 'actor_version', 'logger', 'task_queue', 'namespace',
+    'workflow_id', 'workflow_type', 'attempt',
+  ]);
+  const fields: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(line)) {
+    if (SKIP.has(k) || k.startsWith('_')) continue;
+    fields[k] = v;
+  }
   return {
     ts: typeof t === 'number' ? t : Date.parse(String(t ?? '')) || 0,
     level,
@@ -118,6 +139,7 @@ export function parseRecord(line: Record<string, unknown>, runId: string): LogRe
     // The string "true" as well as the boolean: it arrives as a stream field, and stream fields are
     // strings on the wire.
     ...(line.incomplete === true || line.incomplete === 'true' ? { incomplete: true } : {}),
+    ...(Object.keys(fields).length > 0 ? { fields } : {}),
   };
 }
 

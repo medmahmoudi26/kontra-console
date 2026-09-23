@@ -6,10 +6,10 @@
  * from. Anything that only holds one way round is a link that opens the right page once and then
  * cannot be re-shared from it.
  *
- * AND ONE THING THAT DELIBERATELY DOES NOT ROUND-TRIP: a retired address. `/runs/<id>` still names
- * a run, so it parses — into the address that run has NOW. It prints back as the new one, which is
- * exactly what makes the redirect a fact about the address space rather than a special case at the
- * browser boundary.
+ * AND ONE THING THAT DELIBERATELY DOES NOT ROUND-TRIP: a retired address. `/scratch` still parses —
+ * into the address that surface has NOW (the Workflows list) — and prints back as the new one, which
+ * is exactly what makes the redirect a fact about the address space rather than a special case at
+ * the browser boundary. (`/runs/<id>` used to be here; Runs is a live surface again and round-trips.)
  */
 
 import { describe, expect, it } from 'vitest';
@@ -30,6 +30,7 @@ const RESTING: AddressedState = {
   view: 'workflows',
   workflowName: null,
   runId: null,
+  runsRun: null,
   runPane: null,
   focusTerminal: null,
   datasetFocus: null,
@@ -54,6 +55,7 @@ describe('the address of a surface', () => {
     expect(VIEWS).toEqual([
       'catalog',
       'workflows',
+      'runs',
       'actors',
       'datasets',
       'monitor',
@@ -274,42 +276,30 @@ describe('a Terminal in a run’s address', () => {
   });
 });
 
+describe('the runs surface', () => {
+  // Runs is a live surface again: `/runs` and `/runs/<id>` are addresses the app owns, so they
+  // ROUND-TRIP rather than redirect. The id rides its own store field, not the Workflows `run`.
+  it('round-trips the run list', () => {
+    expect(parseAddress('/runs')).toEqual({ view: 'runs', run: null });
+    expect(formatAddress({ view: 'runs', run: null })).toBe('/runs');
+  });
+
+  it('round-trips one run by its id — and does NOT redirect', () => {
+    expect(parseAddress('/runs/nscheck-123')).toEqual({ view: 'runs', run: 'nscheck-123' });
+    expect(formatAddress({ view: 'runs', run: 'nscheck-123' })).toBe('/runs/nscheck-123');
+  });
+
+  it('keeps a dotted run id in the path — the ids this bit us on', () => {
+    expect(parseAddress('/runs/sweep-v1.2')).toEqual({ view: 'runs', run: 'sweep-v1.2' });
+    expect(formatAddress({ view: 'runs', run: 'sweep-v1.2' })).toBe('/runs/sweep-v1.2');
+  });
+
+  it('refuses a second segment under a run', () => {
+    expect(parseAddress('/runs/a/b')).toBeNull();
+  });
+});
+
 describe('a retired address', () => {
-  it('redirects the global run list to the workflows list', () => {
-    // RETIRED, NOT DELETED. It parses, so nothing 404s and nothing blanks; it prints back as the
-    // address that place has now, so `land()` corrects the bar with one `replace`.
-    expect(parseAddress('/runs')).toEqual({
-      view: 'workflows',
-      workflow: null,
-      run: null,
-      pane: null,
-    });
-    expect(formatAddress(parseAddress('/runs') as Address)).toBe('/workflows');
-  });
-
-  it('keeps the run id when it redirects one run', () => {
-    // The whole reason not to 404: `/runs/nscheck-123` still NAMES something, and dropping the id
-    // would land the operator on a list and lose what they pasted.
-    expect(parseAddress('/runs/nscheck-123')).toEqual({
-      view: 'workflows',
-      workflow: null,
-      run: 'nscheck-123',
-      pane: null,
-    });
-    expect(formatAddress(parseAddress('/runs/nscheck-123') as Address)).toBe(
-      '/workflows?run=nscheck-123'
-    );
-  });
-
-  it('redirects a run id with a dot in it — the ids this bit us on', () => {
-    expect(parseAddress('/runs/sweep-v1.2')).toEqual({
-      view: 'workflows',
-      workflow: null,
-      run: 'sweep-v1.2',
-      pane: null,
-    });
-  });
-
   it('redirects Scratch to the list, carrying nothing, because it never addressed anything', () => {
     // Scratch is a workflow's own design tab now. It had no entity to hand on: a drawing about
     // nothing is exactly what it was retired for.

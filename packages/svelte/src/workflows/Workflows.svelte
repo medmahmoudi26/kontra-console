@@ -364,7 +364,24 @@
           {#key run.runId}
           <!-- KEYED ON THE RUN, like `Transcript`, and for a sharper reason: `RunStream` holds an
                open EventSource. Without the key, picking a different run would leave the previous
-               run's subscription attached and interleave two runs' progress into one pane. -->
+               run's subscription attached and interleave two runs' progress into one pane.
+
+               ── THIS WAS REMOVED AND IS BACK, DELIBERATELY ──────────────────────────────────
+
+               The runs-surface refactor took `RunStream` out on the argument that "progress is not
+               a typed stream any more — it is the run's LOG lines (the rail below); a workflow says
+               where it is with `workflow.logger`." That is half right and the half it misses is the
+               half ADR 0050 §1 is about: logs are LINES a human reads, progress is STATE a machine
+               draws, and the two are not interchangeable. A rail cannot recover `step 3 of 5` from
+               a sentence without a regex that breaks the moment somebody rewords the line.
+
+               It is also the feature the newest commit on `kontra` shipped — "Typed per-method
+               streaming, end to end and in both SDKs" — where an actor declares `streams=` and the
+               shape travels in the catalog beside `input` and `output` precisely so a console can
+               render typed progress for an actor whose source the reader has never opened. Deleting
+               the only consumer of that leaves the schema published and nothing reading it.
+
+               Whoever finishes the Runs Surface should MOVE this there rather than delete it. -->
           <RunStream runId={run.runId} />
           <Transcript runId={run.runId} />
         {/key}
