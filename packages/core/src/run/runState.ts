@@ -64,7 +64,16 @@ export function materializationOf(row: Pick<RunRow, 'materialization'>): Dimensi
   if (m.total === 0) {
     return {
       label: 'unrecorded',
-      title: 'materialization — no writer recorded a Dataset for this run',
+      // AND "UNRECORDED" IS NOT "WROTE NOTHING", which this title used to leave a reader to infer.
+      // The ledger is the graph interpreter's; the SDK path (`publishBatch`) writes lake rows and
+      // no ledger record, so EVERY v2 Run lands here — including ones with ten rows in the lake
+      // and this run's id stamped on each. The lake is the authority that can tell the two apart,
+      // and it costs a catalog join the run LIST must not pay on every poll. The run page pays it
+      // once, when a run is opened: `fetchRunDatasets` in `run/record.ts`.
+      title:
+        'materialization — the ADR 0017 ledger holds no record for this run. That is NOT a claim ' +
+        'that it wrote nothing: the SDK publish path does not write the ledger. Open the run to ' +
+        'see what the lake holds.',
     };
   }
   const of = `${m.complete}/${m.total} Datasets · ${m.rows.toLocaleString()} rows committed`;

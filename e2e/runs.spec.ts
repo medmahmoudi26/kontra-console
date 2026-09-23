@@ -80,6 +80,34 @@ interface Stubs {
   detail?: Record<string, () => Promise<unknown> | unknown>;
   /** What `POST /api/runs` answers, if the test presses Run. */
   started?: { runId: string; type: string; queue: string };
+  /** Line-delimited log records `/api/logs/query` answers with (VictoriaLogs shape: `_time`,
+   *  `_msg`, `level`, `run_id`, plus whatever stream fields the emitter stamped). */
+  logs?: Record<string, unknown>[];
+  /** The output-dataset preview `/api/datasets/:name/preview` answers with. */
+  preview?: { columns: { name: string; type: string }[]; rows: unknown[][]; truncated: boolean };
+  /**
+   * What `GET /api/runs/:id/datasets` answers — the Dataset partitions the LAKE attributes to this
+   * run, which is what the DATASET region draws.
+   *
+   * NOT `materializationRecords`. That is the ADR 0017 ledger's, and it is EMPTY for every v2 Run
+   * because `publishBatch` writes lake rows and no ledger record — so the region read an authority
+   * that had nothing to say and printed "This run recorded no output Dataset" over rows that were
+   * there. `version` and `dt` are part of the row because they ADDRESS the partition: the preview
+   * is fetched with them, so what is shown is THIS run's rows and not the newest run's under the
+   * same name.
+   */
+  datasets?: { name: string; kind: string; version?: string; dt?: string; rows: number; bytes: number }[];
+  /**
+   * What `GET /api/runs/:id/io` answers — the run's decoded start payload and result.
+   *
+   * ABSENT IS A CASE, not a gap: a run whose execution Temporal has dropped for retention has no
+   * argument to show, and the INPUT region then says which fact it is rather than drawing a blank
+   * form. A test that wants that path leaves this unset.
+   */
+  io?: { input?: unknown; output?: unknown; closedAs?: string };
+  /** The `registered` descriptors `/api/workflows` answers with — each may carry `input`/`output`
+   *  JsonSchema, which is what the typed input FORM and typed OUTPUT are drawn from. */
+  workflows?: unknown[];
 }
 
 /**
@@ -115,6 +143,16 @@ async function stub(page: import('@playwright/test').Page, s: Stubs): Promise<vo
       return json({ events: [], scanned: 0, elided: 0, truncated: false });
     }
     if (/^\/api\/runs\/[^/]+\/heartbeats$/.test(path)) return json({ nodes: {} });
+    // WHAT THE LAKE SAYS THIS RUN WROTE. An empty array is the honest default — a run that wrote
+    // nothing — and `fetchRunDatasets` refuses a non-array, so the catch-all's `{}` below would
+    // render the empty state rather than throwing. That is exactly how this went unnoticed.
+    if (/^\/api\/runs\/[^/]+\/datasets$/.test(path)) return json(s.datasets ?? []);
+    // THE RUN'S OWN TWO PAYLOADS. 404 rather than `{}` when a test declares none: `{}` would mean
+    // "started with nothing and returned nothing", where 404 means "Temporal has dropped it" — two
+    // different sentences on screen, and the region says which.
+    if (/^\/api\/runs\/[^/]+\/io$/.test(path)) {
+      return s.io ? json(s.io) : json({ error: 'no such execution' }, 404);
+    }
 
     if (path === '/api/workflows') {
       return json({
@@ -131,7 +169,7 @@ async function stub(page: import('@playwright/test').Page, s: Stubs): Promise<vo
         //
         // `name` is the workflow TYPE (`NsCheck`, from SOURCE), not the file name: the page joins
         // the descriptor on the type the open source declares.
-        registered: [{ name: 'NsCheck', queue: 'wf-nscheck-0a4be1b6cdea', description: '' }],
+        registered: s.workflows ?? [{ name: 'NsCheck', queue: 'wf-nscheck-0a4be1b6cdea', description: '' }],
       });
     }
     // THE FOLDER LISTING, without which the Workflows page has no rows at all.
@@ -163,6 +201,16 @@ async function stub(page: import('@playwright/test').Page, s: Stubs): Promise<vo
     // non-array here is a bad shape rather than an empty list — the Runs page reports that as an
     // error in its Fleet panel, which is correct behaviour and pure noise in these tests.
     if (path === '/api/fleet/operations') return json([]);
+    // A run's logs: VictoriaLogs answers line-delimited JSON, one record per line — `fetchLogs`
+    // reads `res.text()` and splits on newlines, so this must NOT be a JSON array.
+    if (path === '/api/logs/query' || path === '/api/logs/tail') {
+      const body = (s.logs ?? []).map((l) => JSON.stringify(l)).join('\n');
+      return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body });
+    }
+    // A run's output-dataset preview.
+    if (/^\/api\/datasets\/[^/]+\/preview$/.test(path)) {
+      return json(s.preview ?? { columns: [], rows: [], truncated: false });
+    }
     if (path === '/api/datasets') return json([]);
     if (path === '/api/actors') return json([]);
     return json({});
@@ -228,5 +276,178 @@ test('Run on the Workflows surface lands on the new run, and never shows the pre
 
   // …and once the run answers for itself, it says what IT is doing.
   await expect(page.getByTestId('run-tail-execution')).toHaveText('running', { timeout: 15_000 });
+  expect(errors).toEqual([]);
+});
+
+test('the Runs surface: prefilled typed input, typed output, and a run whose one error shows in full with its record', async ({
+  page,
+}) => {
+  const errors = watchErrors(page);
+  const RUN = 'hunt-2026-09-20T08-49-00';
+  // The actor's OWN error.message, verbatim, as `hunt`'s `_log_drops` writes it when a Unit is
+  // isolated — a socket failure, the kind that actually drops a desync Unit. Not composed here.
+  const DROP_ERROR = 'read tcp 10.0.0.14:41022->203.0.113.7:443: read: connection reset by peer';
+  // The real desync erratic string (main.go), verbatim — carried in the dataset's void_reason column.
+  const ROW_ERROR = 'baseline not reproducible — refusing to scan (statuses [200 200 200])';
+
+  // A run that FINISHED CLEANLY and wrote its output — mostly green, with one findable error, not a
+  // wall of red. Both dimensions agree here (completed + complete).
+  const HUNT = {
+    runId: RUN,
+    type: 'Hunt',
+    status: 'completed',
+    tenant: 'acme',
+    startedAt: Date.parse('2026-09-20T08:49:00Z'),
+    closedAt: Date.parse('2026-09-20T09:07:00Z'),
+    dispatches: 16,
+    materialization: { total: 1, pending: 0, running: 0, complete: 1, failed: 0, rows: 1796, bytes: 262144 },
+    lifecycle: 'completed',
+  };
+
+  // The workflow's declared input + output schemas — what the typed form and typed output draw from.
+  const HUNT_DESCRIPTOR = {
+    name: 'Hunt',
+    queue: 'wf-hunt-0a4be1b6cdea',
+    description: 'Attack the mapped surface for desyncs, two axes, and own the leads.',
+    input: {
+      type: 'object',
+      required: ['program'],
+      properties: {
+        program: { type: 'string', default: '8x8', description: 'Selects scope_<program> / exchanges_<program>; stamped on every row.' },
+        machines: { type: 'integer', default: 4, description: 'Fleet width — how many machines poll the desync actor.' },
+        rate_ms: { type: 'integer', default: 100, description: 'Per-HOST minimum gap between connections.' },
+        tier: { type: 'integer', default: 1, description: 'Fold vector tier ceiling: 1 quick, 2 standard, 3 full.' },
+        max_points: { type: 'integer', default: 40, description: 'Injection points probed per exchange.' },
+        backoff: { type: 'boolean', default: true, description: 'Let a host widen its own gap on 429/503/reset.' },
+      },
+    },
+    output: {
+      type: 'object',
+      properties: {
+        dataset: { type: 'string', description: 'The Dataset this run wrote observations to.' },
+        errors: { type: 'integer', description: 'Units the workflow could not test (erratic + voided), counted from its own dataset.' },
+        suggested_query: { type: 'string', description: 'A query to list the failed units — a plain string, copy it into the Datasets workbench.' },
+        note: { type: 'string', description: 'A free-text summary the workflow returns.' },
+      },
+    },
+  };
+
+  await stub(page, {
+    runs: [HUNT],
+    workflows: [HUNT_DESCRIPTOR],
+    detail: {
+      [RUN]: () =>
+        detailOf(HUNT, {
+          materializationRecords: [{ name: 'observations', kind: 'output', rows: 1796, state: 'complete' }],
+        }),
+    },
+    // The lines a real hunt run writes: progress via `note()`, and — when a Unit is isolated —
+    // `_log_drops` logging the actor's OWN error.message with the record in stream fields.
+    logs: [
+      { _time: Date.parse('2026-09-20T08:49:03Z'), level: 'info', _msg: 'corpus published: 12,330 technique(s) in 32 shard(s)', run_id: RUN },
+      { _time: Date.parse('2026-09-20T08:50:00Z'), level: 'info', _msg: 'screen complete: 1796 observation(s)', run_id: RUN },
+      {
+        _time: Date.parse('2026-09-20T08:58:41Z'),
+        level: 'error',
+        _msg: DROP_ERROR,
+        run_id: RUN,
+        phase: 'sweep',
+        category: 'host-loss',
+        host: 'pay.8x8.com',
+        endpoint: '/',
+        unit_id: '8x8:pay.8x8.com:/',
+      },
+      { _time: Date.parse('2026-09-20T09:06:59Z'), level: 'info', _msg: 'sweep complete: 1796 observation(s)', run_id: RUN },
+    ],
+    // WHAT THE LAKE ATTRIBUTES TO THIS RUN, which is what makes the DATASET region draw at all.
+    datasets: [{
+      name: 'observations',
+      kind: 'output',
+      version: '1.0.0',
+      dt: '2026-09-20T08-49-00',
+      rows: 1796,
+      bytes: 262144,
+    }],
+    // WHAT THE RUN WAS STARTED WITH AND WHAT IT RETURNED — deliberately NOT the declared defaults.
+    // `program` was sent as `vonage` where the schema's default is `8x8`, and `tier` was not sent at
+    // all: the region has to show the first as a VALUE and the second as the default it fell back
+    // to, because those are different facts and a form showing both identically is the bug this
+    // region was rebuilt to fix.
+    io: {
+      input: { program: 'vonage', machines: 4, rate_ms: 100, max_points: 40, backoff: true },
+      output: {
+        dataset: 'observations',
+        errors: 1,
+        suggested_query: "SELECT * FROM observations WHERE void_reason <> ''",
+        note: 'one host refused a reproducible baseline',
+      },
+    },
+    // Mostly-ok rows; ONE dataset-error whose void_reason column carries the whole text.
+    preview: {
+      columns: [
+        { name: 'host', type: 'VARCHAR' },
+        { name: 'endpoint', type: 'VARCHAR' },
+        { name: 'signals', type: 'INTEGER' },
+        { name: 'erratic', type: 'BOOLEAN' },
+        { name: 'void_reason', type: 'VARCHAR' },
+      ],
+      rows: [
+        ['vcc-eu.8x8.com', '/api/thankyou', 2, false, ''],
+        ['voapi.8x8.com', '/v2/session', 1, false, ''],
+        ['cc.8x8.com', '/status', 3, false, ''],
+        ['pay.8x8.com', '/', 0, true, ROW_ERROR],
+        ['web.8x8.com', '/login', 1, false, ''],
+      ],
+      truncated: true,
+    },
+  });
+
+  // Reached THROUGH THE NAV — Runs is a Surface, so it must be in the rail (the bug a screenshot
+  // caught that a typecheck could not: the route worked while the nav omitted it).
+  await page.goto('/');
+  await expect(page.getByTestId('nav-runs')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('nav-runs').click();
+  await expect(page.getByTestId('runs-list')).toBeVisible();
+  await expect(page.getByTestId(`run-row-${RUN}`)).toBeVisible();
+  await page.screenshot({ path: 'test-results/runs-list.png', fullPage: true });
+
+  await page.getByTestId(`run-row-${RUN}`).click();
+  await expect(page.getByTestId('run-detail')).toBeVisible();
+  await expect(page.getByTestId('run-detail-id')).toHaveText(RUN);
+
+  // THE INPUT REGION IS THE RUN, NOT THE SCHEMA — and that is the whole change. It used to print
+  // each declared field's DEFAULT, footnoted "the run's recorded values land with the snapshot
+  // store", so two runs of one workflow started with different arguments rendered identically.
+  await expect(page.getByTestId('run-input')).toContainText('as started');
+  // SENT: the value the run actually carried, not the `8x8` the schema declares.
+  await expect(page.getByTestId('input-field-program')).toContainText('vonage');
+  await expect(page.getByTestId('input-field-program')).not.toContainText('8x8');
+  await expect(page.getByTestId('input-field-machines')).toContainText('4');
+  await expect(page.getByTestId('input-field-backoff')).toContainText('true');
+  // NOT SENT: drawn as the absence it is, naming the default the workflow used instead. An empty
+  // box here would be indistinguishable from a field the page failed to fill in.
+  await expect(page.getByTestId('input-field-tier')).toContainText('default 1');
+
+  // THE OUTPUT REGION IS WHAT IT RETURNED, for the same reason — it used to print field names and
+  // descriptions with no values at all.
+  await expect(page.getByTestId('run-output')).toContainText('as returned');
+  await expect(page.getByTestId('output-field-suggested_query')).toContainText('void_reason');
+  await expect(page.getByTestId('output-field-errors')).toContainText('1');
+  // The author's sentence survives beside the value — it is the only thing that says what a field
+  // MEANS, and a decoded payload does not carry it.
+  await expect(page.getByTestId('output-field-errors')).toContainText('could not test');
+
+  // THE WORKFLOW-LOGGED DROP: the actor's own error message, verbatim, AND which record.
+  const logLine = page.getByTestId('log-line').filter({ hasText: 'connection reset by peer' });
+  await expect(logLine).toContainText(DROP_ERROR);
+  const record = logLine.getByTestId('log-record');
+  await expect(record).toContainText('host=pay.8x8.com');
+  await expect(record).toContainText('phase=sweep');
+
+  // THE ERROR, in the DATASET: the void_reason column carries the whole text on the failing record.
+  const errCell = page.getByTestId('dataset-error-cell').filter({ hasText: 'baseline not reproducible' });
+  await expect(errCell).toContainText(ROW_ERROR);
+
+  await page.screenshot({ path: 'test-results/runs-detail.png', fullPage: true });
   expect(errors).toEqual([]);
 });

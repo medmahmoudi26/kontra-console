@@ -26,7 +26,10 @@
   <dl>
     <dt>control plane</dt>
     <dd>{#if reachable}reachable{:else}<span class="bad">not answering</span>{/if}</dd>
-    {#if health?.namespace}<dt>tenant</dt><dd class="mono">{health.namespace}</dd>{/if}
+    <!-- NAMED FOR WHAT IT IS. `/api/health` returns the TEMPORAL NAMESPACE; calling it "tenant"
+         made the install's one tenant look like a thing you could have several of, and it is the
+         workspace that varies. -->
+    {#if health?.namespace}<dt>temporal namespace</dt><dd class="mono">{health.namespace}</dd>{/if}
     {#if health?.version}<dt>version</dt><dd class="mono">{health.version}</dd>{/if}
   </dl>
 

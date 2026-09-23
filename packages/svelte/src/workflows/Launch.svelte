@@ -20,6 +20,7 @@
    * and the run itself off screen at the exact moment they wanted all three. The run is watched here.
    */
   import { schemaFields, type FieldNode } from '@kontra/console-core/panels/schemaTree';
+  import { plainText } from '@kontra/console-core/panels/prose';
   import { mergeWorkflowFolders } from '@kontra/console-core/panels/sourceFolders';
   import { guessTypeFromFilename, workflowDefns } from '@kontra/console-core/panels/workflowSource';
   import {
@@ -41,7 +42,7 @@
 
   import Field from '../dev/Field.svelte';
   import { watchDescriptors } from './watchFolder';
-  import { missing, payloadOf, type FieldValue } from '../dev/payload';
+  import { missing, payloadOf, syncDefaults, type FieldValue } from '../dev/payload';
 
   interface Props {
     /** The folder the ADDRESS names, if it names one. `/workflows/approve` opens `approve`. */
@@ -204,21 +205,62 @@
   }
 
   const descriptor = $derived(registered.find((d) => d.name === type));
+
+  /**
+   * WHAT THIS WORKFLOW IS FOR, IN THE AUTHOR'S WORDS — and it was on screen NOWHERE.
+   *
+   * Two sides already publish it and the form ignored both: the serving worker sends the
+   * `@workflow.defn` class's docstring on the descriptor (`catalog.py::workflow_descriptor` →
+   * `first_paragraph(cls.__doc__)`), and the orchestrator sends the first paragraph of the
+   * folder's `description.md` on the row. So an operator picked between `approve`, `canary`,
+   * `ping` and `probedemo` by reading four names, with the paragraph explaining each one sitting
+   * unread in two API responses.
+   *
+   * THE DESCRIPTOR FIRST, because it is the CODE's own sentence and it came from the worker that
+   * is serving right now — a `description.md` can describe a folder whose workflow was rewritten
+   * under it. The folder's text is the fallback, which is what a workflow nobody has served yet
+   * still has.
+   */
+  const about = $derived(
+    plainText(
+      descriptor?.description ||
+        rows.find((r) => r.name === selected)?.folder.description ||
+        rows.find((r) => r.name === selected)?.file?.description ||
+        ''
+    )
+  );
+
   const nodes = $derived(schemaFields(descriptor?.input) ?? []);
-  const leaves = $derived(nodes.filter((n): n is FieldNode => n.kind === 'leaf'));
+  /**
+   * THE FIELDS THIS FORM DRAWS — and a LIST or a nested OBJECT is one of them.
+   *
+   * This filtered to `kind === 'leaf'`, so every other shape was silently ABSENT. Measured on the
+   * canary: `targets: list[str]` is the first field the workflow declares, it carries a default and
+   * a description, and the form rendered seven fields and not it — no label, no box, no note. A
+   * field a schema declares and a form does not draw is worse than one drawn badly, because there
+   * is nothing on screen to be suspicious of.
+   *
+   * IT IS ONE JSON BOX, NOT REPEATABLE ROWS, and that is a smaller step rather than the right end
+   * state. `formFields.ts` already has the row machinery (`addRow`, `rowCount`, `elementAt`) that
+   * the React console's Batch builder uses, and a list of typed rows is the better UI. What makes
+   * the box honest in the meantime is that nothing has to be invented for it: `schemaDefault`
+   * already stringifies an array default to `["alpha","beta"]`, and `coerceField` already JSON-
+   * parses anything that is not string/integer/number/boolean — so the value round-trips through
+   * the form and reaches the workflow as the list it declared.
+   */
+  const leaves = $derived(
+    nodes.filter((n): n is FieldNode => n.kind === 'leaf' || n.kind === 'list' || n.kind === 'group')
+  );
   // The declared type per field, so a text input's string becomes the int the workflow
   // declares. Without this every numeric workflow fails to decode its own arguments.
   const fieldTypes = $derived(new Map(leaves.map((n) => [n.name, n.type])));
   const payload = $derived(payloadOf(values, fieldTypes));
   const gaps = $derived(missing(leaves.filter((n) => n.required).map((n) => n.name), payload));
 
-  // A NEW SELECTION MUST NOT CARRY THE LAST FORM'S VALUES. Keys the current type does not declare
-  // are dropped; anything it still declares keeps what was typed, which is what makes a live
-  // contract change (`serve --watch`) survivable mid-form.
-  $effect(() => {
-    const declared = new Set(leaves.map((n) => n.name));
-    for (const k of Object.keys(values)) if (!declared.has(k)) delete values[k];
-  });
+  // THE FORM OPENS PREFILLED, so pressing Run without typing anything starts the run the author
+  // described — and a new selection does not carry the last form's values. Both rules live in
+  // `syncDefaults` because the Method form in `/dev` needs exactly the same two.
+  $effect(() => syncDefaults(leaves, values));
 
   /**
    * Serve this folder: start a detached worker polling the queue its content digest names.
@@ -325,6 +367,11 @@
           <span class="state {serveState}" class:live={words.live} title={words.title}>{words.label}</span>
         </header>
 
+        <!-- THE AUTHOR'S PARAGRAPH, ABOVE THE FIELDS. It is what somebody deciding whether to press
+             Run is actually looking for, and it is the one thing on this panel that cannot be
+             guessed from a name. -->
+        {#if about}<p class="about" data-testid="workflow-about">{about}</p>{/if}
+
         {#if sourceError}<p class="err" role="alert">{sourceError}</p>{/if}
 
         {#if descriptor?.error}
@@ -417,6 +464,12 @@
     border: 1px solid var(--line); border-radius: var(--radius);
   }
   .form header { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+  /* --t-small and full colour: this is the panel's lead, not an aside. 68ch is the measure the
+     rest of the console's prose uses. */
+  .about {
+    font-size: var(--t-small); color: var(--fg); margin: 0;
+    max-width: 68ch; line-height: var(--lh-body);
+  }
   h3 { font-size: var(--t-body); font-weight: 600; margin: 0; overflow-wrap: anywhere; }
   .type, .queue { font-size: var(--t-small); color: var(--dim); }
   .queue { margin-left: auto; }

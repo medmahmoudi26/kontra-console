@@ -23,6 +23,7 @@ import { DEFAULT_VIEW, PATHS, RETIRED, SPA_SEGMENTS, SURFACES } from './surfaces
 const EXPECTED: readonly string[] = [
   'catalog',
   'workflows',
+  'runs',
   'actors',
   'datasets',
   'monitor',
@@ -72,16 +73,17 @@ describe('the surfaces', () => {
 });
 
 describe('the retired surfaces', () => {
-  it('are Runs and Scratch, and both land on Workflows', () => {
-    expect(Object.keys(RETIRED).sort()).toEqual(['runs', 'scratch']);
+  it('is Scratch, which lands on Workflows', () => {
+    // Runs used to be here too; it is a live surface again, so Scratch is the one retired segment
+    // left — a drawing surface with no subject, folded into a workflow's own design tab.
+    expect(Object.keys(RETIRED).sort()).toEqual(['scratch']);
     for (const [segment, target] of Object.entries(RETIRED)) {
       expect(target.to, segment).toBe('workflows');
     }
   });
 
-  it('differ in exactly one thing: whether the old address named anything', () => {
-    // `/runs/<id>` has a run to hand on; `/scratch` was a drawing about nothing and has nothing.
-    expect(RETIRED.runs?.carries).toBe('run');
+  it('carries nothing, because the old address never named anything', () => {
+    // `/scratch` was a drawing about nothing and has nothing to hand on across the redirect.
     expect(RETIRED.scratch?.carries).toBe('nothing');
   });
 
@@ -97,7 +99,7 @@ describe('what the server has to serve', () => {
     // A LIVE segment missing there 404s a cold load of any id containing a dot. A RETIRED segment
     // missing there is worse in a quieter way: the redirect is frontend code, so the shell that
     // would forward `/runs/sweep-v1.2` never loads to forward it.
-    expect([...SPA_SEGMENTS].sort()).toEqual([...EXPECTED, 'runs', 'scratch'].sort());
+    expect([...SPA_SEGMENTS].sort()).toEqual([...EXPECTED, 'scratch'].sort());
   });
 
   it('names the copy the server keeps, so the pair can only be wrong together', () => {
@@ -105,7 +107,7 @@ describe('what the server has to serve', () => {
     // package and cannot import it — and that repo's `spaFallback.test.ts` asserts the other half.
     // The number is here so adding a surface fails on BOTH sides of the boundary rather than
     // silently on neither.
-    expect(SPA_SEGMENTS).toHaveLength(EXPECTED.length + 2);
+    expect(SPA_SEGMENTS).toHaveLength(EXPECTED.length + 1);
     expect(SPA_SEGMENTS).toHaveLength(10);
   });
 });

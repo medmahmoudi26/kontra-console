@@ -60,6 +60,7 @@
     catalog: () => import('./catalog/Catalog.svelte'),
     actors: () => import('./actors/Actors.svelte'),
     workflows: () => import('./workflows/Workflows.svelte'),
+    runs: () => import('./runs/Runs.svelte'),
     datasets: () => import('./datasets/Datasets.svelte'),
     secrets: () => import('./secrets/Secrets.svelte'),
     settings: () => import('./secrets/Settings.svelte'),
@@ -99,7 +100,7 @@
        starts — capped at 1180px that is a third of the line spent on identity, and long lines wrap
        that would not have to. Named here rather than inside either view, because the width belongs
        to the SHELL. -->
-  <Shell view={first} views={SURFACES} wide={first === 'datasets' || first === 'logs'}
+  <Shell view={first} views={SURFACES} wide={first === 'datasets' || first === 'logs' || first === 'runs'}
          onnavigate={(id) => location.assign(go(id, first).href)}>
     {#if failed}<p class="err" role="alert">{failed}</p>
     {:else if View}

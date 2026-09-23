@@ -1,5 +1,5 @@
 /**
- * The seven Surfaces, in the order the nav draws them.
+ * The Surfaces, in the order the nav draws them.
  *
  * ── IT MUST MATCH THE ORCHESTRATOR'S LIST ───────────────────────────────────────────────────────
  *
@@ -12,8 +12,9 @@
  *
  * While the console migrated (ADR 0048) each entry said which of two bundles drew it, and a click
  * across that line was a document load. There is one bundle now; what survives is the rule for a
- * segment the nav does NOT know — a retired `/runs/<id>`, or anything else the server serves — which
- * is still a document load, because this app cannot render it.
+ * segment the nav does NOT know — a retired `/scratch`, or anything else the server serves — which
+ * is still a document load, because this app cannot render it. (`runs` used to be such a segment; it
+ * is a nav Surface again.)
  */
 export interface Surface {
   id: string;
@@ -23,6 +24,7 @@ export interface Surface {
 export const SURFACES: readonly Surface[] = [
   { id: 'catalog', label: 'Catalog' },
   { id: 'workflows', label: 'Workflows' },
+  { id: 'runs', label: 'Runs' },
   { id: 'actors', label: 'Actors' },
   { id: 'datasets', label: 'Datasets' },
   { id: 'monitor', label: 'Monitor' },

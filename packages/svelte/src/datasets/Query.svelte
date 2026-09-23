@@ -85,6 +85,17 @@
     return cellText((row as unknown[])[i]);
   }
 
+  /**
+   * What each result column IS — the inspector's accessor.
+   *
+   * NOT `resultText`. `cellText` flattens a MAP or LIST into one line so it fits a row; opening a
+   * cell on that would show the lossy rendering at full size, which is precisely the shape a
+   * reader clicked to get away from.
+   */
+  function resultValue(row: unknown, i: number): unknown {
+    return (row as unknown[])[i];
+  }
+
   /** The dataset an export is named after: the first table the query names, else `query`. */
   const exportBase = $derived((/\bfrom\s+"?([A-Za-z0-9_.-]+)"?/i.exec(sql)?.[1] ?? 'query'));
 
@@ -200,6 +211,7 @@
           rows={result.rows}
           maxHeight="26rem"
           textOf={resultText}
+          cellValue={resultValue}
           empty="The query ran and matched nothing. That is an answer."
         >
           {#snippet cell(row)}

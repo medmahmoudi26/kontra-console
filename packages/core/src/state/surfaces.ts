@@ -33,9 +33,11 @@
  *  - **Catalog is new**, and it is first. It is the whole registry — every workflow and every actor
  *    this control plane knows about, in one searchable list. It does not replace Workflows or
  *    Actors: those are where you WORK on one, and this is where you FIND one. See `panels/catalog.ts`.
- *  - **Runs is retired.** A run is reached through the workflow that produced it, because a
- *    conversation belongs to a thread. The global list was a place where a run id and the code that
- *    produced it were two different searches.
+ *  - **Runs is a surface.** A run has a record — the input it was started with and the output it
+ *    produced — that outlives the thread it was started in, so it earns its own list and its own
+ *    address. The workflow-scoped run strip is the ENTRY to a live run; `/runs/<id>` is where that
+ *    record lives afterward, and where every run across every workflow is listed. It was retired
+ *    once (a run reached only through its workflow); the record turned out to want a home of its own.
  *  - **Scratch is retired as a top level.** It comes back as a workflow's own design tab, where a
  *    drawing has a subject — ADR 0026 survives unchanged and is strengthened by it.
  *  - **Logs is new**, and it sits under Monitor because the two are the same question at different
@@ -94,7 +96,12 @@ const DECLARED = [
   {
     id: 'workflows',
     label: 'Workflows',
-    hint: 'your caller workflows, each run of one, and everything that run did — a run is reached through the workflow that produced it',
+    hint: 'your caller workflows, each run of one, and everything that run did — where you start a run and watch it live',
+  },
+  {
+    id: 'runs',
+    label: 'Runs',
+    hint: 'every run this control plane has seen — each one as the input it was started with and the output it produced, replayable',
   },
   {
     id: 'actors',
@@ -181,12 +188,11 @@ export const DEFAULT_VIEW = 'workflows' satisfies View;
 /**
  * A first path segment that WAS a surface, and the surface that answers for it now.
  *
- * `runs` carries an id and `scratch` never did, which is the whole difference between them at this
- * level: `/runs/<id>` has something to hand on and `/scratch` has nothing to say. Both land on
- * Workflows, because that is where a run and a workflow's sketch both live now.
+ * `scratch` never carried an id — `/scratch` had nothing to hand on — so it lands on Workflows,
+ * where a workflow's sketch lives now. (`runs` used to be here too, carrying a run id; it is a live
+ * surface again — see {@link DECLARED} — so `/runs/<id>` is answered directly rather than redirected.)
  */
 export const RETIRED: Record<string, { to: 'workflows'; carries: 'run' | 'nothing' }> = {
-  runs: { to: 'workflows', carries: 'run' },
   scratch: { to: 'workflows', carries: 'nothing' },
 };
 

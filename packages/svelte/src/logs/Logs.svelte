@@ -140,7 +140,7 @@
   </header>
 
   <p class="muted">
-    every actor on this tenant, interleaved, oldest first — times are UTC, the colour is the actor
+    every actor on this install, interleaved, oldest first — times are UTC, the colour is the actor
     and is the same colour in every tab. Scroll up to pause; the last {BACKFILL_LINES} lines are
     loaded on arrival so this is never an empty box waiting.
   </p>
@@ -248,8 +248,19 @@
             {@const who = line.actor ?? ''}
             <li class="row {line.level}" class:incomplete={line.incomplete}>
               <span class="t mono" title={full(line.ts)}>{clock(line.ts)}</span>
+<!--
+                WHICH WORKER SAID IT, in the hover. `actor` is which actor and `machine` is which
+                box; on a packed Machine running four Workers neither answers "which process", and
+                that is the question asked when one Droplet is grinding an abandoned sweep and ten
+                are idle. The identity is also what `temporal task-queue describe` lists, so it is
+                the string that carries a reader from this rail into the engine's own view.
+
+                IN THE TITLE AND NOT IN THE ROW, because it is forty characters of `pid@host@queue`
+                and the row is already three columns competing for a rail. The free-text filter
+                matches it (`run/logs.ts`), which is how somebody narrows to one Worker.
+              -->
               <span class="who mono" style="color:{actorStyle(who).color}"
-                    title="{who || 'control plane'}{line.machine ? ` · ${line.machine}` : ''}{line.unit ? ` · ${line.unit}` : ''}"
+                    title="{who || 'control plane'}{line.machine ? ` · ${line.machine}` : ''}{line.unit ? ` · ${line.unit}` : ''}{line.worker ? `\n${line.worker}` : ''}"
               >{who || '—'}</span>
               <span class="msg mono">{line.msg}</span>
             </li>

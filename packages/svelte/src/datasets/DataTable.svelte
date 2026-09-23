@@ -29,6 +29,8 @@
    */
   import type { Snippet } from 'svelte';
 
+  import CellInspector from './CellInspector.svelte';
+
   export interface Column {
     /** Header text. Uppercase labels are the one place `--t-micro` is allowed. */
     label: string;
@@ -60,6 +62,27 @@
      * exactly as before.
      */
     textOf?: (row: unknown, column: number) => string;
+    /**
+     * CLICK A CELL, SEE THE WHOLE VALUE. The same accessor shape as `textOf`, returning the RAW
+     * value rather than its text — see `CellInspector.svelte` for why the difference matters.
+     *
+     * ── IT IS NOT CALLED `valueOf`, AND THAT IS NOT A STYLE PREFERENCE ────────────────────────
+     *
+     * `valueOf` IS ON `Object.prototype`. Destructuring `let { valueOf } = $props()` therefore
+     * finds it through the prototype chain on EVERY table, whether the caller passed one or not —
+     * so `if (!valueOf) return` never returns, the listing table became cell-inspectable, and
+     * calling it rendered the component's own props object into the dialog. Caught by
+     * `e2e/datasets.spec.ts`, which is the only place it could be caught: the prop is typed
+     * optional, `svelte-check` is happy, and the vitest suites never mount two tables at once.
+     *
+     * ── A TABLE IS ROW-NAVIGABLE OR CELL-INSPECTABLE, NEVER BOTH ──────────────────────────────
+     *
+     * Passing this AND `onpick` would make one click mean two things, and the reader cannot be
+     * told which they are about to get. The listing table navigates (a row opens a dataset); the
+     * preview and the query result inspect (a row is not a destination, a value is). The dev
+     * assertion below is there because the two props look independent and are not.
+     */
+    cellValue?: (row: unknown, column: number) => unknown;
   }
 
   let {
@@ -71,7 +94,50 @@
     empty = 'Nothing to show.',
     maxHeight,
     textOf,
+    cellValue,
   }: Props = $props();
+
+  // IN AN EFFECT, so it reads the props reactively and fires if a caller starts passing both later
+  // — and so `svelte-check` is right rather than merely quiet. Loud in development, absent in
+  // production: refusing to render a table over a prop combination would be a worse failure than
+  // the ambiguity it is complaining about.
+  $effect(() => {
+    if (import.meta.env.DEV && onpick && cellValue) {
+      // eslint-disable-next-line no-console
+      console.error(
+        'DataTable: `onpick` and `cellValue` together make one click mean two things. ' +
+          'A table navigates by row or inspects by cell — pick one.'
+      );
+    }
+  });
+
+  /** Which cell the inspector is open on. `undefined` is closed. */
+  let open = $state<{ row: unknown; column: number; index: number } | undefined>(undefined);
+
+  /**
+   * ONE DELEGATED LISTENER ON THE BODY, not a handler per `<td>`.
+   *
+   * The `<td>`s are the CALLER's — they come out of `cell`, and this component never constructs
+   * one. So it cannot attach anything to them, and asking every caller to wire a click into every
+   * cell of every snippet is how half of them end up not doing it. `closest('td')` plus
+   * `cellIndex` recovers the coordinates from the event, which is the one thing the DOM will
+   * always know about a table.
+   */
+  function inspect(event: MouseEvent): void {
+    if (!cellValue) return;
+    const td = (event.target as HTMLElement | null)?.closest('td');
+    if (!td) return;
+    const tr = td.closest('tr');
+    if (!tr) return;
+    // A SELECTION IS NOT A CLICK. Dragging across a cell to copy part of it must not also open a
+    // dialog over the thing being read — which is the first way a modal-on-click gets annoying.
+    if ((window.getSelection()?.toString() ?? '') !== '') return;
+    const index = Number(tr.dataset.index);
+    if (!Number.isInteger(index)) return;
+    const row = visible[index];
+    if (row === undefined) return;
+    open = { row, column: td.cellIndex, index };
+  }
 
   /** One filter per column, by index. Empty string means "this column is not filtering". */
   let filters = $state<Record<number, string>>({});
@@ -119,13 +185,19 @@
           </tr>
         {/if}
       </thead>
-      <tbody>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <tbody onclick={inspect}>
         {#each visible as row, i (i)}
           <!-- A ROW IS A BUTTON WHEN IT DOES SOMETHING, and inert markup when it does not. That is
                why `onpick` is optional rather than a no-op: a row that looks clickable and is not
-               is a worse affordance than one that never offered. -->
+               is a worse affordance than one that never offered.
+               `data-index` is what the delegated cell listener reads back — the DOM knows which
+               `<td>` was clicked and this is what tells it which ROW that was. -->
           <tr
+            data-index={i}
             class:pickable={!!onpick}
+            class:inspectable={!!cellValue}
             class:on={picked?.(row)}
             tabindex={onpick ? 0 : undefined}
             role={onpick ? 'button' : undefined}
@@ -144,6 +216,14 @@
       </tbody>
     </table>
   </div>
+  {#if open && cellValue}
+    <CellInspector
+      label={columns[open.column]?.label ?? `column ${open.column + 1}`}
+      value={cellValue(open.row, open.column)}
+      row={open.index + 1}
+      onclose={() => (open = undefined)}
+    />
+  {/if}
   {#if textOf && filtering}
     <!-- THE COUNT IS THE HONEST PART. A filtered table showing three rows looks identical to a
          dataset holding three rows, and an operator who forgot a filter is in a box reads the
@@ -201,6 +281,27 @@
     white-space: nowrap;
   }
   :global(.wrap tbody tr:last-child td) { border-bottom: 0; }
+
+  /*
+   * CLIPPING IS ALLOWED ONLY WHERE THE WHOLE VALUE IS ONE CLICK AWAY.
+   *
+   * That is why this bound hangs off `.inspectable` and not off every `<td>`. The rule it replaces
+   * lived in `Datasets.svelte` and clipped at `44ch` with no way to see the rest — the value was
+   * not scrolled off, it was gone. The opposite rule (no bound at all, which is what the query
+   * result had) is no better: one 4 KB JSON cell makes its row kilometres wide and pushes every
+   * other column out of the scroll box.
+   *
+   * `zoom-in` rather than `pointer`, because the cell is not a link and does not navigate.
+   */
+  :global(.wrap tr.inspectable td) {
+    max-width: 48ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: zoom-in;
+  }
+  :global(.wrap tr.inspectable td:hover) {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
 
   /* NO ZEBRA. Alternating fills read as grouping and there is none here; a hairline per row is
      enough separation and leaves the tinting budget for state, which is a real signal. */

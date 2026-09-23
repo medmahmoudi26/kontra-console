@@ -24,7 +24,6 @@
   import Launch from './Launch.svelte';
   import RunTail from './RunTail.svelte';
   import Timeline from './Timeline.svelte';
-  import RunStream from '../runs/RunStream.svelte';
   import { followRun, type Follow } from './runStream';
   import type { ScratchFlowEdge, ScratchFlowNode } from '@kontra/console-core/panels/scratchFlow';
 
@@ -221,13 +220,39 @@
 
   const run = $derived(runs.find((r) => r.runId === picked));
 
+  /** Which run the rail last showed, so a REFETCH does not flash the loading state. */
+  let logsFor = '';
+
   $effect(() => {
     const id = picked;
+    /**
+     * THE RAIL RIDES `revision`, WHICH IS THE STREAM'S CADENCE — and before this it fetched ONCE.
+     *
+     * The effect depended only on `picked`, so the single fetch happened the instant a run was
+     * selected. Press Run and the rail queries `run_id:"<new id>"` about a second later, gets an
+     * empty body because nothing has been written yet, and never asks again — 0/0 for the whole
+     * run and for ever afterwards. MEASURED, in the browser: two requests, both 200, the first for
+     * the previous run returning 4781 bytes and the second for the run just started returning 0.
+     *
+     * It looked exactly like a broken log pipeline, and it was a stale read. A LOGS RAIL THAT
+     * NEVER REFETCHES IS A LOGS RAIL FOR RUNS THAT ALREADY FINISHED.
+     *
+     * `revision` bumps on every frame the run stream delivers, which is the SERVER's cadence and
+     * the same thing the history re-read beside it already rides on — so this is not a timer, and
+     * it stops on its own when the stream ends.
+     */
+    void revision;
     if (!id) {
       logs = [];
+      logsFor = '';
       return;
     }
-    logsLoading = true;
+    // ONLY ON A RUN CHANGE. A refetch every frame that flipped `loading` would blink the rail's
+    // empty state over lines that are already on screen.
+    if (logsFor !== id) {
+      logsLoading = true;
+      logsFor = id;
+    }
     logsError = null;
     void fetchLogs(id)
       .then((r) => {
@@ -362,10 +387,21 @@
           </div>
 
           {#key run.runId}
-          <!-- KEYED ON THE RUN, like `Transcript`, and for a sharper reason: `RunStream` holds an
-               open EventSource. Without the key, picking a different run would leave the previous
-               run's subscription attached and interleave two runs' progress into one pane. -->
-          <RunStream runId={run.runId} />
+          <!-- KEYED ON THE RUN so a change of selection remounts rather than appending one run's
+               transcript to another's.
+
+               ── THERE IS NO TYPED PROGRESS PANE HERE, AND THAT IS THE DESIGN ────────────────
+
+               Progress is not a second typed channel. It is the run's LOG LINES, in the rail
+               beside this, and the DATASET TAIL on the run page — both of which survive the
+               workflow, which a stream living in workflow memory does not. A 55-second run is
+               already over by the time a browser has loaded and signed in, so the pane's most
+               common state was an empty box under a "stream" heading.
+
+               A workflow says where it is with `workflow.logger`; an actor says so with its own
+               logger. One channel, one place to read it, nothing to keep in sync. `stream()` and
+               `progress()` come back when there is a reader that needs STATE rather than lines —
+               and they come back with a durable store behind them. -->
           <Transcript runId={run.runId} />
         {/key}
 

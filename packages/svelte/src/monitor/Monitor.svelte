@@ -39,7 +39,10 @@
   <header class="top">
     <h1>Monitor</h1>
     <span class="phase" data-phase={wall.phase}>{wall.phase}</span>
-    {#if health?.namespace}<span class="tenant mono">{health.namespace}</span>{/if}
+    <!-- The TEMPORAL NAMESPACE, under its own name. The class was `tenant`, which read as a
+         second identity the operator could change; there is one tenant per install and it is the
+         install. -->
+    {#if health?.namespace}<span class="ns mono" title="Temporal namespace">{health.namespace}</span>{/if}
   </header>
 
   <p class="muted">
@@ -83,7 +86,7 @@
   .phase { font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
   .phase[data-phase='streaming'] { color: var(--ok); }
   .phase[data-phase='error'] { color: var(--bad); }
-  .tenant { font-size: var(--t-small); color: var(--dim); margin-left: auto; }
+  .ns { font-size: var(--t-small); color: var(--dim); margin-left: auto; }
   .muted { font-size: var(--t-small); color: var(--dim); margin: 0; max-width: 62ch; line-height: var(--lh-body); }
   .err {
     font-size: var(--t-small); color: var(--bad); margin: 0; line-height: var(--lh-body);

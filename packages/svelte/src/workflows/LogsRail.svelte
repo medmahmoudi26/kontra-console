@@ -32,6 +32,22 @@
 
   const time = (ts: number): string =>
     new Date(ts).toISOString().slice(11, 19);
+
+  /**
+   * WHICH RECORD a line is about, from its structured fields.
+   *
+   * This is the second half of "show the full error AND which record" (kontra-console#6): a dropped
+   * or errored unit is only debuggable if the reader can see BOTH the whole message — never
+   * truncated, `.msg` wraps — and the record it happened on. VictoriaLogs carries stream fields
+   * verbatim (`logs.ts` — `_time`/`_msg` plus whatever the emitter attached), so `fields` is where a
+   * `host`/`endpoint`/`point`/`record`/`unit` id rides. Rendered as `k=v`, dim, under the message.
+   */
+  const recordOf = (r: LogRecord): string =>
+    r.fields
+      ? Object.entries(r.fields)
+          .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
+          .join('  ')
+      : '';
 </script>
 
 <aside class="rail">
@@ -80,10 +96,15 @@
     {:else}
       <ol>
         {#each shown as r (r.ts + r.msg)}
-          <li class="row {r.level}" class:incomplete={r.incomplete}>
+          <li class="row {r.level}" class:incomplete={r.incomplete} data-testid="log-line">
             <span class="t mono">{time(r.ts)}</span>
             <span class="lv mono">{r.level}</span>
-            <span class="msg">{r.msg}</span>
+            <span class="msg">
+              {r.msg}
+              {#if r.fields && Object.keys(r.fields).length > 0}
+                <span class="record mono" data-testid="log-record">{recordOf(r)}</span>
+              {/if}
+            </span>
           </li>
         {/each}
       </ol>
@@ -161,6 +182,16 @@
   .t { color: var(--dim); }
   .lv { color: var(--dim); }
   .msg { overflow-wrap: anywhere; }
+  /* WHICH RECORD — a dim line under the (never-truncated) message, so a dropped/errored unit is
+     debuggable in place: the full error above, the record it happened on below. */
+  .record {
+    display: block;
+    color: var(--dim);
+    font-size: var(--t-small);
+    margin-top: 1px;
+    overflow-wrap: anywhere;
+  }
+  .row.error .record { color: color-mix(in srgb, var(--bad) 65%, var(--dim)); }
 
   .row.debug .msg, .row.debug .lv { color: var(--dim); }
   .row.warn .lv { color: var(--warn); }

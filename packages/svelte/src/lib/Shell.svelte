@@ -15,16 +15,27 @@
    *
    * ── NAV WRAPS AND THE CONTEXT HIDES ─────────────────────────────────────────────────────────────
    *
-   * Tabs are navigation and survive at every width. The tenant chip is CONTEXT and does not — it was
-   * one of the things pushing the prototype's document sideways. Hiding it below the panel width is a
-   * decision about what is load-bearing, not a concession.
+   * Tabs are navigation and survive at every width. The workspace picker is CONTEXT and does not —
+   * it was one of the things pushing the prototype's document sideways. Hiding it below the panel
+   * width is a decision about what is load-bearing, not a concession.
+   *
+   * ── THERE IS NO TENANT CHIP, AND THAT IS THE MODEL ───────────────────────────────────────────
+   *
+   * This used to print `tenant default` beside the picker. It never had a source: the prop was
+   * declared, nothing ever passed it, and the literal `'default'` in its own default value was
+   * what every install read. A label that is the same string on every screen it will ever appear
+   * on is not information.
+   *
+   * It is also wrong about the model. One user, one tenant: the INSTALL is the tenant, so naming
+   * it on screen is like printing the hostname of the machine you are already sitting at. What
+   * varies — and what decides what every surface below lists — is the WORKSPACE, which is the one
+   * thing left here.
    */
   import type { Snippet } from 'svelte';
 
   interface Props {
     view: string;
     views: readonly { id: string; label: string }[];
-    tenant?: string;
     onnavigate?: (id: string) => void;
     /**
      * Let a data-dense view use the whole viewport.
@@ -38,7 +49,7 @@
     wide?: boolean;
     children: Snippet;
   }
-  let { view, views, tenant = 'default', onnavigate, wide = false, children }: Props = $props();
+  let { view, views, onnavigate, wide = false, children }: Props = $props();
 </script>
 
 <div class="app" class:wide>
@@ -54,10 +65,9 @@
               onclick={() => onnavigate?.(v.id)}>{v.label}</button>
     {/each}
     <span class="spacer"></span>
-    <!-- WHICH WORKSPACE, top right, because it decides what every surface below lists. The tenant
-         chip sits beside it: one says whose cluster, the other says whose code. -->
+    <!-- WHICH WORKSPACE, top right, because it decides what every surface below lists — and it is
+         the only context here, for the reason in the header. -->
     <Workspace />
-    <span class="tenant">tenant <b>{tenant}</b></span>
   </nav>
   <main>{@render children()}</main>
 </div>
@@ -89,8 +99,7 @@
   .spacer { flex: 1; }
 
   /* CONTEXT, not navigation: it goes when there is no room, and it is the default that it has none. */
-  .tenant { display: none; font-size: var(--t-small); color: var(--dim); }
-  .tenant b { color: var(--fg); font-weight: 500; }
+
 
   main { min-width: 0; } /* grid/flex children default to min-width:auto and widen the page */
 
@@ -101,6 +110,5 @@
     .app.wide { max-width: min(2200px, 96vw); }
     .brand { margin-right: var(--s-4); }
     nav button { padding: var(--s-1) var(--s-3); }
-    .tenant { display: inline; }
   }
 </style>

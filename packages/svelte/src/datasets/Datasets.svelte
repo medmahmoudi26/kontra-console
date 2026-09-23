@@ -176,6 +176,37 @@
     { label: 'expires', width: '7rem' },
   ];
 
+  /**
+   * THE PREVIEW'S COLUMNS, as `DataTable` wants them.
+   *
+   * The type goes in the LABEL rather than in a `title`, matching the query workbench's header and
+   * for the same reason: a column called `contexts` is a different thing depending on whether it
+   * is a `BIGINT` or a `MAP`, and a tooltip is a fact nobody on a touch screen can read.
+   */
+  const previewColumns = $derived<Column[]>(
+    (preview?.columns ?? []).map((c) => {
+      const name = typeof c === 'string' ? c : String((c as { name?: string }).name ?? c);
+      const type = typeof c === 'string' ? '' : String((c as { type?: string }).type ?? '');
+      return { label: type ? `${name}  ${type.toLowerCase()}` : name };
+    })
+  );
+
+  /** What each preview column SHOWS, for the filter row. The same accessor shape the grid uses. */
+  function previewText(row: unknown, i: number): string {
+    return cellText((row as unknown[])[i]);
+  }
+
+  /**
+   * What each preview column IS, for the inspector.
+   *
+   * `previewText` and this differ by exactly the thing that matters: `cellText` flattens a MAP or
+   * a LIST into one line so it fits a row, and opening the inspector on THAT would be showing a
+   * lossy rendering at full size. The raw value is what a reader clicked to see.
+   */
+  function previewValue(row: unknown, i: number): unknown {
+    return (row as unknown[])[i];
+  }
+
   /** Bytes at the scale a person reads. Was `bytesCell`; the arithmetic is unchanged. */
   function bytes(b: number): string {
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -286,26 +317,40 @@
               A bounded sample — the server capped it, so this is not the whole dataset.
             </p>
           {/if}
-          <div class="scroll">
-            <table>
-              <thead>
-                <tr>{#each preview.columns as c (c.name)}<th title={c.type}>{c.name}</th>{/each}</tr>
-              </thead>
-              <tbody>
-                {#each preview.rows as row, i (i)}
-                  <tr>
-                    {#each row as cell, j (j)}
-                      <!-- `null` DRAWN AS A WORD, not as an empty cell: a null and a blank string
-                           are different values and a scan reader has to tell them apart.
-                           `cellText` for the rest — `String()` renders a MAP or LIST column as
-                           `[object Object]`, destroying the cell's whole content. -->
-                      <td class:null={cell === null}>{cell === null ? 'null' : cellText(cell)}</td>
-                    {/each}
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
+          <!--
+            ONE TABLE IMPLEMENTATION, AND THIS IS THE SECOND ONE GOING AWAY.
+
+            This was a hand-rolled `<table>` sitting three hundred lines below a `DataTable` doing
+            the same job, and the divergence cost exactly what divergence costs: the component had
+            per-column filters and this did not, and this clipped at `max-width: 44ch` with
+            `overflow: hidden` and NO title, no click target and no expansion — so anything past
+            forty-four characters was unreachable from the console. The bug was not the clipping;
+            it was clipping in the copy that had no inspector.
+          -->
+          <DataTable
+            columns={previewColumns}
+            rows={preview.rows}
+            maxHeight="28rem"
+            textOf={previewText}
+            cellValue={previewValue}
+            empty="This dataset has no rows yet."
+          >
+            {#snippet cell(r)}
+              {#each r as unknown[] as v, j (j)}
+                <!-- `null` DRAWN AS A WORD, not as an empty cell: a null and a blank string are
+                     different values and a scan reader has to tell them apart. `cellText` for the
+                     rest — `String()` renders a MAP or LIST column as `[object Object]`,
+                     destroying the cell's whole content. -->
+                <td class:num={typeof v === 'number'}>
+                  {#if v === null || v === undefined}
+                    <span class="null">null</span>
+                  {:else}
+                    <span class="mono">{cellText(v)}</span>
+                  {/if}
+                </td>
+              {/each}
+            {/snippet}
+          </DataTable>
           <p class="muted">
             {preview.rows.length} row{preview.rows.length === 1 ? '' : 's'} ·
             {preview.columns.length} columns · full SQL is
@@ -372,14 +417,20 @@
            border: 1px solid var(--line); border-radius: var(--radius);
            background: var(--track); color: var(--dim); cursor: pointer; }
   /* WIDE CONTENT SCROLLS IN ITS OWN BOX. A 31-column observation row would otherwise make the
-     whole page scroll sideways, which is the one thing every surface here refuses to do. */
+     whole page scroll sideways, which is the one thing every surface here refuses to do.
+     `DataTable` owns that box now; this class is kept for the provenance block below it. */
   .scroll { overflow-x: auto; max-width: 100%; }
-  .peek table { border-collapse: collapse; font-size: var(--t-small); font-family: var(--mono); }
-  .peek th, .peek td { border-bottom: 1px solid var(--line); padding: 3px var(--s-2);
-                       text-align: left; white-space: nowrap; max-width: 44ch;
-                       overflow: hidden; text-overflow: ellipsis; }
-  .peek th { color: var(--dim); font-weight: 500; }
-  .peek td.null { color: var(--dim); font-style: italic; }
+  /*
+   * THE SECOND TABLE'S STYLES ARE GONE WITH IT, and this is the rule they broke:
+   *
+   *     .peek th, .peek td { white-space: nowrap; max-width: 44ch;
+   *                          overflow: hidden; text-overflow: ellipsis; }
+   *
+   * No title, no click target, no expansion. Anything past forty-four characters was not scrolled
+   * off — it was unreachable from the console. `DataTable` clips too, at `48ch`, but only on rows
+   * marked `.inspectable`, which is the structural version of "clip only what a click can open".
+   */
+  .null { color: var(--dim); font-style: italic; }
   .err { margin: 0; font-size: var(--t-small); color: var(--bad); }
   .bar { display: flex; flex-direction: column; gap: var(--s-2); }
   h1 { font-size: var(--t-head); font-weight: 600; margin: 0; }
