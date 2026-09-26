@@ -5,8 +5,22 @@
    * Everything on this page is a FACT the control plane already knows: its namespace, its bind
    * address, which surfaces each bundle serves. A settings page that let you type them would be a
    * second source for values the appliance reads from `config.yaml` at boot.
+   *
+   * ── AND NOW WHAT IT RUNS ON: `Infra` (ADR 0052 §6) ──────────────────────────────────────────────
+   *
+   * "Settings gains `Infra`, and it is how an install is verified" — every Machine this control plane
+   * owns and what is serving on each, which is the same KIND of fact as the three above: read off the
+   * install, never authored here. It is a section rather than a ninth nav Surface, and that is a
+   * decision with a cross-repo reason recorded in `infra/Infra.svelte`: a nav entry the orchestrator's
+   * `SPA_SURFACES` does not carry 404s on a COLD load and only on a cold load, which is what let the
+   * same bug ride a release once already (`lib/surfaces.ts:4-9`).
+   *
+   * IT IS STATICALLY IMPORTED, unlike a surface. `App.svelte:11-21`'s argument is that nobody pays for
+   * a surface they did not open; this one has no heavy dependency — no grid, no canvas, no terminal —
+   * so a second chunk for it would buy a round trip and nothing else.
    */
   import { SURFACES } from '../lib/surfaces';
+  import Infra from '../infra/Infra.svelte';
 
   interface Health { ok?: boolean; namespace?: string; version?: string }
   let health = $state<Health | undefined>(undefined);
@@ -35,15 +49,20 @@
 
   <h2>Surfaces</h2>
   <p class="muted">
-    The seven things this console is. Each is addressable — its first path segment names it — and
-    each is declared once, here and in the control plane, which is what stops a surface from being
-    built, tested and unreachable.
+    <!-- COUNTED FROM THE LIST, not typed beside it. This read "the seven things this console is"
+         while `SURFACES` held eight — the prose and the list it introduces cannot disagree if only
+         one of them is written down. -->
+    The {SURFACES.length} things this console is. Each is addressable — its first path segment names
+    it — and each is declared once, here and in the control plane, which is what stops a surface from
+    being built, tested and unreachable.
   </p>
   <ul>
     {#each SURFACES as s (s.id)}
       <li><span class="nm">{s.label}</span><span class="b mono">/{s.id}</span></li>
     {/each}
   </ul>
+
+  <Infra />
 </section>
 
 <style>
