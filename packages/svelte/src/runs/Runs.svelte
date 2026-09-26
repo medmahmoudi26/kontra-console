@@ -21,10 +21,14 @@
   import {
     fetchRuns,
     fetchRun,
+    fetchRunHistory,
     fetchWorkflows,
+    type RunEvent,
     type RunRow,
     type RunDetail,
   } from '@kontra/console-core/run/api';
+  import { startedAtText, shortSeconds } from '@kontra/console-core/run/steps';
+  import { runScopedSql } from '@kontra/console-core/datasets/query';
   import {
     datasetLabel,
     fetchRunDatasets,
@@ -40,7 +44,11 @@
   import { plainText } from '@kontra/console-core/panels/prose';
   import { schemaFields, type FieldNode } from '@kontra/console-core/panels/schemaTree';
   import { formatAddress, parseAddress } from '@kontra/console-core/state/address';
+  import { followRun, type Follow } from '../workflows/runStream';
   import LogsRail from '../workflows/LogsRail.svelte';
+  import Asks from '../workflows/Asks.svelte';
+  import Progress from './Progress.svelte';
+  import Drawer from './Drawer.svelte';
 
   function runFromUrl(): string | null {
     const a = parseAddress(location.pathname + location.search);
@@ -63,6 +71,9 @@
   /** The Dataset partitions the LAKE attributes to this run — the authority, see `record.ts`. */
   let datasets = $state<RunDataset[]>([]);
   let datasetsErr = $state('');
+  /** The lake read is in flight. `datasets.length === 0` cannot stand in for this: it is also what
+   *  a run that wrote nothing looks like, and the handle has to tell those apart. */
+  let datasetsLoading = $state(false);
   /** Which of them is previewed. A run can write several; the first is the one opened. */
   let shownDataset = $state<RunDataset | undefined>(undefined);
   /** What this run was STARTED with and what it RETURNED. Not the schema — the run. */
@@ -74,6 +85,63 @@
   // a decoded payload does not carry.
   let inputFields = $state<FieldNode[]>([]);
   let outputFields = $state<FieldNode[]>([]);
+
+  /**
+   * The run's event history — what the Progress region reduces into steps.
+   *
+   * A FIFTH INDEPENDENT READ, on the same terms as the other four: a history Temporal has dropped
+   * must not blank the Dataset the run wrote. `fetchRunHistory` answers `null` for both "dropped
+   * for retention" and "no first event yet", which are the two ordinary absences.
+   */
+  let events = $state<RunEvent[]>([]);
+  let historyErr = $state('');
+  let historyLoading = $state(false);
+  /** Which workflow type the declared schemas were read for, so a poll does not re-read them. */
+  let schemasFor = $state('');
+
+  /**
+   * WHICH DRAWER IS OPEN — the Dataset rows and the log rail, out of the page's flow.
+   *
+   * They are the two regions that GROW while a run is going, and in a column they push everything
+   * under them down for the whole run. Behind a drawer they cannot push anything, and the page
+   * above settles at second one. See `Drawer.svelte` for the measurement.
+   */
+  let drawer = $state<'logs' | 'dataset' | null>(null);
+
+  /**
+   * How much each feed held when its drawer was last open.
+   *
+   * The one real cost of hiding a live feed is missing it arrive, so the handle has to say when
+   * something landed that nobody has looked at. Seeded on open rather than on load: a run opened
+   * with 15 lines already in it has not been read, and marking the handle is correct.
+   */
+  let seenLogs = $state(0);
+  let seenRows = $state(0);
+
+  /**
+   * A clock for the elapsed readout and for drawing an in-flight step against something.
+   *
+   * A `setTimeout` CHAIN AND NOT `setInterval`, and the difference is not cosmetic. `no-polling.mjs`
+   * bans the call outright — deliberately narrowly, because "a broad rule gets suppressed" — and
+   * `setTimeout` is named as allowed. This qualifies on the rule's own terms rather than by
+   * wording: it ASKS NOBODY ANYTHING. There is no fetch behind it, no server is woken, and the value
+   * it writes is `Date.now()`. A poll is stale for its interval and then jumps; a clock that reads
+   * the clock cannot be stale.
+   *
+   * Only while something can still change. A settled run's numbers are final, and a wakeup per
+   * second on a page full of them buys no new information.
+   */
+  let nowMs = $state(Date.now());
+  $effect(() => {
+    if (detail?.settled !== false) return;
+    let t: ReturnType<typeof setTimeout>;
+    const tick = (): void => {
+      nowMs = Date.now();
+      t = setTimeout(tick, 1000);
+    };
+    t = setTimeout(tick, 1000);
+    return () => clearTimeout(t);
+  });
 
   function open(id: string | null): void {
     history.pushState({}, '', formatAddress({ view: 'runs', run: id }));
@@ -100,15 +168,122 @@
   // The list drives the detail header's two status words from the same RunRow.
   const current = $derived(rows.find((r) => r.runId === openRun));
 
+  /** How the page knows the run changed. `connecting` until the first frame lands. */
+  let follow = $state<Follow<RunDetail>>({ state: 'connecting' });
+
   /**
-   * Everything a run's record is made of, loaded when one opens.
+   * Bumped on every frame the run stream delivers. {@link Asks} re-reads on it.
    *
-   * FOUR INDEPENDENT READS, AND ONE FAILING MUST NOT BLANK THE OTHERS. They answer from four
-   * different authorities — Temporal for the status and the payloads, VictoriaLogs for the rail,
-   * the lake for the Dataset — and a run whose execution Temporal has dropped for retention still
-   * has rows and log lines worth showing. Each keeps its own error so the page can say WHICH part
-   * is missing instead of rendering as if the run were empty.
+   * A COUNTER AND NOT THE FRAME, because an answer is not instant: the POST that answers a question
+   * returns when the signal is DELIVERED, not when the workflow has acted on it, so re-reading in
+   * the same tick shows the question still pending under a run that has already moved on. The
+   * stream is what says it actually moved — the same cadence the rest of this page rides, and not
+   * a timer.
    */
+  let revision = $state(0);
+
+  /** One refresh in flight at a time. A slow history read must not queue three more behind it. */
+  let refreshing = false;
+
+  const say = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+  /**
+   * Everything a run's record is made of.
+   *
+   * FIVE INDEPENDENT READS, AND ONE FAILING MUST NOT BLANK THE OTHERS. They answer from different
+   * authorities — Temporal for the status, the history and the payloads, VictoriaLogs for the
+   * rail, the lake for the Dataset — and a run whose execution Temporal has dropped for retention
+   * still has rows and log lines worth showing. Each keeps its own error so the page can say WHICH
+   * part is missing instead of rendering as if the run were empty.
+   *
+   * EVERY WRITE IS GUARDED ON `openRun === id`. These are re-entered on a timer now, so an answer
+   * can arrive after the reader has opened a different run — and painting run A's rows under run
+   * B's heading is the one failure worse than showing nothing.
+   */
+  async function refresh(id: string): Promise<void> {
+    if (refreshing) return;
+    refreshing = true;
+    const mine = (): boolean => openRun === id;
+    try {
+      await Promise.allSettled([
+        fetchRunHistory(id)
+          .then((h) => { if (mine()) { events = h?.events ?? []; historyErr = ''; } })
+          .catch((e: unknown) => { if (mine()) historyErr = say(e); })
+          .finally(() => { if (mine()) historyLoading = false; }),
+
+        fetchRun(id)
+          .then((d) => {
+            if (!mine()) return;
+            detail = d;
+            // The declared schemas supply the ORDER a field is read in and the author's sentence
+            // about it, which a decoded payload does not carry. They do not change while a run
+            // runs, so they are read once per type rather than on every poll.
+            if (d.type && d.type !== schemasFor) {
+              schemasFor = d.type;
+              void fetchWorkflows()
+                .then((w) => {
+                  if (!mine()) return;
+                  const desc = w.registered.find((r) => r.name === d.type);
+                  inputFields = schemaFields(desc?.input) ?? [];
+                  outputFields = schemaFields(desc?.output) ?? [];
+                })
+                .catch(() => {});
+            }
+          })
+          .catch((e: unknown) => { if (mine()) detailErr = say(e); }),
+
+        /**
+         * THE DATASET COMES FROM THE LAKE, NOT FROM `materializationRecords`.
+         *
+         * That field is the ADR 0017 ledger's, and it is EMPTY for every v2 Run — `publishBatch`
+         * writes lake rows and no ledger record. The region read it, found nothing, and printed
+         * "This run recorded no output Dataset" over ten rows the lake had stamped with this run.
+         *
+         * THE PARTITION IS ADDRESSED IN FULL. `version` and `dt` ride into the preview, so what is
+         * shown is THIS run's rows — asking by name alone returns whichever run wrote that name
+         * last, which on a Dataset several runs append to is somebody else's data.
+         */
+        fetchRunDatasets(id)
+          .then(async (ds) => {
+            if (!mine()) return;
+            datasets = ds;
+            datasetsErr = '';
+            const first = ds[0];
+            if (!first) return;
+            shownDataset = first;
+            try {
+              const p = await fetchPreview({
+                dataset: first.name,
+                kind: first.kind || 'output',
+                ...(first.version ? { version: first.version } : {}),
+                ...(first.dt ? { dt: first.dt } : {}),
+                limit: 50,
+              });
+              if (mine()) { preview = p; previewErr = ''; }
+            } catch (e) {
+              if (mine()) previewErr = say(e);
+            }
+          })
+          .catch((e: unknown) => { if (mine()) datasetsErr = say(e); })
+          .finally(() => { if (mine()) datasetsLoading = false; }),
+
+        // `undefined` means Temporal has dropped the execution — an ordinary answer for an old
+        // run, and a different fact from "this run was started with nothing".
+        fetchRunIO(id)
+          .then((r) => { if (mine()) { io = r; ioGone = r === undefined; } })
+          .catch((e: unknown) => { if (mine()) ioErr = say(e); }),
+
+        fetchLogs(id)
+          .then((r) => { if (mine()) { logs = r; logsErr = null; } })
+          .catch((e: unknown) => { if (mine()) logsErr = say(e); })
+          .finally(() => { if (mine()) logsLoading = false; }),
+      ]);
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  /** Opening a run: clear the last one, then read. */
   $effect(() => {
     const id = openRun;
     detail = undefined;
@@ -125,66 +300,70 @@
     ioGone = false;
     inputFields = [];
     outputFields = [];
+    schemasFor = '';
+    events = [];
+    historyErr = '';
+    drawer = null;
+    seenLogs = 0;
+    seenRows = 0;
+    datasetsLoading = id !== null;
+    historyLoading = id !== null;
+    logsLoading = id !== null;
     if (id === null) return;
+    void refresh(id);
+  });
 
-    fetchRun(id)
-      .then((d) => {
-        detail = d;
-        // The declared schemas still supply the ORDER and the author's sentence per field. The
-        // VALUES come from `io` — see the note on `inputFields`.
-        fetchWorkflows()
-          .then((w) => {
-            const desc = w.registered.find((r) => r.name === d.type);
-            inputFields = schemaFields(desc?.input) ?? [];
-            outputFields = schemaFields(desc?.output) ?? [];
-          })
-          .catch(() => {});
-      })
-      .catch((e: unknown) => (detailErr = e instanceof Error ? e.message : String(e)));
+  /**
+   * KEEP READING WHILE IT IS OPEN — ON THE SERVER'S WORD, NOT ON A TIMER.
+   *
+   * THIS WAS A TWO-SECOND `setInterval` AND THAT WAS THE WRONG FIX. The page used to read ONCE: five
+   * fetches when a run opened and nothing ever again, so a run that took a minute sat on whatever
+   * was true in its first second — measured, a canary showing "bringing up the fleet" sixteen
+   * minutes after it had finished, with a reload as the only way to learn otherwise. A run page that
+   * is wrong until you reload is worse than one that says nothing, because it looks like an answer.
+   *
+   * An interval fixed that and broke something else. ADR 0048 §3 and `scripts/no-polling.mjs`
+   * forbid it in this bundle, and the reason is the same failure in slower motion: "a polled surface
+   * is stale for its interval and then JUMPS, which is the thing this console exists to stop doing".
+   * Five reads per tab per two seconds, against Temporal, VictoriaLogs and the lake, most of them
+   * answering the same bytes.
+   *
+   * `/api/runs/:id/stream` already exists and already says when a run changed — one read
+   * server-side, fanned out to every open tab, emitted only when the payload DIFFERS. So the stream
+   * is what triggers the re-read, exactly as `Workflows.svelte` already does it: "the stream says
+   * the run changed; the history endpoint says how".
+   *
+   * THE FRAME'S OWN `run` IS USED FOR `detail`, so the status the page shows is the one that woke
+   * it — and `refresh` then brings the other four into line. Painting the frame and re-reading are
+   * not two sources: the frame carries `runs.read`, which is what `fetchRun` returns.
+   *
+   * AND THE SETTLE TAIL SURVIVES, because it was never about the interval. `settled` is Temporal and
+   * the ledger agreeing the run is over; the LAKE is a third authority and commits a moment later.
+   * Measured: a canary reported `Finished in 46.2s` with `Dataset 0` beside it, and the rows — six
+   * of them — were queryable four seconds afterwards. The server closes the stream ten seconds after
+   * terminal, so the last frame can still land before the lake has; these two `setTimeout`s are what
+   * make the page's final word about the output true. They are not a poll and the guard agrees:
+   * bounded, twice, on an event that does not repeat.
+   */
+  $effect(() => {
+    const id = openRun;
+    if (id === null) return;
+    follow = { state: 'connecting' };
+    return followRun<RunDetail>(id, (f) => {
+      follow = f;
+      if ((f.state === 'live' || f.state === 'ended') && f.run) detail = f.run;
+      if (f.state === 'live' || f.state === 'ended') {
+        revision += 1;
+        void refresh(id);
+      }
+    });
+  });
 
-    /**
-     * THE DATASET COMES FROM THE LAKE, NOT FROM `materializationRecords`.
-     *
-     * That field is the ADR 0017 ledger's, and it is EMPTY for every v2 Run — `publishBatch`
-     * writes lake rows and no ledger record. The region read it, found nothing, and printed "This
-     * run recorded no output Dataset" over ten rows the lake had stamped with this run's id.
-     *
-     * THE PARTITION IS ADDRESSED IN FULL. `version` and `dt` ride into the preview, so what is
-     * shown is THIS run's rows — asking by name alone returns whichever run wrote that name last,
-     * which on a Dataset several runs append to is somebody else's data under this run's heading.
-     */
-    fetchRunDatasets(id)
-      .then((ds) => {
-        datasets = ds;
-        const first = ds[0];
-        if (!first) return;
-        shownDataset = first;
-        return fetchPreview({
-          dataset: first.name,
-          kind: first.kind || 'output',
-          ...(first.version ? { version: first.version } : {}),
-          ...(first.dt ? { dt: first.dt } : {}),
-          limit: 50,
-        })
-          .then((p) => (preview = p))
-          .catch((e: unknown) => (previewErr = e instanceof Error ? e.message : String(e)));
-      })
-      .catch((e: unknown) => (datasetsErr = e instanceof Error ? e.message : String(e)));
-
-    // `undefined` means Temporal has dropped the execution — an ordinary answer for an old run,
-    // and a different fact from "this run was started with nothing".
-    fetchRunIO(id)
-      .then((r) => {
-        io = r;
-        ioGone = r === undefined;
-      })
-      .catch((e: unknown) => (ioErr = e instanceof Error ? e.message : String(e)));
-
-    logsLoading = true;
-    fetchLogs(id)
-      .then((r) => (logs = r))
-      .catch((e: unknown) => (logsErr = e instanceof Error ? e.message : String(e)))
-      .finally(() => (logsLoading = false));
+  $effect(() => {
+    const id = openRun;
+    if (id === null || !settled) return;
+    const timers = [1_500, 5_000].map((ms) => setTimeout(() => void refresh(id), ms));
+    return () => timers.forEach(clearTimeout);
   });
 
   /**
@@ -239,6 +418,72 @@
       ? JSON.stringify(io.output)
       : ''
   );
+
+  /** When the run started, and how long it has been going. Both from whichever read answered. */
+  const startedAt = $derived(detail?.startedAt ?? current?.startedAt ?? 0);
+  const closedAt = $derived(detail?.closedAt ?? current?.closedAt ?? 0);
+  const startedText = $derived(startedAtText(startedAt));
+  /** Seconds since the run's first event — what an in-flight step is drawn against. */
+  const elapsed = $derived(startedAt ? ((closedAt || nowMs) - startedAt) / 1000 : 0);
+  /**
+   * The server's reading across BOTH dimensions — execution and materialization (ADR 0017).
+   *
+   * It is what stops the poll, so it is a `$derived` of its own: an effect keyed on this re-runs
+   * when the ANSWER changes rather than every time `detail` is replaced.
+   */
+  const settled = $derived(detail?.settled === true);
+  /** Nothing has closed it. Absent detail is not "finished" — it is "not known yet". */
+  const live = $derived(detail ? !detail.settled : false);
+
+  /**
+   * WHERE "query these rows" GOES — the Datasets workbench, with this run's query already written.
+   *
+   * The address carries the dataset and the run and a flag; `runScopedSql` composes the SQL from
+   * exactly those on arrival, so the link is short, shareable, and the only spelling of the query.
+   * An `<a href>` rather than a button: it is a navigation, so it should middle-click, and the
+   * status bar should say where it goes before it is clicked.
+   */
+  const queryHref = $derived(
+    shownDataset && openRun
+      ? formatAddress({
+          view: 'datasets',
+          dataset: {
+            name: shownDataset.name,
+            ...(shownDataset.kind === 'output' || shownDataset.kind === 'standalone'
+              ? { kind: shownDataset.kind }
+              : {}),
+            run: openRun,
+            query: true,
+          },
+        })
+      : ''
+  );
+  /** Shown beside the button, so what the link will ask is legible before following it. */
+  const queryPreview = $derived(
+    shownDataset && openRun ? runScopedSql(shownDataset.name, openRun).replace(/\n/g, ' ') : ''
+  );
+
+  /**
+   * What the Dataset handle says before it is opened.
+   *
+   * `0` AND "NOT READ YET" MUST NOT LOOK THE SAME. The preview is a lake query and can take
+   * seconds; printing `0` while it is in flight says this run wrote nothing, which is the exact
+   * lie every other region on this page is written to avoid. Measured live: the handle read
+   * `Dataset 0` over a Dataset that had 10 rows.
+   */
+  const rowCount = $derived<string>(
+    preview ? String(preview.rows.length) : datasetsLoading ? '…' : '0'
+  );
+
+  /** Something arrived in a feed that nobody has opened since. */
+  const unreadLogs = $derived(drawer !== 'logs' && logs.length > seenLogs);
+  const unreadRows = $derived(drawer !== 'dataset' && (preview?.rows.length ?? 0) > seenRows);
+
+  function openDrawer(which: 'logs' | 'dataset'): void {
+    drawer = drawer === which ? null : which;
+    if (drawer === 'logs') seenLogs = logs.length;
+    if (drawer === 'dataset') seenRows = preview?.rows.length ?? 0;
+  }
 
   function ago(ms: number): string {
     if (!ms) return '';
@@ -306,19 +551,60 @@
     <header class="head">
       <div class="idcol">
         <span class="rid mono" data-testid="run-detail-id">{openRun}</span>
-        {#if current}<span class="type">{current.type}</span>{/if}
-      </div>
-      {#if current}
-        {@const ex = executionOf(current)}
-        <!-- THE LAKE WINS ON THIS PAGE, and only on this page. The ledger answers `unrecorded` for
-             every v2 Run; the page has already read the lake for the Dataset region below, so it
-             can say what is actually there instead of repeating a word the list is stuck with. -->
-        {@const mat = lakeMaterialization(datasets) ?? materializationOf(current)}
-        <div class="dims">
-          <span class="chip {tone(ex.label)}" title={ex.title} data-testid="run-execution">{ex.label}</span>
-          <span class="chip {tone(mat.label)}" title={mat.title} data-testid="run-materialization">{mat.label}</span>
+        <!-- WHAT IT IS AND WHEN IT STARTED. A run id carries an epoch (`canary-1790191378`) and
+             nobody reads one at a glance, so the date is printed rather than left to be decoded. -->
+        <div class="sub">
+          {#if detail?.type || current?.type}<span>{detail?.type || current?.type}</span>{/if}
+          {#if startedText}
+            <span class="dot">·</span>
+            <span>started <span class="when mono" data-testid="run-started">{startedText}</span></span>
+          {/if}
+          {#if elapsed > 0}
+            <span class="dot">·</span>
+            <span class="when mono">{shortSeconds(elapsed)}{live ? ' and counting' : ''}</span>
+          {/if}
+          <!-- A LIVE PAGE THAT STOPPED BEING LIVE HAS TO SAY SO, which is the whole lesson of the
+               bug this page was rewritten for: a run showing "bringing up the fleet" sixteen
+               minutes after it finished, looking exactly like an answer. The stream can drop or be
+               unsupported, and a frozen page is indistinguishable from a run that is thinking — so
+               the two states that mean "these numbers have stopped arriving" are printed.
+               `connecting` is not one of them: it lasts one round trip and blinking on every open
+               would be noise. -->
+          {#if live && follow.state === 'reconnecting'}
+            <span class="dot">·</span>
+            <span class="stale" data-testid="run-stream-stale">reconnecting — these numbers may be behind</span>
+          {:else if live && follow.state === 'unsupported'}
+            <span class="dot">·</span>
+            <span class="stale" data-testid="run-stream-stale">live updates unavailable in this browser — reload to refresh</span>
+          {/if}
         </div>
-      {/if}
+      </div>
+      <div class="rightcol">
+        {#if current}
+          {@const ex = executionOf(current)}
+          <!-- THE LAKE WINS ON THIS PAGE, and only on this page. The ledger answers `unrecorded`
+               for every v2 Run; the page has already read the lake for the Dataset region, so it
+               can say what is actually there instead of repeating a word the list is stuck with. -->
+          {@const mat = lakeMaterialization(datasets) ?? materializationOf(current)}
+          <div class="dims">
+            <span class="chip {tone(ex.label)}" title={ex.title} data-testid="run-execution">{ex.label}</span>
+            <span class="chip {tone(mat.label)}" title={mat.title} data-testid="run-materialization">{mat.label}</span>
+          </div>
+        {/if}
+        <!-- THE TWO FEEDS THAT GROW, behind handles. The counts keep climbing while the drawer is
+             shut, and a handle marks itself when something landed nobody has looked at — which is
+             the one thing hiding a live feed has to get right. -->
+        <div class="handles">
+          <button class="handle" class:hot={unreadLogs} data-testid="open-logs" onclick={() => openDrawer('logs')}>
+            {#if unreadLogs && live}<span class="blip"></span>{/if}
+            <span>Logs</span><span class="n mono">{logs.length}</span><span class="arrow">▸</span>
+          </button>
+          <button class="handle" class:hot={unreadRows} data-testid="open-dataset" onclick={() => openDrawer('dataset')}>
+            {#if unreadRows && live}<span class="blip"></span>{/if}
+            <span>Dataset</span><span class="n mono">{rowCount}</span><span class="arrow">▸</span>
+          </button>
+        </div>
+      </div>
     </header>
 
     {#if detailErr}<p class="err" role="alert">{detailErr}</p>{/if}
@@ -369,63 +655,28 @@
       {/if}
     </div>
 
-    <div class="middle">
-      <!-- DATASET (left) — the last rows of the run's output, with error/void_reason shown IN FULL
-           and the record (host/endpoint/point/node…) alongside. This is the DATASET-error's home. -->
-      <div class="region dataset" data-testid="run-dataset">
-        <h2>
-          Dataset
-          {#if shownDataset}<span class="dim mono">{datasetLabel(shownDataset)}</span>{/if}
-          {#if datasets.length > 1}
-            <!-- A RUN CAN WRITE SEVERAL. The first is shown; the count says the others exist
-                 rather than letting the page read as though there were only one. -->
-            <span class="dim">and {datasets.length - 1} more</span>
-          {/if}
-        </h2>
-        {#if datasetsErr}
-          <p class="err" role="alert">{datasetsErr}</p>
-        {:else if previewErr}
-          <p class="err">{previewErr}</p>
-        {:else if !shownDataset}
-          <p class="muted">This run wrote no rows to the lake.</p>
-        {:else if !preview}
-          <p class="muted">reading…</p>
-        {:else if preview.rows.length === 0}
-          <p class="muted">The Dataset is empty — a successful empty result.</p>
-        {:else}
-          <div class="tbl-wrap">
-            <table>
-              <thead>
-                <tr>{#each preview.columns as c}<th title={c.type}>{c.name}</th>{/each}</tr>
-              </thead>
-              <tbody>
-                {#each preview.rows as r, ri (ri)}
-                  <tr class:err-row={rowHasError(r)} data-testid={rowHasError(r) ? 'dataset-error-row' : 'dataset-row'}>
-                    {#each preview.columns as _c, ci}
-                      <td class:err-cell={errorCols.includes(ci) && cell(r[ci]).trim() !== ''}
-                          data-testid={errorCols.includes(ci) ? 'dataset-error-cell' : undefined}>{cell(r[ci])}</td>
-                    {/each}
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-          <p class="foot mono">
-            {preview.rows.length} of {shownDataset.rows} row{shownDataset.rows === 1 ? '' : 's'}{preview.truncated ? ' · truncated' : ''}
-            {#if (shownDataset.contributingRuns ?? []).length > 1}
-              · shared with {(shownDataset.contributingRuns ?? []).length - 1} other run(s)
-            {/if}
-            · the error / void_reason column carries the full message; the rest of the row is which record
-          </p>
-        {/if}
-      </div>
+    <!-- WHAT THIS RUN NEEDS FROM A PERSON, above everything that merely describes it.
 
-      <!-- LOG (right) — the run's log lines, filterable, each showing the full message and the
-           record it is about (from stream `fields`). This is the DROPPED/logged error's home. -->
-      <div class="region log" data-testid="run-log">
-        <LogsRail records={logs} loading={logsLoading} error={logsErr} />
-      </div>
-    </div>
+         IT LIVED ON THE WORKFLOWS PAGE AND CAME HERE WITH THE RUN VIEW. That page's own comment is
+         the reason it could not simply be deleted with the rest: "a run parked on an `ask` looks
+         exactly like a run that is working, and the only difference visible anywhere is this". A
+         parked run is the one state a person has to ACT on, so it goes above Progress — which will
+         truthfully show a run doing nothing, without being able to say that nothing is what it is
+         waiting for. -->
+    <Asks runId={openRun} {revision} />
+
+    <!-- PROGRESS — WHAT THE RUN IS DOING, and the region the page leads with after Input.
+
+         It sits here because for the first 34 seconds of a canary it is the only region with
+         anything in it: nothing reaches the log rail and no row reaches the lake until a Session
+         opens. A page whose first live region is empty reads as a hang. -->
+    <Progress
+      {events}
+      now={elapsed}
+      {live}
+      error={historyErr}
+      loading={historyLoading}
+    />
 
     <!-- OUTPUT (bottom) — WHAT THIS RUN RETURNED, decoded from `WorkflowExecutionCompleted`,
          against the declared output schema for the order and the author's sentence per field.
@@ -467,6 +718,101 @@
         <p class="muted">This workflow returned no value.</p>
       {/if}
     </div>
+    <!-- THE TWO FEEDS, OUT OF THE FLOW. They are the only regions that grow while a run is going;
+         in the column they pushed Input, Output and each other down for the whole run. Nothing
+         here can move anything on the page behind it. -->
+    <Drawer
+      open={drawer !== null}
+      label={drawer === 'dataset' ? 'Dataset rows' : 'Run logs'}
+      onclose={() => (drawer = null)}
+    >
+      {#snippet head()}
+        <div class="dtabs" role="tablist">
+          <button role="tab" aria-selected={drawer === 'logs'} data-testid="drawer-tab-logs" onclick={() => openDrawer('logs')}>
+            Logs<span class="n mono">{logs.length}</span>
+          </button>
+          <button role="tab" aria-selected={drawer === 'dataset'} data-testid="drawer-tab-dataset" onclick={() => openDrawer('dataset')}>
+            Dataset<span class="n mono">{rowCount}</span>
+          </button>
+        </div>
+        <span class="spacer"></span>
+        <!-- QUERY THESE ROWS — the whole point of showing them here rather than only listing them.
+             Seeing that a run produced rows is half the job; the next thing anybody does is query
+             them, and making them re-find the dataset by name and re-type a SELECT is the gap this
+             closes. An anchor, not a button: it is a navigation and should middle-click. -->
+        {#if drawer === 'dataset' && queryHref}
+          <a class="toquery" href={queryHref} data-testid="query-dataset" title={queryPreview}>
+            query these rows ↗
+          </a>
+        {/if}
+        <button class="dclose" onclick={() => (drawer = null)} aria-label="Close">✕ esc</button>
+      {/snippet}
+
+      {#snippet children()}
+        {#if drawer === 'dataset'}
+        <!-- DATASET (left) — the last rows of the run's output, with error/void_reason shown IN FULL
+             and the record (host/endpoint/point/node…) alongside. This is the DATASET-error's home. -->
+        <!-- `fills` ONLY WHEN THERE IS A TABLE IN IT. The region stretches to the panel so the rows
+             get the height, but "This run wrote no rows to the lake." in a bordered box stretched
+             to 700px is a region that looks broken rather than empty. -->
+        <div
+          class="region dataset"
+          class:fills={(preview?.rows.length ?? 0) > 0}
+          data-testid="run-dataset"
+        >
+          <h2>
+            Dataset
+            {#if shownDataset}<span class="dim mono">{datasetLabel(shownDataset)}</span>{/if}
+            {#if datasets.length > 1}
+              <!-- A RUN CAN WRITE SEVERAL. The first is shown; the count says the others exist
+                   rather than letting the page read as though there were only one. -->
+              <span class="dim">and {datasets.length - 1} more</span>
+            {/if}
+          </h2>
+          {#if datasetsErr}
+            <p class="err" role="alert">{datasetsErr}</p>
+          {:else if previewErr}
+            <p class="err">{previewErr}</p>
+          {:else if !shownDataset}
+            <p class="muted">This run wrote no rows to the lake.</p>
+          {:else if !preview}
+            <p class="muted">reading…</p>
+          {:else if preview.rows.length === 0}
+            <p class="muted">The Dataset is empty — a successful empty result.</p>
+          {:else}
+            <div class="tbl-wrap" data-testid="dataset-scroller">
+              <table>
+                <thead>
+                  <tr>{#each preview.columns as c}<th title={c.type}>{c.name}</th>{/each}</tr>
+                </thead>
+                <tbody>
+                  {#each preview.rows as r, ri (ri)}
+                    <tr class:err-row={rowHasError(r)} data-testid={rowHasError(r) ? 'dataset-error-row' : 'dataset-row'}>
+                      {#each preview.columns as _c, ci}
+                        <td class:err-cell={errorCols.includes(ci) && cell(r[ci]).trim() !== ''}
+                            data-testid={errorCols.includes(ci) ? 'dataset-error-cell' : undefined}>{cell(r[ci])}</td>
+                      {/each}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+            <p class="foot mono">
+              {preview.rows.length} of {shownDataset.rows} row{shownDataset.rows === 1 ? '' : 's'}{preview.truncated ? ' · truncated' : ''}
+              {#if (shownDataset.contributingRuns ?? []).length > 1}
+                · shared with {(shownDataset.contributingRuns ?? []).length - 1} other run(s)
+              {/if}
+              · the error / void_reason column carries the full message; the rest of the row is which record
+            </p>
+          {/if}
+        </div>
+        {:else}
+          <div class="region log" data-testid="run-log">
+            <LogsRail records={logs} loading={logsLoading} error={logsErr} />
+          </div>
+        {/if}
+      {/snippet}
+    </Drawer>
   </section>
 {/if}
 
@@ -544,6 +890,13 @@
     white-space: nowrap;
   }
 
+  /* The stream is not delivering. Warning-toned rather than error-toned: the run is probably fine
+     and the PAGE is the thing that is behind, which is a different sentence. */
+  .stale {
+    color: var(--warn, var(--dim));
+    white-space: nowrap;
+  }
+
   .word {
     white-space: nowrap;
   }
@@ -583,14 +936,140 @@
   .idcol {
     display: flex;
     flex-direction: column;
-    gap: var(--s-1);
+    gap: 3px;
+    min-width: 0;
   }
   .idcol .rid {
     font-size: var(--t-lead);
+    overflow-wrap: anywhere;
+  }
+  /* WHAT IT IS, WHEN IT STARTED, HOW LONG IT HAS BEEN — one line under the id. */
+  .idcol .sub {
+    display: flex;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+    align-items: baseline;
+    font-size: var(--t-small);
+    color: var(--dim);
+  }
+  .idcol .sub .when {
+    color: var(--dim);
+  }
+  .idcol .sub .dot {
+    color: var(--line);
+  }
+  .rightcol {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    align-items: flex-end;
   }
   .dims {
     display: flex;
     gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  /* ── the two feeds, behind handles ──────────────────────────────────────────────────────────── */
+  .handles {
+    display: flex;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+  .handle {
+    display: flex;
+    gap: var(--s-2);
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--s-1) var(--s-3);
+    cursor: pointer;
+    font-size: var(--t-small);
+    color: var(--dim);
+  }
+  .handle:hover {
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--fg) 25%, var(--line));
+  }
+  .handle .n {
+    font-size: var(--t-micro);
+    color: var(--dim);
+  }
+  .handle .arrow {
+    font-size: var(--t-micro);
+    color: var(--dim);
+  }
+  /* SOMETHING LANDED WHILE THE DRAWER WAS SHUT. The one thing hiding a live feed has to get right. */
+  .handle.hot {
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .handle.hot .n {
+    color: var(--accent);
+  }
+  .blip {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blip 1.6s ease-in-out infinite;
+  }
+  @keyframes blip {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  /* ── drawer chrome ──────────────────────────────────────────────────────────────────────────── */
+  .dtabs {
+    display: flex;
+    gap: var(--s-1);
+  }
+  .dtabs button {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    color: var(--dim);
+    padding: var(--s-1) var(--s-3);
+    cursor: pointer;
+    font-size: var(--t-small);
+  }
+  .dtabs button[aria-selected='true'] {
+    color: var(--fg);
+    background: var(--track);
+    border-color: var(--line);
+  }
+  .dtabs .n {
+    font-size: var(--t-micro);
+    color: var(--dim);
+    margin-left: var(--s-1);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .toquery {
+    font-size: var(--t-small);
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: var(--radius);
+    padding: var(--s-1) var(--s-2);
+    white-space: nowrap;
+  }
+  .toquery:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .dclose {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--dim);
+    cursor: pointer;
+    padding: 2px var(--s-2);
+    font-size: var(--t-small);
+  }
+  .dclose:hover {
+    color: var(--fg);
   }
   .chip {
     font-size: var(--t-small);
@@ -612,30 +1091,74 @@
     border: none;
     padding: 0;
   }
-  /* In the Runs page the log is a COLUMN, not a full-height sticky rail — cap it so the middle is
-     compact instead of a viewport-tall void beside a short dataset. */
+  /*
+   * ── THE CHAIN OF DEFINITE HEIGHTS, WITHOUT WHICH NEITHER FEED SCROLLS ──────────────────────────
+   *
+   * `overflow-y: auto` on a box only produces a scrollbar when the box has a height its content can
+   * exceed, and the height `.scroller` had was the WRONG ONE rather than no height at all.
+   * `LogsRail.svelte:159` sets `height: calc(100vh - 220px)` — the window's height, minus the
+   * full-page chrome it was written under. Inside this drawer that is a number about the viewport
+   * pinned onto a box whose container is a `position: fixed` panel, so the rail was sized by
+   * something that is not its parent and overflowed whenever the two disagreed. The `flex: 1` below
+   * is what replaces that `calc` with a share of the PANEL; it is part of the fix, not the bug.
+   * Every link below is one hop of the height travelling down from the panel.
+   *
+   * THE PRE-FIX SPILL MEASUREMENTS THAT USED TO BE QUOTED HERE ARE GONE, deliberately. They were
+   * taken against an uncommitted intermediate state of this file that no longer exists and was never
+   * stashed, so nobody — including whoever wrote them — can reproduce them. A number that cannot be
+   * re-measured is a claim, not evidence. What IS checkable is the `calc(100vh - 220px)` above, in
+   * git, today.
+   *
+   * `min-height: 0` ON EVERY HOP, AND AN EXPLICIT FLOOR ONLY ON THE FEED. In the block axis a box's
+   * min-content height IS its content height — there is no shrink-to-fit for heights — so a flex
+   * item's default `min-height: auto` means "never smaller than everything inside me", and one link
+   * in the chain keeping that default pins the whole chain open. Measured with `flex: 1 1 auto` and
+   * no `min-height` on these: the table rendered at its full 1684px inside a 646px body, exactly as
+   * before the fix. So every intermediate box says `min-height: 0` and only the scrolling feed
+   * carries a real floor (`9rem`, below). A panel too short to honour that floor overflows the feed
+   * out of these `overflow: visible` boxes and into `.dbody`, which is the scroll container of last
+   * resort and the reason the floor is safe to set at all.
+   */
+  .region.dataset.fills,
+  .region.log {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  /* In the Runs page the log is a COLUMN, not a full-height sticky rail — `position: static` so it
+     does not stick, and `flex: 1` because the rail's own default is `0 1 auto`: it would not GROW,
+     which is the hop where the panel's height was being dropped on the floor. */
   .region.log :global(.rail) {
     position: static;
+    flex: 1;
+    min-height: 0;
   }
   .region.log :global(.scroller) {
     height: auto;
-    max-height: 26rem;
+    /* IN A DRAWER THE RAIL FILLS ITS SHEET. The 26rem cap was for the old column, where an
+       unbounded rail made the page taller every time a line arrived; here the drawer is already
+       viewport-height and capping it would leave dead space under the last line. */
+    max-height: none;
+    flex: 1;
+    /* THE FLOOR, which is what gives `.dbody`'s overflow something to be. 9rem is 126px at this
+       console's 14px root and a log row measures 19px (12px over `--lh-tight`, plus 2px of padding
+       each side), so it is six and a half lines — below that a log pane is not worth the filter bar
+       above it. A panel too short for it hands the remainder up to `.dbody`; measured at 1280x180,
+       the scroller holds its 126px and `.dbody` takes 71px of scroll rather than squeezing it. */
+    min-height: 9rem;
   }
-  .middle {
-    display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-    gap: var(--s-4);
-    align-items: start;
-  }
-  @media (max-width: 900px) {
-    .middle {
-      grid-template-columns: 1fr;
-    }
-  }
-
   .tbl-wrap {
     overflow: auto;
-    max-height: 26rem;
+    /* IT FILLS THE PANEL NOW, WHERE IT USED TO BE CAPPED AT `26rem`. This console's root is 14px
+       (`html { font: 400 var(--t-body)… }`), so that cap was 364px, and 364px is wrong in both
+       directions: at 1280x900 it left 482px of the drawer empty while 1682px of rows went past a
+       364px letterbox, and at 1280x420 the heading, the cap and the footnote came to 107px more
+       than the panel — which, with no `overflow` anywhere above, was 107px nobody could reach. */
+    flex: 1;
+    /* The same floor as the rail's, for the same reason — 126px is the header row and three and a
+       half rows at 27px each, and a panel too short for that scrolls in `.dbody` instead. */
+    min-height: 9rem;
     border: 1px solid var(--line);
     border-radius: var(--radius);
   }

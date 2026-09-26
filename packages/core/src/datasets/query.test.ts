@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cellText, fetchSchema, runQuery, starterSql } from './query';
+import { cellText, fetchSchema, runQuery, runScopedSql, starterSql } from './query';
 
 const res = (status: number, body: unknown): Response =>
   ({ ok: status >= 200 && status < 300, status, statusText: 'x', json: async () => body }) as Response;
@@ -86,6 +86,30 @@ describe('the starter query', () => {
   it('names the dataset, so the box is never an empty prompt', () => {
     expect(starterSql('lame')).toContain('FROM lame');
     expect(starterSql('lame')).toContain('LIMIT');
+  });
+});
+
+describe('the query for one run’s rows', () => {
+  it('scopes to the run, because a Dataset several runs append to holds everybody’s rows', () => {
+    const sql = runScopedSql('canary_signals', 'canary-1790191378');
+    expect(sql).toContain('FROM canary_signals');
+    expect(sql).toContain("WHERE run_id = 'canary-1790191378'");
+    expect(sql).toContain('LIMIT');
+  });
+
+  it('is the plain starter when there is no run — a standalone Dataset has no run_id', () => {
+    expect(runScopedSql('loaded')).toBe(starterSql('loaded'));
+    expect(runScopedSql('loaded', '')).toBe(starterSql('loaded'));
+  });
+
+  /**
+   * A run id is whatever `--id` was. Nothing in the console constrains it, so a quote in one must
+   * close as a literal rather than as the string it was pasted into.
+   */
+  it('escapes a quote in the run id rather than ending the literal on it', () => {
+    const sql = runScopedSql('t', "it's-1");
+    expect(sql).toContain("run_id = 'it''s-1'");
+    expect(sql).not.toContain("'it's-1'");
   });
 });
 

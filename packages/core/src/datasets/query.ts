@@ -107,6 +107,34 @@ export function starterSql(dataset: string): string {
 }
 
 /**
+ * The query for ONE RUN's rows of a Dataset — what the run page's "query these rows" button means.
+ *
+ * A Dataset several runs append to holds everybody's rows, so `starterSql` reached from a run
+ * answers with whichever run wrote last. That is a plausible wrong answer rather than an obvious
+ * one, which is the worst kind: the columns are right, the run id column is even there, and
+ * nothing on screen says the rows are not the ones you clicked through from.
+ *
+ * COMPOSED HERE AND NOWHERE ELSE. The button and the Datasets surface both need this string, and
+ * the address between them carries a FLAG rather than the text (`address.ts`, `DatasetFocus.query`)
+ * so there is one spelling of the query and a short URL instead of two spellings and a long one.
+ */
+export function runScopedSql(dataset: string, runId?: string): string {
+  if (!runId) return starterSql(dataset);
+  return `SELECT *\nFROM ${dataset}\nWHERE run_id = ${sqlText(runId)}\nLIMIT 100`;
+}
+
+/**
+ * A SQL string literal.
+ *
+ * A run id is whatever `--id` was — the console never constrains it — so it is escaped rather than
+ * interpolated. The query route is `READ_ONLY` hardened server-side, which makes this defence in
+ * depth rather than the only defence, and that is the right order for both to exist in.
+ */
+function sqlText(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
  * ONE CELL, AS TEXT — and the reason this is a function rather than `String(v)` at the call site.
  *
  * `String(v)` is correct for every scalar and catastrophic for everything else. DuckDB's composite

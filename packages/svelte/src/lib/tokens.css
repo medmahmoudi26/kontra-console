@@ -63,6 +63,11 @@
 
 * { box-sizing: border-box; }
 
+/* An open drawer owns the wheel. Without this the page scrolls behind it, which moves the thing
+   the reader closed the drawer to get back to. Set by `runs/Drawer.svelte`, global because `body`
+   is not in any component's scope. */
+body.drawer-open { overflow: hidden; }
+
 html, body {
   margin: 0;
   background: var(--bg);

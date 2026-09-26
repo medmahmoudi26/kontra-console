@@ -11,16 +11,33 @@
    * The contract table reuses `schemaFields` — the same derivation `/dev` draws its form from. Two
    * copies would disagree about what a Method takes, which is precisely the thing that must not
    * happen between a table describing a call and the form making it.
+   *
+   * ── AND SERVING HAS A PAST, NOT ONLY A PRESENT ─────────────────────────────────────────────────
+   *
+   * The chip above answers "is anything polling this queue RIGHT NOW". It cannot answer the
+   * question an operator actually has when it says no poller: *I pressed Serve — what happened?*
+   * A serve is a `serveDevWorkflow` execution, which the orchestrator keeps off the Runs page on
+   * purpose (it is kontra's infrastructure, not a caller's Run), so until now that answer existed
+   * nowhere. The history panel below is the other half of the chip: the chip is the state, the
+   * history is how it got there, and a failed serve's REASON is the row that makes the pair useful.
+   *
+   * IT IS NOT LIVE, AND MUST NOT BE. A record does not change; the thing beside it that does — the
+   * poller state — is re-read on every press already. A timer here would poll Temporal once per
+   * open tab to redraw rows that cannot move (and `setInterval` is banned in this tree anyway,
+   * ADR 0048 §3).
    */
   import { schemaFields } from '@kontra/console-core/panels/schemaTree';
   import {
     AlreadyServingError,
+    fetchServeHistory,
     fetchSources,
     serveActorSource,
+    type ServeHistory,
     type Source,
   } from '@kontra/console-core/run/api';
   import type { JsonSchema } from '@kontra/console-core/types';
 
+  import { serveCapNote, serveLines } from './serveHistory';
   import { servingHint, servingState, type PollerReport } from './serving';
 
   interface Operation { name: string; description?: string; input?: JsonSchema }
@@ -149,6 +166,71 @@
       .sort((x, y) => x.name.localeCompare(y.name));
   });
 
+  /**
+   * THE SERVE HISTORY OF THE FOLDER IN VIEW.
+   *
+   * KEYED ON THE FOLDER AND NOT ON THE ACTOR, because a serve is of a directory: the workflow id is
+   * `serve-dev/at:<path>` and a catalog entry with no folder here has no history to ask for (its
+   * code was served from some other machine). That is the same split the Serve button makes two
+   * lines down, and it must be the same split — a panel that asked anyway would 404 on exactly the
+   * rows that already say "this code is not here to serve".
+   *
+   * THREE PIECES OF STATE AND NOT ONE, because clicking down the grid starts a fetch per row and
+   * they can land out of order. `historyPending` is the folder currently being ASKED about and
+   * `historyFor` the folder the held answer BELONGS to; every landing is dropped unless it is still
+   * the current ask. The comment on `serveFolder` below records the same class of bug already
+   * observed on this page — "worker started" drawn under `bbscope` for a worker started for
+   * `redditapi` — which is why a second surface on it gets the guard up front rather than later.
+   */
+  let history = $state<ServeHistory | null>(null);
+  let historyFor = $state('');
+  let historyPending = $state('');
+  let historyError = $state('');
+
+  $effect(() => {
+    const id = detail?.folder?.id;
+    if (!id) {
+      history = null;
+      historyFor = '';
+      historyPending = '';
+      historyError = '';
+      return;
+    }
+    void loadHistory(id);
+  });
+
+  async function loadHistory(id: string): Promise<void> {
+    historyPending = id;
+    historyError = '';
+    try {
+      // NO `limit` PASSED. The server owns the bound and reports whether it bit (`capped`); a number
+      // restated here is a number that can disagree with that flag.
+      const got = await fetchServeHistory('actor', id);
+      if (historyPending !== id) return;
+      history = got;
+      historyFor = id;
+    } catch (err) {
+      if (historyPending !== id) return;
+      // AN UNREACHABLE CONTROL PLANE IS NOT AN EMPTY HISTORY, and the two must not render alike:
+      // "nothing has served this yet" is a claim, and printing it over an actor served all week
+      // because one fetch failed is the loudest wrong sentence this panel can produce.
+      history = null;
+      historyFor = id;
+      historyError = err instanceof Error ? err.message : String(err);
+    } finally {
+      // ONLY IF IT IS STILL MINE. A superseded fetch clearing this would take the "reading…" line
+      // out from under the newer one that is still in flight, and the panel would fall through to
+      // "nothing has ever served this folder" about a folder it has not finished asking about.
+      if (historyPending === id) historyPending = '';
+    }
+  }
+
+  /** The rows as drawn: outcome, clock, and — for a failure — why. Nothing in them is relative to
+   *  the present, so unlike the chip above they do not need `now` and cannot go stale in a tab left
+   *  open — see `serveHistory.ts:took`. */
+  const serveRows = $derived(serveLines(history));
+  const capNote = $derived(serveCapNote(history));
+
   /** Serve a WORKSPACE ROW — the folder is the thing that gets served. */
   async function serveFolder(row: WorkspaceRow, restart = false): Promise<void> {
     // PRESSING SERVE OPENS THAT ROW. The outcome — the session name, or the server's refusal — is
@@ -180,6 +262,11 @@
             : String(err);
     } finally {
       serving = '';
+      // BOTH OUTCOMES ADD A ROW, which is why this is in `finally` and not on the success path. The
+      // failed press is the case the panel exists for: `serveError` above is one sentence in one
+      // colour that a reload loses, and the execution behind it is the durable copy of the same
+      // fact. (A 409 started nothing, but the serve it collided with is in the list either way.)
+      void loadHistory(folder.id);
     }
   }
 </script>
@@ -280,7 +367,49 @@
         </div>
         {#if serveError}<p class="err" role="alert">{serveError}</p>{/if}
         {#if served}
-          <p class="muted">worker started — <code class="mono">{served}</code>, and its pane is on the Monitor.</p>
+          <p class="muted">worker started — <code class="mono">{served}</code>. What it prints is on Logs.</p>
+        {/if}
+
+        <!-- HOW THE CHIP ABOVE GOT THAT WAY. The chip is the present tense; this is the record
+             behind it, and a failed serve's reason is the row that makes the pair worth having —
+             a serve is a Temporal execution the Runs page deliberately hides, so this is the only
+             place that sentence ever reaches a browser. Folders only: a catalog entry with no code
+             here has nothing to have been served FROM this control plane. -->
+        {#if detail.folder}
+          <div class="serves" data-testid="serve-history">
+            <h3>serve history</h3>
+            {#if historyError}
+              <!-- NOT "nothing has served this yet". That sentence is a claim, and making it because
+                   one fetch failed is the loudest wrong thing this panel can say. -->
+              <p class="err" role="alert">could not read the serve history — {historyError}</p>
+            {:else if historyPending === detail.folder.id && historyFor !== detail.folder.id}
+              <p class="muted">reading the serve history…</p>
+            {:else if serveRows.length === 0}
+              <!-- SAID PLAINLY, rather than drawn as an empty box. "Never served" and "served and it
+                   failed" look identical as a blank list and are opposite states. -->
+              <p class="muted">
+                Nothing has ever served this folder from this control plane. Press Serve and each
+                attempt — including the ones that fail — is recorded here.
+              </p>
+            {:else}
+              <ul class="serveList">
+                {#each serveRows as r (r.execId)}
+                  <li>
+                    <span class="outcome {r.outcome}">
+                      {r.outcome === 'worked' ? 'served' : r.outcome === 'running' ? 'serving' : 'failed'}
+                    </span>
+                    <span class="when mono">{r.when || 'time unknown'}</span>
+                    {#if r.took}<span class="took mono">{r.took}</span>{/if}
+                    <!-- THE REASON IS THE POINT OF THE ROW, so it is its own line at full width and
+                         not a title attribute: an import error runs to several hundred characters
+                         and is the thing being read, not a hover affordance. -->
+                    {#if r.reason}<span class="reason">{r.reason}</span>{/if}
+                  </li>
+                {/each}
+              </ul>
+              {#if capNote}<p class="muted">{capNote}</p>{/if}
+            {/if}
+          </div>
         {/if}
 
         {#if detail.actor.operations === undefined}
@@ -391,6 +520,39 @@
   .state.serving { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
   .state.idle { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
   .state.unknown { color: var(--dim); border-style: dashed; }
+
+  /* THE HISTORY SITS BETWEEN THE BUTTON AND THE METHODS, which is where it is read: you press
+     Serve, the chip does not move, and the next thing you look at is why. */
+  .serves { border-top: 1px solid var(--line); padding-top: var(--s-3); margin-top: var(--s-3); }
+  .serves h3 {
+    font-size: var(--t-micro); letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--dim); font-weight: 600; margin: 0 0 var(--s-2);
+  }
+  .serveList { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+  /* WRAPS RATHER THAN SCROLLS. A serve row is an outcome, a timestamp, a duration and a sentence
+     that can be three hundred characters of Python traceback; at 320px those cannot sit on one
+     line, and a row that overflowed would take the whole page's horizontal scroll with it (the
+     `overflow` guard fails the build for exactly that). `--s-1` column gap so a wrapped reason
+     still reads as part of the row above it. */
+  .serveList li {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2);
+    min-width: 0; font-size: var(--t-small);
+  }
+  .outcome {
+    font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim);
+    white-space: nowrap;
+  }
+  /* The same three colours the chip above uses, for the same three meanings — a serve that
+     produced a Worker is `--ok` there and here. */
+  .outcome.worked { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .outcome.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+  .outcome.running { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .serveList .when { color: var(--fg); }
+  .took { color: var(--dim); font-size: var(--t-micro); }
+  /* FULL WIDTH ON ITS OWN LINE. `flex-basis: 100%` after a wrap boundary puts the reason under the
+     row rather than trailing off the end of it — it is the sentence being read, not a suffix. */
+  .reason { flex: 1 0 100%; color: var(--bad); overflow-wrap: anywhere; line-height: var(--lh-body); }
 
   .detail { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: var(--s-3); }
   .hint { font-size: var(--t-small); margin: 0 0 var(--s-3); color: var(--dim); }

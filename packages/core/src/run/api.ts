@@ -728,6 +728,65 @@ export async function serveActorSource(
 /** A worker is already there. Its own class so `catch` can offer restart rather than apologise. */
 export class AlreadyServingError extends Error {}
 
+/**
+ * ONE PAST PRESS OF SERVE. Mirrors `ServeRow` on the server.
+ *
+ * A serve is a `serveDevWorkflow` execution, which the orchestrator deliberately keeps OFF the Runs
+ * page — it is kontra's own infrastructure, not a caller's Run. So this is the only shape in which
+ * "what happened when this folder was served" reaches a browser.
+ */
+export interface ServeRecord {
+  /** Temporal's run id for this ONE execution. The workflow id is the FOLDER, reused across every
+   *  press, so this is the only thing telling two serves of one actor apart. */
+  execId: string;
+  /** EXECUTION dimension, exactly as Temporal reports it — the same vocabulary as a run's. */
+  status: RunStatus;
+  startedAt: number;
+  /** 0 while the serve is still in flight. */
+  closedAt: number;
+  /**
+   * Why it did not produce a Worker, in Temporal's own words. Absent on a serve that worked, AND
+   * absent when the reason could not be read — a closed execution's history ages out of retention
+   * before its visibility row does. `status` cannot carry this: the server folds FAILED, TERMINATED
+   * and TIMED_OUT into the one word `failed`.
+   */
+  failure?: string;
+}
+
+/** A folder's serve history. `capped` says the server stopped at its limit — see {@link fetchServeHistory}. */
+export interface ServeHistory {
+  /** Newest first. */
+  serves: ServeRecord[];
+  capped: boolean;
+}
+
+/**
+ * What happened the last times this folder was served.
+ *
+ * IT IS NOT A RUN LIST AND MUST NOT BECOME ONE. `fetchRuns` is the caller's own executions; this is
+ * the infrastructure behind one Serve button, which is why it hangs off the folder and not off
+ * `/runs`. The orchestrator excludes `serveDevWorkflow` from run discovery precisely so the two
+ * cannot merge.
+ *
+ * `capped` IS PART OF THE ANSWER, not a detail. A bounded list rendered without it reads as the
+ * complete history — "this actor has been served twice" where the truth is "here are the last two
+ * of many" — so the caller has a flag to say so out loud.
+ *
+ * AN EMPTY HISTORY IS A 200, and a cluster that could not be reached is a throw. Those must stay
+ * different: the page prints "nothing has served this yet" for the first, which would be a lie
+ * about the second.
+ */
+export async function fetchServeHistory(
+  kind: SourceKind,
+  id: string,
+  limit?: number
+): Promise<ServeHistory> {
+  const q = limit === undefined ? '' : `?limit=${encodeURIComponent(String(limit))}`;
+  const res = await fetch(`${BASE}/sources/${kind}/${encodeURIComponent(id)}/serves${q}`);
+  if (!res.ok) return asError(res, 'read the serve history');
+  return (await res.json()) as ServeHistory;
+}
+
 /** The caller workflow the Actors page shows beside its Run button. Mirrors the `caller` route. */
 export interface GeneratedCaller {
   /** What the file would be called if the operator kept it — `workflow.py`, the marker that makes

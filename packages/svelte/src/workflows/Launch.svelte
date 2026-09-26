@@ -407,8 +407,7 @@
         {#if startError}<p class="err" role="alert">{startError}</p>{/if}
         {#if served}
           <p class="muted">
-            worker started — <code class="mono">{served}</code> attaches to it, and its pane is on
-            the Monitor.
+            worker started — <code class="mono">{served}</code>. What it prints is on Logs.
           </p>
         {/if}
 

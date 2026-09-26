@@ -81,7 +81,7 @@
     </button>
   </div>
 
-  <div class="scroller">
+  <div class="scroller" data-testid="log-scroller">
     {#if error}
       <p class="err">{error}</p>
     {:else if loading}

@@ -10,7 +10,7 @@
    */
   import { groupDatasets } from '@kontra/console-core/datasets/grouped';
   import { fetchPreview, type DatasetPreview } from '@kontra/console-core/datasets/preview';
-  import { cellText } from '@kontra/console-core/datasets/query';
+  import { cellText, runScopedSql } from '@kontra/console-core/datasets/query';
   import { download, type ExportFormat } from '@kontra/console-core/datasets/export';
   import DataTable, { type Column } from './DataTable.svelte';
   import Query from './Query.svelte';
@@ -28,12 +28,35 @@
   } from '@kontra/console-core/datasets/provenance';
   import { listingRows, type DatasetListingRow } from '@kontra/console-core/datasets/listing';
   import type { DatasetInfo } from '@kontra/console-core/run/api';
+  import { parseAddress } from '@kontra/console-core/state/address';
 
 
   let rows = $state<DatasetListingRow[]>([]);
   let loading = $state(true);
   let error = $state('');
   let q = $state('');
+
+  /**
+   * ARRIVING FROM A RUN, WITH ITS QUERY ALREADY WRITTEN.
+   *
+   * `/datasets/<name>?run=<id>&q=1` is what the run page's "query these rows" button addresses. The
+   * address carries WHERE — the dataset and the run — and `runScopedSql` composes WHAT from exactly
+   * those two, so the link stays short and there is one spelling of the query.
+   *
+   * SCOPED TO THE RUN, not just to the dataset. A Dataset several runs append to holds everybody's
+   * rows, and a bare `SELECT * FROM canary_signals` reached from a run answers with whichever run
+   * wrote last — the columns are right, the run id column is even there, and nothing on screen
+   * says these are not the rows you clicked through from.
+   */
+  const arrival = parseAddress(location.pathname + location.search);
+  const focus = arrival !== null && arrival.view === 'datasets' ? arrival.dataset : null;
+  const incomingSql = focus?.query === true ? runScopedSql(focus.name, focus.run) : '';
+
+  // The workbench sits below the listing, so a link that opens it has to take the reader there.
+  $effect(() => {
+    if (!incomingSql) return;
+    document.getElementById('query')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 
   /**
    * THE OPEN DATASET, AND WHAT IS IN IT.
@@ -280,7 +303,7 @@
     </DataTable>
   {/if}
 
-  <Query />
+  <Query initialSql={incomingSql} />
 
   {#if open}
     <section class="peek" data-testid="dataset-preview">

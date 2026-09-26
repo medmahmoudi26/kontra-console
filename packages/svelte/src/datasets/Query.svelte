@@ -31,6 +31,23 @@
   import DataTable, { type Column } from './DataTable.svelte';
   import { onMount } from 'svelte';
 
+  interface Props {
+    /**
+     * A query to open with, instead of the starter for whichever dataset happens to be first.
+     *
+     * THE WHOLE POINT OF THE RUN PAGE'S "query these rows" BUTTON. Arriving here from a run means
+     * arriving with a dataset AND a run already in mind, and re-finding the dataset by name and
+     * re-typing a `SELECT` is the gap that button closes. Composed by `runScopedSql` and carried
+     * across the navigation as a flag on the address (`address.ts`, `DatasetFocus.query`), so there
+     * is one spelling of the query rather than one here and one there.
+     */
+    initialSql?: string;
+  }
+  let { initialSql = '' }: Props = $props();
+
+  // EMPTY, THEN SEEDED ON MOUNT — see `onMount`. Initialising from the prop here would capture it
+  // once anyway, and Svelte is right to flag that as ambiguous: the editor is not a mirror of the
+  // prop, it is a box seeded from it and then owned by whoever is typing.
   let sql = $state('');
   let running = $state(false);
   let result = $state<QueryResult | undefined>(undefined);
@@ -43,7 +60,12 @@
   let box = $state<HTMLTextAreaElement | undefined>(undefined);
 
   onMount(async () => {
+    // A QUERY HANDED IN FROM A RUN WINS, and it is seeded before the schema read so a slow
+    // `/schema` cannot land the starter on top of it.
+    if (initialSql) sql = initialSql;
     schema = await fetchSchema();
+    // `!sql` still guards the starter: an incoming query, or anything already typed while the
+    // schema was loading, must not be replaced by the first dataset's `SELECT *`.
     if (!sql && schema.length) sql = starterSql(schema[0]!.name);
   });
 
@@ -115,7 +137,7 @@
   );
 </script>
 
-<section class="wb">
+<section class="wb" id="query" data-testid="dataset-query">
   <header>
     <h2>Query</h2>
     <span class="hint mono">⌘/ctrl + ⏎ to run</span>
