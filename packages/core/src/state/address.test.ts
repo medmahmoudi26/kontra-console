@@ -31,8 +31,6 @@ const RESTING: AddressedState = {
   workflowName: null,
   runId: null,
   runsRun: null,
-  runPane: null,
-  focusTerminal: null,
   datasetFocus: null,
 };
 
@@ -58,7 +56,6 @@ describe('the address of a surface', () => {
       'runs',
       'actors',
       'datasets',
-      'monitor',
       'logs',
       'secrets',
       'settings',
@@ -87,7 +84,6 @@ describe('the address of a surface', () => {
     expect(parseAddress('/Runs')).toBeNull();
     expect(parseAddress('/workflows/a/b/c')).toBeNull();
     expect(parseAddress('/datasets/a/b')).toBeNull();
-    expect(parseAddress('/monitor/a/b')).toBeNull();
     // A surface with no entity to address cannot carry one.
     expect(parseAddress('/actors/foo')).toBeNull();
     expect(parseAddress('/settings/foo')).toBeNull();
@@ -98,7 +94,6 @@ describe('the address of a surface', () => {
       view: 'workflows',
       workflow: null,
       run: null,
-      pane: null,
     });
     expect(parseAddress('/datasets/')).toEqual({ view: 'datasets', dataset: null });
   });
@@ -108,7 +103,6 @@ describe('the address of a surface', () => {
       view: 'workflows',
       workflow: 'dnssweep',
       run: null,
-      pane: null,
     });
   });
 });
@@ -120,7 +114,6 @@ describe('a workflow and its run in the address', () => {
       view: 'workflows',
       workflowName: 'dnssweep',
       runId: null,
-      runPane: null,
     });
     expect(trip.url).toBe('/workflows/dnssweep');
   });
@@ -131,7 +124,6 @@ describe('a workflow and its run in the address', () => {
       view: 'workflows',
       workflowName: 'dnssweep',
       runId: 'nightly-sweep-2026-08-14',
-      runPane: null,
     });
     expect(trip.url).toBe('/workflows/dnssweep/nightly-sweep-2026-08-14');
   });
@@ -144,7 +136,6 @@ describe('a workflow and its run in the address', () => {
       view: 'workflows',
       workflowName: null,
       runId: 'nscheck-123',
-      runPane: null,
     });
     expect(trip.url).toBe('/workflows?run=nscheck-123');
   });
@@ -156,9 +147,8 @@ describe('a workflow and its run in the address', () => {
       view: 'workflows',
       workflow: null,
       run: 'r1',
-      pane: null,
     });
-    expect(formatAddress({ view: 'workflows', workflow: 'dnssweep', run: 'r1', pane: null })).toBe(
+    expect(formatAddress({ view: 'workflows', workflow: 'dnssweep', run: 'r1' })).toBe(
       '/workflows/dnssweep/r1'
     );
   });
@@ -166,11 +156,10 @@ describe('a workflow and its run in the address', () => {
   it('closes the thread for /workflows with no name — the list is a place too', () => {
     // Not "leave whatever was open": Back out of `/workflows/dnssweep` has to land on the list, and
     // the only thing that can say so is this address writing `null`.
-    expect(stateFor({ view: 'workflows', workflow: null, run: null, pane: null })).toEqual({
+    expect(stateFor({ view: 'workflows', workflow: null, run: null })).toEqual({
       view: 'workflows',
       workflowName: null,
       runId: null,
-      runPane: null,
     });
   });
 
@@ -183,96 +172,28 @@ describe('a workflow and its run in the address', () => {
       view: 'workflows',
       workflow: 'nscheck-0.1.0',
       run: 'sweep-v1.2',
-      pane: null,
     });
     expect(roundTrip(url).url).toBe(url);
   });
 
   it('encodes an id that is not path-safe, and reads it back whole', () => {
     const id = 'wf/one two';
-    expect(formatAddress({ view: 'workflows', workflow: null, run: id, pane: null })).toBe(
+    expect(formatAddress({ view: 'workflows', workflow: null, run: id })).toBe(
       '/workflows?run=wf%2Fone%20two'
     );
-    expect(formatAddress({ view: 'workflows', workflow: id, run: null, pane: null })).toBe(
+    expect(formatAddress({ view: 'workflows', workflow: id, run: null })).toBe(
       '/workflows/wf%2Fone%20two'
     );
     expect(parseAddress('/workflows/wf%2Fone%20two')).toEqual({
       view: 'workflows',
       workflow: id,
       run: null,
-      pane: null,
     });
   });
 
   it('falls back on a malformed escape rather than throwing at the operator', () => {
     // `decodeURIComponent('%zz')` throws. A URL typed wrong is not a blank page.
     expect(parseAddress('/workflows/%zz')).toBeNull();
-  });
-});
-
-describe('a Terminal in a run’s address', () => {
-  /** A real Terminal id: `<mode>:<node>/<session>/<window>`, with a tmux window of `0.1`. One
-   *  colon, two slashes and a DOT — every byte the SPA fallback was caught 404ing on. */
-  const PANE = 'local:main-droplet/kontra-recon/0.1';
-
-  it('round-trips a Machine under a run, on a cold load and on F5', () => {
-    // A cold load and an F5 are the same operation as far as this module is concerned: the bar's
-    // string is read, the store is landed on it, and `land()` prints it back — an address that did
-    // not round-trip would be REWRITTEN on arrival, which is how a pasted link loses its pane.
-    const url = `/workflows/dnssweep/sweep-1?pane=${encodeURIComponent(PANE)}`;
-    const trip = roundTrip(url);
-    expect(trip.state).toEqual({
-      view: 'workflows',
-      workflowName: 'dnssweep',
-      runId: 'sweep-1',
-      runPane: PANE,
-    });
-    expect(trip.url).toBe(url);
-  });
-
-  it('keeps the colon, the slashes and the dot OUT of the path', () => {
-    // This is the whole reason it is a query. The server answers a cold load by asking whether the
-    // FIRST segment is a surface (`surfaces.ts`), and the path here is `/workflows/dnssweep/sweep-1`
-    // whatever the id contains — so an id with a dot in it can never reach the file sniffing that
-    // 404'd `/datasets/acme.com`.
-    const printed = formatAddress({
-      view: 'workflows',
-      workflow: 'dnssweep',
-      run: 'sweep-1',
-      pane: PANE,
-    });
-    const [path = ''] = printed.split('?');
-    expect(path).toBe('/workflows/dnssweep/sweep-1');
-    expect(path).not.toContain('.');
-    expect(printed).toBe(
-      '/workflows/dnssweep/sweep-1?pane=local%3Amain-droplet%2Fkontra-recon%2F0.1'
-    );
-  });
-
-  it('carries a pane on the thread and on the list too, beside a run with no thread', () => {
-    expect(parseAddress(`/workflows?run=r1&pane=${encodeURIComponent(PANE)}`)).toEqual({
-      view: 'workflows',
-      workflow: null,
-      run: 'r1',
-      pane: PANE,
-    });
-    expect(
-      formatAddress({ view: 'workflows', workflow: null, run: 'r1', pane: PANE })
-    ).toBe('/workflows?run=r1&pane=local%3Amain-droplet%2Fkontra-recon%2F0.1');
-  });
-
-  it('drops a value that is not a Terminal id, and still lands you on the run', () => {
-    // LENIENT ABOUT THE QUERY, exactly as an unrecognised `?kind=` is dropped. The admission is
-    // `@kontra/core/panels/ids.tryParseTerminalId` — the one parser — so a value the streamer could not
-    // have minted never becomes a subscription id.
-    for (const junk of ['nonsense', 'local:a/b', 'nope:main-droplet/s/w', 'fleet:main-droplet/s/w']) {
-      expect(parseAddress(`/workflows/dnssweep/sweep-1?pane=${encodeURIComponent(junk)}`), junk).toEqual({
-        view: 'workflows',
-        workflow: 'dnssweep',
-        run: 'sweep-1',
-        pane: null,
-      });
-    }
   });
 });
 
@@ -307,7 +228,6 @@ describe('a retired address', () => {
       view: 'workflows',
       workflow: null,
       run: null,
-      pane: null,
     });
     expect(formatAddress(parseAddress('/scratch') as Address)).toBe('/workflows');
   });
@@ -334,6 +254,28 @@ describe('a Dataset in the address', () => {
       datasetFocus: { name: 'lame', kind: 'output', run: 'nightly-2026-08-15' },
     });
     expect(trip.url).toBe('/datasets/lame?kind=output&run=nightly-2026-08-15');
+  });
+
+  /**
+   * The link the run page's "query these rows" button hands out. It carries WHERE to go — the
+   * dataset and the run — and not the SQL, which `runScopedSql` composes from exactly these two
+   * fields. A URL that carried the text would be a second spelling of the same query.
+   */
+  it('round-trips the workbench flag, so a query link is shareable', () => {
+    const trip = roundTrip('/datasets/canary_signals?run=canary-1790191378&q=1');
+    expect(trip.state).toEqual({
+      view: 'datasets',
+      datasetFocus: { name: 'canary_signals', run: 'canary-1790191378', query: true },
+    });
+    expect(trip.url).toBe('/datasets/canary_signals?run=canary-1790191378&q=1');
+  });
+
+  it('omits the flag when it is not set, rather than writing q=0', () => {
+    expect(formatAddress({ view: 'datasets', dataset: { name: 'lame' } })).toBe('/datasets/lame');
+    expect(formatAddress({ view: 'datasets', dataset: { name: 'lame', query: false } })).toBe(
+      '/datasets/lame'
+    );
+    expect(parseAddress('/datasets/lame?q=0')).toEqual({ view: 'datasets', dataset: { name: 'lame' } });
   });
 
   it('keeps "no kind" distinct from "output"', () => {
@@ -377,14 +319,6 @@ describe('a Dataset in the address', () => {
   });
 });
 
-describe('a Terminal in the address', () => {
-  it('round-trips an id with a colon in it', () => {
-    const trip = roundTrip('/monitor/kontra-recon%3A0.1');
-    expect(trip.state).toEqual({ view: 'monitor', focusTerminal: 'kontra-recon:0.1' });
-    expect(trip.url).toBe('/monitor/kontra-recon%3A0.1');
-  });
-});
-
 describe('the projection of a store', () => {
   it('addresses only the surface on screen', () => {
     // `setRunId` on the Datasets page changes the Workflows surface's selection without navigating
@@ -402,10 +336,9 @@ describe('the projection of a store', () => {
     expect(stateFor({ view: 'datasets', dataset: { name: 'lame' } })).not.toHaveProperty(
       'workflowName'
     );
-    expect(stateFor({ view: 'workflows', workflow: 'w', run: 'r1', pane: null })).not.toHaveProperty(
+    expect(stateFor({ view: 'workflows', workflow: 'w', run: 'r1' })).not.toHaveProperty(
       'datasetFocus'
     );
-    expect(stateFor({ view: 'monitor', terminal: null })).not.toHaveProperty('runId');
     expect(stateFor({ view: 'settings' })).toEqual({ view: 'settings' });
   });
 });

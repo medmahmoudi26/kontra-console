@@ -26,7 +26,6 @@ const EXPECTED: readonly string[] = [
   'runs',
   'actors',
   'datasets',
-  'monitor',
   'logs',
   'secrets',
   'settings',
@@ -73,18 +72,21 @@ describe('the surfaces', () => {
 });
 
 describe('the retired surfaces', () => {
-  it('is Scratch, which lands on Workflows', () => {
-    // Runs used to be here too; it is a live surface again, so Scratch is the one retired segment
-    // left — a drawing surface with no subject, folded into a workflow's own design tab.
-    expect(Object.keys(RETIRED).sort()).toEqual(['scratch']);
-    for (const [segment, target] of Object.entries(RETIRED)) {
-      expect(target.to, segment).toBe('workflows');
-    }
+  it('are Scratch and Monitor, and they land on different surfaces', () => {
+    // Runs used to be here too; it is a live surface again. Scratch is a drawing surface with no
+    // subject, folded into a workflow's own design tab. Monitor is the wall of read-only Terminals,
+    // deleted outright — so it lands on Logs, which answers what the wall was opened to ask and
+    // keeps answering it after the machine is gone.
+    expect(Object.keys(RETIRED).sort()).toEqual(['monitor', 'scratch']);
+    expect(RETIRED.scratch?.to).toBe('workflows');
+    expect(RETIRED.monitor?.to).toBe('logs');
   });
 
-  it('carries nothing, because the old address never named anything', () => {
-    // `/scratch` was a drawing about nothing and has nothing to hand on across the redirect.
+  it('carry nothing, because neither old address named anything that still exists', () => {
+    // `/scratch` was a drawing about nothing. `/monitor/<id>` named a Terminal, and a Terminal is
+    // not a thing any more — handing that id on would be inventing a selection nothing can honour.
     expect(RETIRED.scratch?.carries).toBe('nothing');
+    expect(RETIRED.monitor?.carries).toBe('nothing');
   });
 
   it('are not surfaces any more, so nothing can navigate to them', () => {
@@ -99,7 +101,7 @@ describe('what the server has to serve', () => {
     // A LIVE segment missing there 404s a cold load of any id containing a dot. A RETIRED segment
     // missing there is worse in a quieter way: the redirect is frontend code, so the shell that
     // would forward `/runs/sweep-v1.2` never loads to forward it.
-    expect([...SPA_SEGMENTS].sort()).toEqual([...EXPECTED, 'scratch'].sort());
+    expect([...SPA_SEGMENTS].sort()).toEqual([...EXPECTED, 'scratch', 'monitor'].sort());
   });
 
   it('names the copy the server keeps, so the pair can only be wrong together', () => {
@@ -107,7 +109,7 @@ describe('what the server has to serve', () => {
     // package and cannot import it — and that repo's `spaFallback.test.ts` asserts the other half.
     // The number is here so adding a surface fails on BOTH sides of the boundary rather than
     // silently on neither.
-    expect(SPA_SEGMENTS).toHaveLength(EXPECTED.length + 1);
+    expect(SPA_SEGMENTS).toHaveLength(EXPECTED.length + 2);
     expect(SPA_SEGMENTS).toHaveLength(10);
   });
 });

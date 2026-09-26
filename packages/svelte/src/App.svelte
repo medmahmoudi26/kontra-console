@@ -64,7 +64,6 @@
     datasets: () => import('./datasets/Datasets.svelte'),
     secrets: () => import('./secrets/Secrets.svelte'),
     settings: () => import('./secrets/Settings.svelte'),
-    monitor: () => import('./monitor/Monitor.svelte'),
     logs: () => import('./logs/Logs.svelte'),
     dev: () => import('./dev/DevPane.svelte'),
   };

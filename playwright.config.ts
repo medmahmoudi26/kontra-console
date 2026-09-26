@@ -1,39 +1,34 @@
 /**
- * Playwright for the Dashboard — two projects over one spec file (ADR 0020, CONTRACT.md 14).
+ * Playwright for the console — the browser bar for anything geometric or interactive.
  *
  * WHY THIS EXISTS SEPARATELY FROM VITEST. `pnpm typecheck` and the vitest suites pass on a view that
- * throws on mount, on a socket that never connects, and on a terminal that mounts at 0×0 and shows
- * nothing. None of those is evidence that a human can see a Machine's output, and CONTRACT.md's
- * Verification section makes a browser run the bar for a UI slice.
+ * throws on mount and on a component that mounts at 0×0 and shows nothing — jsdom has no layout
+ * engine, so every `clientHeight` is `0`. None of those is evidence that a human can see anything,
+ * and CONTRACT.md's Verification section makes a browser run the bar for a UI slice.
  *
  * The glob is deliberately disjoint from vitest's (`src/**\/*.test.ts` there, `e2e/**\/*.spec.ts`
  * here) so neither runner collects the other's files — a spec collected by vitest fails on the first
  * `page` reference and reads like a broken test rather than a misconfigured runner.
  *
- * TWO PROJECTS, SAME SPECS:
+ * ONE PROJECT NOW, AND IT USED TO BE TWO. The Dashboard was driven against two independent
+ * streamers — a hand-written RFC 6455 stub and a booted `PanelServer` with the SSH/tmux seam faked —
+ * so that a pass meant the browser could read what the WIRE specified, not merely what one
+ * implementation emitted. Both went with the Monitor, and with them `e2e/fixtures.ts`,
+ * `e2e/streamer.ts`, `e2e/stubStreamer.mjs`, `e2e/fakeFleet.ts`, `e2e/control.ts` and
+ * `e2e/stubProcess.ts`. What is left stubs the ORCHESTRATOR with `page.route` and opens no socket.
  *
- *   contract  the hand-written stub (`e2e/stubStreamer.mjs`), which implements RFC 6455 and the tagged
- *             framing independently of `backend/src/panels/`. A pass means the browser can read
- *             what the WIRE specifies.
- *   real      a booted `PanelServer` with only the SSH/tmux seam faked (`e2e/streamer.ts`). A pass
- *             means slice 1's hand-rolled accept-key, frame encoder, mask handling and close path
- *             survive Chromium — code the stub never executes.
- *
- * NOTHING IN A RUN IS FIXED OR SHARED. `e2e/run.mjs` allocates this run's ports and exports them before
- * Playwright starts (see its header for why a config cannot do that), and everything derived from them
- * follows: the dev server's `VITE_KONTRA_PANEL_BASE`, its optimised-deps cache, and Playwright's
- * `outputDir`. Every one of those was a measured collision between two concurrent runs — a human's and
- * an agent's — and each presented as a flaky spec rather than as contention. The two streamers still
- * TAKE TURNS on the run's one port, because vite bakes that base in at start and the projects run
- * sequentially anyway.
+ * NOTHING IN A RUN IS FIXED OR SHARED. `e2e/run.mjs` allocates this run's port and exports it before
+ * Playwright starts (see its header for why a config cannot do that), and everything derived from it
+ * follows: the dev server's optimised-deps cache and Playwright's `outputDir`. Both were measured
+ * collisions between two concurrent runs — a human's and an agent's — and each presented as a flaky
+ * spec rather than as contention.
  *
  * Chromium comes from this machine's Playwright cache. `@playwright/test` stays pinned at 1.61 —
  * amendment 12 — because its Chromium revision (1228) is already there: the suite downloads nothing.
  */
 
 import { defineConfig, devices } from '@playwright/test';
-import type { E2EOptions } from './e2e/control';
-import { HOST, PANEL_BASE, PANEL_TOKEN, WEB_BASE, WEB_PORT } from './e2e/env';
+import { HOST, WEB_BASE, WEB_PORT } from './e2e/env';
 
 /**
  * `test:e2e:serve` sets this instead of pointing at a second config file.
@@ -59,14 +54,12 @@ export const viteServer = {
   reuseExistingServer: !process.env.CI,
   timeout: 120_000,
   env: {
-    VITE_KONTRA_PANEL_BASE: PANEL_BASE,
-    VITE_KONTRA_PANEL_TOKEN: PANEL_TOKEN,
     // Its own optimised-deps cache, so two concurrent runs cannot break each other's module graph.
     KONTRA_E2E_VITE_CACHE: serving ? 'serve' : String(WEB_PORT),
   },
 };
 
-export default defineConfig<E2EOptions>({
+export default defineConfig({
   testDir: './e2e',
   // `serve.hold.ts` is deliberately not a `.spec.ts`: a test that never returns must not be
   // collectable by an ordinary run.
@@ -80,7 +73,7 @@ export default defineConfig<E2EOptions>({
   // Ctrl-C.
   timeout: serving ? 0 : 90_000,
   expect: { timeout: 25_000 },
-  // One worker: the two streamers take turns on this run's port, and the dev server baked it in.
+  // One worker: the specs stub one orchestrator between them and the dev server is shared.
   workers: 1,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -96,20 +89,6 @@ export default defineConfig<E2EOptions>({
     screenshot: 'only-on-failure',
     ...devices['Desktop Chrome'],
   },
-  projects: serving
-    ? // `serve.hold.ts` boots the real streamer itself and uses the plain `test`, so it declares no
-      // custom option — and setting one a plain `test` does not know is an error, not a no-op.
-      [{ name: 'serve' }]
-    : [
-        // `runs.spec.ts` stubs the orchestrator API and never opens a socket, so it has nothing to
-        // learn from a second streamer. The two projects differ ONLY in that streamer — running it
-        // twice would buy identical passes and pay for both.
-        {
-          name: 'contract',
-          use: { streamerKind: 'contract' },
-          testIgnore: ['**/runs.spec.ts'],
-        },
-        { name: 'real', use: { streamerKind: 'real' } },
-      ],
+  projects: [{ name: serving ? 'serve' : 'console' }],
   webServer: [viteServer],
 });

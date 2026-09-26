@@ -41,7 +41,6 @@
  * at all, which forecloses ever answering a **Run** address from the orchestrator.
  */
 
-import { tryParseTerminalId } from '@kontra/core/panels/ids';
 
 import { DEFAULT_VIEW, PATHS, RETIRED, type View } from './surfaces';
 
@@ -58,6 +57,17 @@ export interface DatasetFocus {
   version?: string;
   dt?: string;
   run?: string;
+  /**
+   * Open the QUERY workbench on this Dataset, not just the listing — what the run page's
+   * "query these rows" button addresses.
+   *
+   * A FLAG, NOT THE SQL, and that is the decision. Carrying the text would put a second spelling of
+   * the query in the URL beside `runScopedSql`'s, and the two would drift the first time either
+   * changed; it would also make an ordinary link several hundred characters of encoded SQL. The
+   * name and the run are already here, and they are everything the query is composed from — so the
+   * address says WHERE to go and `datasets/query.ts` stays the only thing that says WHAT to ask.
+   */
+  query?: boolean;
 }
 
 
@@ -82,14 +92,15 @@ export type Address =
    * a QUERY there rather than a segment because it is not addressing a position in the path — there
    * is no workflow above it to be under.
    *
-   * `pane` IS A FIFTH READING OF THE SAME PLACE, and it is a QUERY for a mechanical reason as well
-   * as a semantic one. Semantically it selects a **Terminal** WITHIN the open run's Monitor tab
-   * rather than addressing a fourth position under it. Mechanically, a Terminal id is
-   * `<mode>:<node>/<session>/<window>` — a colon, two slashes, and on tmux a dot — and the SPA
-   * fallback has already 404'd a dotted id once (`surfaces.ts` records it). A query keeps every one
+   * THERE WAS A FIFTH READING AND IT WAS `?pane=`. It selected a **Terminal** within the open run's
+   * Monitor tab, and it was a QUERY rather than a segment because a Terminal id
+   * (`<mode>:<node>/<session>/<window>`) carries a colon, two slashes and, on tmux, a dot — and the
+   * SPA fallback has already 404'd a dotted id once (`surfaces.ts` records it). The Monitor is gone
+   * and so is the axis; the reasoning is kept because the next id-shaped thing somebody wants in a
+   * URL has the same problem. A query keeps every one
    * of those bytes out of the path, so what the server has to recognise stays `/workflows`.
    */
-  | { view: 'workflows'; workflow: string | null; run: string | null; pane: string | null }
+  | { view: 'workflows'; workflow: string | null; run: string | null }
   // `secrets` joins the arms that carry NOTHING. A secret is never addressable from the bar:
   // naming one in a URL would put it in history and in every referrer, and the whole point of the
   // store is that a value never leaves it. The surface is addressable; a secret is not.
@@ -110,7 +121,6 @@ export type Address =
   // landing on `/runs/<id>` never silently reselects a run on the page the operator just left.
   | { view: 'runs'; run: string | null }
   | { view: 'actors' | 'catalog' | 'logs' | 'secrets' | 'settings' }
-  | { view: 'monitor'; terminal: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 
 /** Where an unknown or malformed address lands, and where a cold `/` lands. */
@@ -118,7 +128,6 @@ export const DEFAULT_ADDRESS: Address = {
   view: DEFAULT_VIEW,
   workflow: null,
   run: null,
-  pane: null,
 };
 
 const VIEW_BY_SEGMENT = new Map<string, View>(
@@ -134,11 +143,6 @@ export interface AddressedState {
   /** The **Run** the Runs surface has open — its OWN field, not `runId`. `/runs/<id>` addresses a
    *  run without touching which run the Workflows surface has selected. */
   runsRun: string | null;
-  /** The **Terminal** the open run's Monitor tab is showing. Named for the run rather than for the
-   *  Monitor surface, which has its own {@link AddressedState.focusTerminal} and a different job:
-   *  that one is a reveal that is consumed once, this one is a selection that persists. */
-  runPane: string | null;
-  focusTerminal: string | null;
   datasetFocus: DatasetFocus | null;
 }
 
@@ -154,9 +158,7 @@ export interface AddressedState {
 export function addressOf(s: AddressedState): Address {
   switch (s.view) {
     case 'workflows':
-      return { view: 'workflows', workflow: s.workflowName, run: s.runId, pane: s.runPane };
-    case 'monitor':
-      return { view: 'monitor', terminal: s.focusTerminal };
+      return { view: 'workflows', workflow: s.workflowName, run: s.runId };
     case 'datasets':
       return { view: 'datasets', dataset: s.datasetFocus };
     case 'runs':
@@ -183,10 +185,7 @@ export function stateFor(address: Address): Partial<AddressedState> {
         view: 'workflows',
         workflowName: address.workflow,
         runId: address.run,
-        runPane: address.pane,
       };
-    case 'monitor':
-      return { view: 'monitor', focusTerminal: address.terminal };
     case 'datasets':
       return { view: 'datasets', datasetFocus: address.dataset };
     case 'runs':
@@ -219,21 +218,8 @@ export function formatAddress(address: Address): string {
       if (address.workflow === null && address.run !== null) {
         query.push(`run=${encodeURIComponent(address.run)}`);
       }
-      // The Terminal the run's Monitor tab is showing. A QUERY, always — the colon and both slashes
-      // of `local:main-droplet/kontra-recon/0.1` are escaped here, so the path stays
-      // `/workflows/<w>/<r>` and the id's DOT never reaches a path segment. That is the whole
-      // defence against the 404 `surfaces.ts` records: on a cold load the server still only has to
-      // recognise the FIRST segment, which is `workflows`.
-      if (address.pane !== null) query.push(`pane=${encodeURIComponent(address.pane)}`);
       return `${path}${query.length > 0 ? `?${query.join('&')}` : ''}`;
     }
-    case 'monitor':
-      // A Terminal id carries a colon (`kontra-recon:0.1`) and, on tmux, a dot. Encoded rather
-      // than trusted: nothing constrains the id to path-safe bytes, and one `/` in it would
-      // otherwise turn into a third segment this module refuses to read back.
-      return address.terminal === null
-        ? PATHS.monitor
-        : `${PATHS.monitor}/${encodeURIComponent(address.terminal)}`;
     case 'datasets': {
       if (address.dataset === null) return PATHS.datasets;
       const query = new URLSearchParams();
@@ -244,6 +230,9 @@ export function formatAddress(address: Address): string {
       // The **Run** whose contribution the operator was reading. It scopes the console; it does not
       // pick the Dataset, so it is a search parameter and not a path segment.
       if (address.dataset.run !== undefined) query.set('run', address.dataset.run);
+      // Open the workbench rather than the listing. Only ever written when true — `?q=0` would be
+      // a second spelling of the default.
+      if (address.dataset.query === true) query.set('q', '1');
       const search = query.toString();
       return `${PATHS.datasets}/${encodeURIComponent(address.dataset.name)}${search ? `?${search}` : ''}`;
     }
@@ -256,26 +245,6 @@ export function formatAddress(address: Address): string {
     default:
       return PATHS[address.view];
   }
-}
-
-/**
- * `?pane=<terminal id>`, admitted or dropped.
- *
- * THE EXISTING PARSER, NOT A SECOND ONE. `@kontra/core/panels/ids.tryParseTerminalId` is the authority on
- * the id grammar — one colon, exactly two slashes, and a node admitted by the whitelist for the mode
- * it claims — and it never throws. A value it refuses is a value the streamer could not have minted,
- * so it is dropped exactly the way an unrecognised `?kind=` is: the rest of the address still lands
- * you on the run, which is the part somebody actually pasted.
- *
- * A LEGAL ID CONTAINS A COLON AND, ON TMUX, A DOT — `local:main-droplet/kontra-recon/0.1`, whose
- * window is `0.1` — and none of those bytes are in the path, so a cold load and an F5 both come back
- * as the shell. That is the property this being a query buys, and it is what `surfaces.ts`'s 404
- * says a path segment would not.
- */
-function paneParam(query: URLSearchParams): string | null {
-  const raw = query.get('pane');
-  if (raw === null || raw === '') return null;
-  return tryParseTerminalId(raw) === null ? null : raw;
 }
 
 /**
@@ -330,11 +299,15 @@ export function parseAddress(url: string): Address | null {
     // A retired surface that never addressed anything still cannot: `/scratch/foo` was not a URL
     // this app could mean before, and a redirect is not a licence to start accepting it.
     if (retired.carries === 'nothing') {
-      return first === null ? { view: retired.to, workflow: null, run: null, pane: null } : null;
+      if (first !== null) return null;
+      // TWO SHAPES, because the targets are two different arms of the union. `logs` addresses
+      // nothing below itself; `workflows` carries a workflow and a run, both null here for the
+      // reason below.
+      return retired.to === 'logs' ? { view: 'logs' } : { view: 'workflows', workflow: null, run: null };
     }
-    // A retired address never carried a pane and is not given one now: a redirect moves an id, it
+    // A retired address that carried an id hands it on, and nothing else: a redirect moves an id, it
     // does not invent a selection the old URL could not have expressed.
-    return { view: retired.to, workflow: null, run: first, pane: null };
+    return { view: 'workflows', workflow: null, run: first };
   }
 
   const view = VIEW_BY_SEGMENT.get(surface);
@@ -343,19 +316,16 @@ export function parseAddress(url: string): Address | null {
   switch (view) {
     case 'workflows': {
       const query = new URLSearchParams(search);
-      const pane = paneParam(query);
       // `/workflows?run=<id>` — a run with no thread above it. Only readable when no workflow is
       // named, because `/workflows/<w>/<r>` already says it in the path and two spellings of one
       // address is a link that does not round-trip.
       if (first === null) {
         if (second !== null) return null;
         const run = query.get('run');
-        return { view, workflow: null, run: run === null || run === '' ? null : run, pane };
+        return { view, workflow: null, run: run === null || run === '' ? null : run };
       }
-      return { view, workflow: first, run: second, pane };
+      return { view, workflow: first, run: second };
     }
-    case 'monitor':
-      return second === null ? { view, terminal: first } : null;
     case 'runs':
       // One id, nothing under it: a run is addressed by its id and a second segment is no URL this
       // app could mean. `/runs` is the list; `/runs/<id>` is one run's record.
@@ -369,6 +339,7 @@ export function parseAddress(url: string): Address | null {
       const dataset: DatasetFocus = { name: first };
       if (kind === 'output' || kind === 'standalone') dataset.kind = kind;
       if (run !== null && run !== '') dataset.run = run;
+      if (query.get('q') === '1') dataset.query = true;
       return { view, dataset };
     }
     default:

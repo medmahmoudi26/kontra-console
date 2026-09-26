@@ -12,12 +12,12 @@
  * exactly: one cell with two thousand characters in it, which is what a `desync` row carrying a
  * raw HTTP exchange looks like and is not reliably producible against a live cluster.
  *
- * It imports `test` from `./fixtures` for the reason `runs.spec.ts` gives — the projects set a
- * custom `streamerKind` option and a plain `test` treats an unknown option as an error. The `view`
- * fixture is never requested, so no streamer starts for these tests.
+ * It imports `test` straight from `@playwright/test`. It used to come from `./fixtures` for the
+ * reason `runs.spec.ts` records — the config declared a `streamerKind` option and a plain `test`
+ * treats an unknown option as an error — and both went with the Monitor.
  */
 
-import { expect, test } from './fixtures';
+import { expect, test } from '@playwright/test';
 
 /** Long enough that no reasonable column width shows it whole. A real exchange is longer. */
 const LONG = `GET /api/v2/accounts HTTP/1.1\r\nHost: target.example\r\n${'X-Padding: '.repeat(120)}\r\n\r\n`;
@@ -146,4 +146,34 @@ test('selecting text in a cell does not open the dialog over what is being read'
   await page.mouse.up();
 
   await expect(page.getByTestId('cell-inspector')).toBeHidden();
+});
+
+/**
+ * THE OTHER END OF THE RUN PAGE'S "query these rows" LINK.
+ *
+ * The run page composes `/datasets/<name>?run=<id>&q=1` and this is what has to happen when
+ * somebody follows it: the workbench opens with the query already written, and SCOPED TO THE RUN.
+ * A bare `SELECT * FROM <name>` would be a plausible wrong answer — a Dataset several runs append
+ * to holds everybody's rows, the columns look right, and nothing on screen would say these are not
+ * the rows that were clicked through from.
+ *
+ * A BROWSER TEST BECAUSE THE SEAM IS THE ADDRESS. `runScopedSql` and `parseAddress` are both unit
+ * tested; what this covers is that the surface reads the one and calls the other on arrival, which
+ * is exactly the wiring a unit test of either half cannot see.
+ */
+test('arriving from a run opens the workbench with that run’s query already written', async ({ page }) => {
+  await stub(page);
+  await page.goto('/datasets/exchanges_8x8?run=sweep-42&q=1');
+
+  const box = page.getByTestId('dataset-query').locator('textarea');
+  await expect(box).toHaveValue(/FROM exchanges_8x8/);
+  await expect(box).toHaveValue(/WHERE run_id = 'sweep-42'/);
+});
+
+test('arriving without the flag leaves the workbench on its own starter query', async ({ page }) => {
+  await stub(page);
+  await page.goto('/datasets/exchanges_8x8');
+  // No `run_id` filter invented for somebody who just opened the Datasets surface: the run is not
+  // part of what they asked for, and scoping to one would hide rows they came to see.
+  await expect(page.getByTestId('dataset-query').locator('textarea')).not.toHaveValue(/run_id/);
 });

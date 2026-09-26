@@ -1,5 +1,5 @@
 /**
- * The surfaces, and the two that used to be surfaces and are not any more.
+ * The surfaces, and the ones that used to be surfaces and are not any more.
  *
  * ONE LIST, READ BY THREE THINGS. The nav rail draws it, `address.ts` gives each one a path, and
  * `control/orchestrator/src/server.ts` keeps a copy so a cold load of any of them comes back as the
@@ -40,9 +40,10 @@
  *    once (a run reached only through its workflow); the record turned out to want a home of its own.
  *  - **Scratch is retired as a top level.** It comes back as a workflow's own design tab, where a
  *    drawing has a subject — ADR 0026 survives unchanged and is strengthened by it.
- *  - **Logs is new**, and it sits under Monitor because the two are the same question at different
- *    resolutions: Monitor is the SCREENS a fleet's machines are showing, Logs is the LINES they
- *    wrote. It is not the run page's logs rail and does not replace it — the rail is one run,
+ *  - **Logs replaced Monitor**, and the pair were once adjacent because they were the same question
+ *    at two resolutions: Monitor was the SCREENS a fleet's machines were showing, Logs is the LINES
+ *    they wrote. Only one of those survives a machine being destroyed, which is why the other is
+ *    gone. It is not the run page's logs rail and does not replace it — the rail is one run,
  *    searched beside what that run did; this is every actor at once, watched. See
  *    `logs/Logs.svelte`.
  *  - **Secrets is its own surface**, because a write-only store with a binding lifecycle and a read
@@ -82,8 +83,7 @@ interface SurfaceDecl {
  * Catalog first because it is where you arrive: the registry of everything this control plane
  * knows, and the way to the two surfaces under it. Workflows is the centre of the WORK — a workflow
  * is a thread and each of its runs is a conversation. Actors and Datasets are what a run calls and
- * what it produces. Monitor is the machines under all of it and Logs is what those machines wrote —
- * the same question at two resolutions, which is why they are adjacent. Secrets and Settings are last because
+ * what it produces. Logs is what the machines under all of it wrote. Secrets and Settings are last because
  * they are the two that are not about a running system, and they are in that order because a secret
  * is read while something runs and a setting is not.
  */
@@ -114,11 +114,6 @@ const DECLARED = [
     hint: 'every Dataset ever written, filling as a run writes it — open one to query it',
   },
   {
-    id: 'monitor',
-    label: 'Monitor',
-    hint: 'the wall of read-only Terminals over tmux',
-  },
-  {
     id: 'logs',
     label: 'Logs',
     hint: 'every actor writing at once, live — one line per record, coloured by who wrote it',
@@ -131,7 +126,11 @@ const DECLARED = [
   {
     id: 'settings',
     label: 'Settings',
-    hint: 'this installation: the control plane it talks to, and how it is displayed',
+    // AND WHAT IT RUNS ON, since ADR 0052 §6: the Machines of the control stack and of every Fleet,
+    // with what is serving on each. Named in the hint because the rail's tooltip is the only place
+    // that says what a surface HOLDS, and a reader looking for "where do I see my Machines" had no
+    // word here to find.
+    hint: 'this installation: the control plane it talks to, every Machine it owns and what is serving on each, and how it is displayed',
   },
 ] as const satisfies readonly SurfaceDecl[];
 
@@ -191,9 +190,16 @@ export const DEFAULT_VIEW = 'workflows' satisfies View;
  * `scratch` never carried an id — `/scratch` had nothing to hand on — so it lands on Workflows,
  * where a workflow's sketch lives now. (`runs` used to be here too, carrying a run id; it is a live
  * surface again — see {@link DECLARED} — so `/runs/<id>` is answered directly rather than redirected.)
+ *
+ * `monitor` LANDS ON LOGS, and it redirects rather than 404s for the reason in this file's header:
+ * the wall's URL is in somebody's tab and somebody's notes. Its trailing segment was a Terminal id,
+ * which names nothing that still exists, so it carries nothing. Logs is the surface that answers
+ * what the Monitor was opened to ask — what is this machine doing — and it answers it after the
+ * machine is gone, which the wall never could.
  */
-export const RETIRED: Record<string, { to: 'workflows'; carries: 'run' | 'nothing' }> = {
+export const RETIRED: Record<string, { to: 'workflows' | 'logs'; carries: 'run' | 'nothing' }> = {
   scratch: { to: 'workflows', carries: 'nothing' },
+  monitor: { to: 'logs', carries: 'nothing' },
 };
 
 /**

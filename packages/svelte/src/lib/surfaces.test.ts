@@ -43,7 +43,7 @@ describe('the nav agrees with the orchestrator', () => {
     // The guard on the guard: an empty set makes every assertion below vacuous.
     expect(served.size).toBeGreaterThan(0);
     expect(routes.size).toBeGreaterThan(0);
-    expect(SURFACES.length).toBe(9);
+    expect(SURFACES.length).toBe(8);
   });
 
   it('every surface the nav offers is served', () => {
@@ -54,10 +54,11 @@ describe('the nav agrees with the orchestrator', () => {
 
   it('everything the server serves is either a surface or a retired address', () => {
     const nav = new Set(SURFACES.map((s) => s.id));
-    // `scratch` is retired: served so the shell can load and REDIRECT it, and deliberately absent
+    // `scratch` and `monitor` are retired: served so the shell can load and REDIRECT them, and
+    // deliberately absent
     // from the nav. Anything else the server serves and the nav omits is a surface nobody can reach.
     // (`runs` was retired here too; it is a nav Surface again, so it is in `nav`, not this set.)
-    const retired = new Set(['scratch']);
+    const retired = new Set(['scratch', 'monitor']);
     for (const id of served) {
       expect(nav.has(id) || retired.has(id), `${id} is served and unreachable`).toBe(true);
     }
