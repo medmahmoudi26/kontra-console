@@ -50,8 +50,8 @@
    *
    * ── FORM, NOT ONLY COLOUR ───────────────────────────────────────────────────────────────────────
    *
-   * Each poll state gets a WORD, a GLYPH and its own `border-left-style` (solid / double / dotted /
-   * dashed). The four are the whole point of the page — ADR 0052 §6 forbids rounding them off — and a
+   * Each poll state gets a WORD, a GLYPH and its own `border-left-style` — solid / double / dotted /
+   * dashed for the four, groove for `unknown`. The four are the whole point of the page — ADR 0052 §6 forbids rounding them off — and a
    * reader who cannot separate red from amber must still be able to separate a Worker that is serving
    * from one the Placement converged and never started. `e2e/infra.spec.ts` asserts the four styles
    * are four, in Chromium, because a CSS class that resolves to the same computed style as its
@@ -260,7 +260,10 @@
           </div>
         {/if}
         {#if r.unknown}
-          <div class="w-line mono bad"><span class="grow">{r.unknown}</span></div>
+          <!-- `dim`, NOT `bad`. This line is the reason a queue could not be READ, and painting it
+               in the alarm colour makes "we could not ask" look like "nothing is polling" — the one
+               pair machines.ts:43-48 exists to keep apart, undone by a class name. -->
+          <div class="w-line mono dim"><span class="grow">{r.unknown}</span></div>
         {/if}
 
         <!-- ── WHAT THIS WORKER IS RUNNING ────────────────────────────────────────────────────────
@@ -529,8 +532,8 @@
       <code>dockerFleet</code> refuses a placement that is not <code>repo@sha256:&lt;64 hex&gt;</code>,
       so that digest is exact — what is not exact is whether the tag still means it.
       <span class="ok">≡ current</span> is the tag resolving to the same digest;
-      <span class="bad">≠ drifted</span> is this Worker on older code than the tag names, and it names
-      both digests; <span class="dim">? unknown</span> is a registry that could not be asked, which is
+      <span class="bad">≠ drifted</span> is this Worker on different code from what the tag names
+      now — not necessarily older, since a rolled-back tag makes it newer — and it names both digests; <span class="dim">? unknown</span> is a registry that could not be asked, which is
       never the same answer as drift.
     </p>
   {/if}
@@ -598,8 +601,16 @@
   }
   .stackhead .fqn { font-size: var(--t-small); overflow-wrap: anywhere; }
   .stackhead .sub { font-size: var(--t-small); color: var(--dim); }
+  /* `--t-small`, NOT `--t-micro`, because "converged 2s ago" is a SENTENCE and not a label.
+     `tokens.css:10` draws the line there — "nothing a person READS goes below 12px; `--t-micro` at
+     11px exists for uppercase labels only" — and this pill was 11px with `text-transform: none`, so it
+     was the one thing on this page a reader had to read at the floor's wrong side. `type-scale.mjs`
+     cannot catch it: it checks that a size is ON the scale, never that a token is used for what the
+     token is for, so this was green in the guard and measured wrong in Chromium
+     (`e2e/infra-verify.spec.ts` walks every painted text node after the cascade). Uppercasing it
+     instead was the other way out and it is worse: "CONVERGED 2S AGO" turns a duration into shouting. */
   .pill {
-    font-size: var(--t-micro); font-family: var(--mono); letter-spacing: 0.04em;
+    font-size: var(--t-small); font-family: var(--mono); letter-spacing: 0.04em;
     padding: 2px var(--s-2); border-radius: 3px; border: 1px solid var(--line); color: var(--dim);
     white-space: nowrap;
   }
@@ -627,16 +638,22 @@
   .workers { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-1); min-width: 0; }
   .declared { display: flex; flex-direction: column; gap: var(--s-2); }
 
-  /* ── THE FOUR STATES, IN FORM AS WELL AS IN COLOUR ──────────────────────────────────────────────
-     Four distinct `border-left-style`s, one glyph each, and the word itself. 3px because `double`
-     needs three pixels to draw two lines; below that the browser silently renders it solid, which
-     would make `stale` and `serving` the same shape. */
+  /* ── THE STATES, IN FORM AS WELL AS IN COLOUR ───────────────────────────────────────────────────
+     FIVE distinct `border-left-style`s — the four ADR 0052 §6 states plus `unknown` — one glyph
+     each, and the word itself. 3px because `double` needs three pixels to draw two lines; below
+     that the browser silently renders it solid, which would make `stale` and `serving` the same
+     shape. */
   .w { border-left: 3px solid var(--line); padding-left: var(--s-2); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .w.serving { border-left-style: solid; border-left-color: var(--ok); }
   .w.stale { border-left-style: double; border-left-color: var(--warn); }
   .w.undated { border-left-style: dotted; border-left-color: var(--dim); }
   .w.nothing-polling { border-left-style: dashed; border-left-color: var(--bad); }
-  .w.unknown { border-left-style: dashed; border-left-color: var(--dim); }
+  /* GROOVE, NOT A SECOND DASHED. `unknown` shared `nothing-polling`'s dashed edge and differed
+     only in colour, which is the one pair machines.ts:43-48 insists hardest on separating: folding
+     them "would draw a red Fleet for an unreachable cluster and send an operator to restart Workers
+     that are fine". A reader who cannot separate red from grey saw the same shape for "this queue
+     has no poller" and "we could not ask". `groove` is the remaining style that still reads at 3px. */
+  .w.unknown { border-left-style: groove; border-left-color: var(--dim); }
 
   .w-top { display: flex; align-items: baseline; gap: var(--s-2); min-width: 0; }
   /* WRAPS, unlike every other mono line in this card. The title is an actor name on a Fleet and a
@@ -662,6 +679,7 @@
   .w-line .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .w-line .at { flex: none; }
   .w-line.bad { color: var(--bad); }
+  .w-line.dim { color: var(--dim); }
   .w-line.note { color: var(--accent); }
 
   /* ── THE DIGEST LINE, AND ITS VERDICT ───────────────────────────────────────────────────────────

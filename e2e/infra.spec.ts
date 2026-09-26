@@ -657,7 +657,9 @@ test('a tag that has moved is flagged, naming both digests', async ({ page }) =>
   await expect(notes.locator('li')).toHaveCount(1);
   await expect(notes).toContainText('nscheck');
   await expect(notes).toContainText('127.0.0.1:5000/nscheck:0.1.0');
-  await expect(notes).toContainText('older code than the tag names');
+  // "DIFFERENT", NOT "OLDER" — see drift.ts. A rolled-back tag leaves the Worker on newer code,
+  // so the page may not claim a direction the two digests do not carry.
+  await expect(notes).toContainText('different code from what the tag names now');
 
   expect(errors).toEqual([]);
 });

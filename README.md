@@ -1,13 +1,28 @@
 # kontra-console
 
-**The browser surface for [kontra](https://github.com/medmahmoudi26/kontra)** — four readings of a run, none of which substitutes for another.
+**The browser surface for [kontra](https://github.com/medmahmoudi26/kontra)** — several readings of a run, none of which substitutes for another.
+
+
+> [!CAUTION]
+> **The console is `0.x`, unstable, and in active development.** It is one half of
+> [kontra](https://github.com/medmahmoudi26/kontra), which is itself not ready for production use by
+> anyone but its authors — read that repository's disclaimer first. Surfaces are added, renamed and
+> removed between minors: the Monitor was removed outright in `2ea4cff`. Nothing here is a stable
+> API, including the routes this app calls.
 
 | | |
 |---|---|
+| **Catalog** | what this install holds |
 | **Workflows** | the thread: your workflows, their runs, and the Transcript of what each one did |
+| **Runs** | one execution, laid out against time |
 | **Actors** | what is deployed, at what version, and what each Method takes |
-| **Monitor** | the wall — every Terminal a Machine exposes, with its health signals |
 | **Datasets** | what came back, queryable while the Run is still open |
+| **Logs** | what the control plane said |
+| **Secrets** | names, never values |
+| **Settings** | what this installation is — including **Infra**, every Machine and what is serving on it |
+
+*The **Monitor** surface and the panels plane were removed in `2ea4cff`. A Machine's terminals are
+no longer a surface; what is running where is a section of Settings.*
 
 It is a **control plane, not a canvas.** kontra had a graph interpreter until v2; ADR 0023 §12 deleted it, and a **Run** became one execution of a workflow you wrote. Nothing here builds a program — it shows you the one that ran.
 

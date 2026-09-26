@@ -207,7 +207,12 @@ export function driftOf(
     tag,
     // BOTH DIGESTS, NAMED. "Drifted" alone tells an operator nothing they can act on; the pair tells
     // them which one is on the Machine and which one a re-deploy would put there.
-    why: `running ${shortDigest(pinned.digest)} but ${tag} now resolves to ${shortDigest(nowPinned.digest)} — this Worker is on older code than the tag names`,
+    //
+    // "DIFFERENT", NOT "OLDER", AND THAT IS NOT PEDANTRY. Two digests being unequal does not say
+    // which came first: a tag rolled back to a previous digest leaves the Worker on NEWER code, and
+    // the page would then assert the opposite of the truth to somebody deciding whether to
+    // re-deploy. The registry answers what the tag points at now; nothing here answers when.
+    why: `running ${shortDigest(pinned.digest)} but ${tag} now resolves to ${shortDigest(nowPinned.digest)} — this Worker is on different code from what the tag names now`,
   };
 }
 
