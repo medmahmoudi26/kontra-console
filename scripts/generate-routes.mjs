@@ -1,5 +1,5 @@
 /**
- * Generate `src/run/routes.gen.ts` from the orchestrator's OpenAPI document.
+ * Generate `packages/core/src/run/routes.gen.ts` from the orchestrator's OpenAPI document.
  *
  * The console used to name every path as a string literal at 45 call sites. A route renamed on the
  * server then failed at RUNTIME, as an empty panel three files from the cause. Generating the paths
@@ -59,6 +59,10 @@ export function apiPath(id: OperationId, params: Record<string, string | number>
   });
 }
 `;
-const out = join(here, '..', 'src', 'run', 'routes.gen.ts');
+// `packages/core/src/…`, NOT `src/…`. This said `src/run/routes.gen.ts` from before the console
+// became a workspace, so the documented command wrote a NEW file at the repository root and left
+// the real table untouched — `routes.gen.test.ts` reads the one under `packages/core`, so a run
+// that appeared to succeed changed nothing it checks.
+const out = join(here, '..', 'packages', 'core', 'src', 'run', 'routes.gen.ts');
 writeFileSync(out, body);
 console.log(`${out} — ${entries.length} operations, ${new Set(entries.map((e) => e.path)).size} paths`);
