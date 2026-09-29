@@ -56,9 +56,15 @@
   let rejected = $state('');
   /** A different failure: the surface is off, or the server is unreachable. */
   let unreachable = $state('');
+  /**
+   * STILL READ, THOUGH NOTHING DRAWS IT ANY MORE.
+   *
+   * The catalog rail that listed this is gone (see the markup), but `onMount` below still needs ONE
+   * name out of it to seed the editor when a caller handed in no query. `openSchema` and the
+   * `insert(column)` helper went with the rail — they existed only to expand a dataset's columns
+   * and paste one into the textarea, which is the capability that delete gives up.
+   */
   let schema = $state<SchemaEntry[]>([]);
-  let openSchema = $state<string>('');
-  let box = $state<HTMLTextAreaElement | undefined>(undefined);
 
   onMount(async () => {
     // A QUERY HANDED IN FROM A RUN WINS, and it is seeded before the schema read so a slow
@@ -120,21 +126,6 @@
     running = false;
   }
 
-  function insert(text: string): void {
-    const el = box;
-    if (!el) {
-      sql += text;
-      return;
-    }
-    const a = el.selectionStart ?? sql.length;
-    const b = el.selectionEnd ?? sql.length;
-    sql = sql.slice(0, a) + text + sql.slice(b);
-    queueMicrotask(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = a + text.length;
-    });
-  }
-
   /** What each result column shows, as text — the filter row's accessor. */
   function resultText(row: unknown, i: number): string {
     return cellText((row as unknown[])[i]);
@@ -176,47 +167,27 @@
     <span class="hint mono">⌘/ctrl + ⏎ to run</span>
   </header>
 
-  <div class="grid">
-    <!-- WHAT IS QUERYABLE, listed rather than guessed at. -->
-    <aside class="schema">
-      <h3>datasets</h3>
-      {#if schema.length === 0}
-        <p class="muted">No datasets yet — a run that pushes rows creates one.</p>
-      {:else}
-        <ul>
-          {#each schema as d (d.name)}
-            <li>
-              <button
-                class="ds mono"
-                class:on={openSchema === d.name}
-                onclick={() => {
-                  openSchema = openSchema === d.name ? '' : d.name;
-                  sql = starterSql(d.name);
-                }}
-                title="write a starter query for {d.name}"
-              >
-                {d.name}<span class="n">{d.columns.length}</span>
-              </button>
-              {#if openSchema === d.name}
-                <ul class="cols">
-                  {#each d.columns as c (c.name)}
-                    <li>
-                      <button class="col mono" onclick={() => insert(c.name)} title="insert {c.name}">
-                        {c.name}<span class="ty">{c.type.toLowerCase()}</span>
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </aside>
+  <!--
+    THE CATALOG IS NOT LISTED TWICE ANY MORE.
 
-    <div class="editor">
+    A `.schema` rail sat here naming every dataset in the lake, beside a page whose LISTING already
+    names every dataset in the lake. On this install that is 64 rows drawn twice: an unbounded
+    ~1,200px column that pushed the open dataset's rows below the fold, counts that escaped the
+    210px rail on any name longer than it (`http_events_fifth_third_bank_bbp 20`), and — because
+    `schema` starts empty and `fetchSchema()` is awaited on mount — the words "No datasets yet"
+    printed directly beneath a table listing 64 of them.
+
+    It also made `Datasets.svelte`'s claim false. That file collapses its listing to a crumb when a
+    dataset opens, with a comment reading ONE WIDE TABLE, NOT TWO STACKED ONES (issue 04); the rail
+    put the second one straight back, one component lower, where the issue could not see it.
+
+    WHAT IS LOST, so it is lost on purpose: expanding a dataset here was the only way to read COLUMN
+    NAMES AND TYPES before writing SQL. The path now is to open the dataset and read the preview's
+    headers, which is a click further and needs the dataset to have rows. `fetchSchema` is kept for
+    `starterSql` below, which still needs a name to seed the editor with.
+  -->
+  <div class="editor">
       <textarea
-        bind:this={box}
         bind:value={sql}
         spellcheck="false"
         aria-label="SQL"
@@ -288,7 +259,6 @@
           {/snippet}
         </DataTable>
       {/if}
-    </div>
   </div>
 </section>
 
@@ -298,32 +268,11 @@
   h2 { font-size: var(--t-lead); font-weight: 600; margin: 0; }
   .hint { font-size: var(--t-small); color: var(--dim); margin-left: auto; }
 
-  .grid { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: var(--s-3); align-items: start; }
-  /* Under 900px the schema list stops being a rail and sits above the editor — the same rule the
-     run page's logs rail follows. */
-  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
-
-  .schema {
-    border: 1px solid var(--line); border-radius: var(--radius);
-    background: var(--panel); padding: var(--s-2); min-width: 0;
-  }
-  .schema h3 {
-    font-size: var(--t-micro); text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--dim); font-weight: 600; margin: 0 0 var(--s-1);
-  }
-  .schema ul { list-style: none; margin: 0; padding: 0; }
-  .schema .cols { margin: 0 0 var(--s-1) var(--s-2); }
-
-  .ds, .col {
-    display: flex; align-items: baseline; gap: var(--s-1); width: 100%;
-    background: none; border: 0; border-radius: var(--radius);
-    padding: 2px var(--s-1); text-align: left; cursor: pointer;
-    font-size: var(--t-small); color: var(--fg);
-  }
-  .ds:hover, .col:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-  .ds.on { color: var(--accent); }
-  .ds .n, .col .ty { margin-left: auto; color: var(--dim); font-size: var(--t-small); }
-  .col { color: var(--dim); }
+  /* THE EDITOR IS THE WHOLE WIDTH. This was `grid-template-columns: 210px minmax(0, 1fr)` with a
+     `@media (max-width: 900px)` collapse, both of which existed only to seat the catalog rail that
+     is gone. A one-item grid is a grid pretending to be a decision, so it is a block again — and
+     the 900px rule went with the thing it was reflowing. `min-width: 0` stays on `.editor` below:
+     it is what lets the result table's own scroll box shrink instead of widening the page. */
 
   textarea {
     width: 100%; min-height: 8rem; resize: vertical;

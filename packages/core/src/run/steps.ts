@@ -90,7 +90,21 @@ const FRAMES: readonly Frame[] = [
     open: 'StartChildWorkflowExecutionInitiated',
     start: 'ChildWorkflowExecutionStarted',
     close: /^ChildWorkflowExecution(Completed|Failed|TimedOut|Canceled|Terminated)$/,
-    subject: (e) => WORKFLOW_TYPE.exec(e.detail)?.[1] ?? '',
+    // THE CHILD'S ID, NOT ITS TYPE — and the difference is the whole correctness of this region
+    // for any workflow that fans out.
+    //
+    // `detail` carries only `workflowType=Surface`, which every one of a campaign's 462 crawl
+    // children shares. Keyed on that, they all queue under ONE subject and `matchOf` closes them
+    // FIFO — so the first completion closes the first-STARTED step whether or not that is the child
+    // that actually finished. Children that run concurrently almost never finish in the order they
+    // were initiated, so the rows drift apart from the truth immediately: on campaign-1790599185
+    // the page drew `john_deere_bbp` and `visa` as COMPLETE while both were still running, and
+    // `indrive` as in flight two and a half hours after it closed.
+    //
+    // `link.workflowId` is on the initiated, started AND closing events, so keying on it gives each
+    // child its own queue. FIFO is then correct rather than coincidental: the only events sharing a
+    // key are that one child's, including its retries, which do reuse the id and should pair in order.
+    subject: (e) => e.link?.workflowId ?? WORKFLOW_TYPE.exec(e.detail)?.[1] ?? '',
   },
   {
     kind: 'nexus',
@@ -211,6 +225,19 @@ export interface StepName {
 
 export function nameStep(s: Step): StepName {
   if (s.kind === 'child') {
+    // NOT EVERY CHILD IS A FLEET. These words were written when bringing a stack up was the only
+    // child workflow a run started. A campaign starts one `Surface` or `Hunt` child PER PROGRAM, so
+    // the fleet sentence gets repeated over every crawl on the page — eight rows all claiming to
+    // bring Machines up, when one of them did that and the rest were crawling different companies.
+    // The id underneath keeps them apart, but the title is what a reader actually reads.
+    const type = s.link?.type ?? '';
+    if (type && type !== 'stackWorkflow') {
+      return {
+        title: `Run ${type}`,
+        what: 'A child workflow, running its own steps and reporting back to this one.',
+        sub: s.link?.workflowId ?? s.subject,
+      };
+    }
     return {
       title: 'Bring the Fleet up',
       what: 'A whole stack — Machines, network, the Warden on each one — as one child workflow.',
@@ -328,7 +355,12 @@ export function shortSeconds(s: number): string {
   // ONE DECIMAL UP TO A MINUTE. Whole seconds drew `41s → 41s · 122ms` on every sub-second step,
   // which reads as a bar with no width rather than as a fast one.
   if (s < 60) return `${s.toFixed(1)}s`;
-  return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+  // ROUNDED ONCE, THEN SPLIT. It was `Math.floor(s / 60)` and `Math.round(s % 60)` computed
+  // independently, so any value in the last half-second of a minute rounded its remainder up to 60
+  // while the minutes stayed put: 8219.6 s printed `136m 60s`. Observed on a Fleet's elapsed
+  // readout, which ticks once a second and therefore lands on it constantly.
+  const total = Math.round(s);
+  return `${Math.floor(total / 60)}m ${total % 60}s`;
 }
 
 /**

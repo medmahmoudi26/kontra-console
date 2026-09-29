@@ -33,18 +33,34 @@ const activity = (type: string, summary: string, t0: number, t1: number, ok = tr
   ev(ok ? 'ActivityTaskCompleted' : 'ActivityTaskFailed', `activityType=${type} · identity=1@api`, t1),
 ];
 
-const child = (t0: number, t1: number, ok = true, error = ''): RunEvent[] => [
-  ev('StartChildWorkflowExecutionInitiated', 'workflowType=stackWorkflow · taskQueue=kontra-infra', t0, {
-    summary: 'fleet up kontra-fleet/c-1790194348 (1x c-1790194348)',
+/**
+ * One child workflow. `link.workflowId` rides on ALL THREE events, which is what the orchestrator
+ * actually serves — `/api/runs/<id>/history` carries it on the initiated, started and closing
+ * events alike. An earlier version of this helper put it on the initiated event only, which made
+ * the fixture the one place in the system where a child's halves could not be told apart.
+ */
+const child = (
+  t0: number,
+  t1: number,
+  ok = true,
+  error = '',
+  wid = 'kontra-fleet/c-1790194348',
+  type = 'stackWorkflow'
+): RunEvent[] => [
+  ev('StartChildWorkflowExecutionInitiated', `workflowType=${type} · taskQueue=kontra-infra`, t0, {
+    summary: `fleet up ${wid} (1x c-1790194348)`,
     cat: 'child',
-    link: { workflowId: 'kontra-fleet/c-1790194348', via: 'child' },
+    link: { workflowId: wid, via: 'child', type },
   }),
-  ev('ChildWorkflowExecutionStarted', 'workflowType=stackWorkflow', t0 + 0.02, { cat: 'child' }),
+  ev('ChildWorkflowExecutionStarted', `workflowType=${type}`, t0 + 0.02, {
+    cat: 'child',
+    link: { workflowId: wid, via: 'child', type },
+  }),
   ev(
     ok ? 'ChildWorkflowExecutionCompleted' : 'ChildWorkflowExecutionFailed',
-    `workflowType=stackWorkflow${error ? ` · ${error}` : ''}`,
+    `workflowType=${type}${error ? ` · ${error}` : ''}`,
     t1,
-    { cat: ok ? 'child' : 'failure' }
+    { cat: ok ? 'child' : 'failure', link: { workflowId: wid, via: 'child', type } }
   ),
 ];
 
@@ -149,6 +165,37 @@ describe('reading a history as steps', () => {
     ]);
   });
 
+  /**
+   * THE FAN-OUT BUG, stated as a test.
+   *
+   * A campaign starts N children of the SAME workflow type and they finish out of order. Keyed on
+   * `workflowType` they all shared one FIFO queue, so the first completion closed the first-started
+   * step — and every row after that carried somebody else's clock. On campaign-1790599185 the run
+   * page drew `john_deere_bbp` and `visa` as COMPLETE while both were still crawling, and `indrive`
+   * as in flight two and a half hours after it had closed. A reader cannot tell that by looking,
+   * which is what makes it worse than a blank region.
+   *
+   * Interleaved deliberately: `b` closes before `a` ever does.
+   */
+  it('closes the child that actually finished, not the one that started first', () => {
+    nextId = 0;
+    const a = child(1, 900, true, '', 'campaign-1-surface-john_deere_bbp');
+    const b = child(2, 100, true, '', 'campaign-1-surface-snap-on_tools');
+    const steps = buildSteps([
+      a[0]!, b[0]!, // both initiated
+      a[1]!, b[1]!, // both started
+      b[2]!, // snap-on finishes FIRST, while john_deere is still running
+    ]);
+    const bySubject = new Map(steps.map((s) => [s.subject, s]));
+    const deere = bySubject.get('campaign-1-surface-john_deere_bbp')!;
+    const snap = bySubject.get('campaign-1-surface-snap-on_tools')!;
+
+    expect(snap.t1).toBe(100); // the one that closed carries its own close time
+    expect(deere.t1).toBeNull(); // and the one still running is still OPEN
+    expect(isOpen(deere)).toBe(true);
+    expect(isOpen(snap)).toBe(false);
+  });
+
   it('carries the failure onto the step that failed', () => {
     nextId = 0;
     const steps = buildSteps(child(41.2, 80.1, false, 'Activity task failed: code: -2'));
@@ -186,6 +233,22 @@ describe('naming a step', () => {
     const named = nameStep(one('reticulateSplines'));
     expect(named.title).toBe('Reticulate Splines');
     expect(named.title).not.toContain('activityType');
+  });
+
+  /**
+   * A campaign's children are crawls and sweeps, not fleets. Calling all of them "Bring the Fleet
+   * up" put that sentence on eight concurrent rows, each about a different company.
+   */
+  it('names a child by its workflow type rather than calling every child a fleet', () => {
+    nextId = 0;
+    const [surface] = buildSteps(child(1, 9, true, '', 'campaign-1-surface-visa', 'Surface'));
+    expect(nameStep(surface!).title).toBe('Run Surface');
+    expect(nameStep(surface!).sub).toBe('campaign-1-surface-visa');
+
+    // and the fleet keeps kontra's own words for the case they were written for
+    nextId = 0;
+    const [fleet] = buildSteps(child(1, 9));
+    expect(nameStep(fleet!).title).toBe('Bring the Fleet up');
   });
 
   it('reads the unit count out of a dispatch summary', () => {
@@ -269,6 +332,13 @@ describe('formatting', () => {
     expect(shortSeconds(41.08)).toBe('41.1s');
     expect(shortSeconds(80.4)).toBe('1m 20s');
     expect(shortSeconds(Number.NaN)).toBe('—');
+
+    // NO CLOCK EVER READS `60s`. The minutes and the seconds were rounded independently, so the last
+    // half of every minute printed a remainder of 60 while the minutes stayed put — `136m 60s`,
+    // observed on a Fleet's elapsed readout, which ticks once a second and lands there constantly.
+    expect(shortSeconds(8219.6)).toBe('137m 0s');
+    expect(shortSeconds(119.7)).toBe('2m 0s');
+    expect(shortSeconds(119.4)).toBe('1m 59s');
   });
 
   it('says when a sub-second step happened rather than drawing an empty range', () => {

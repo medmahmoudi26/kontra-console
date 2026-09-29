@@ -218,7 +218,14 @@ export function collapse(attempts: readonly Attempt[]): Missing[] {
   return out;
 }
 
-async function part<T>(
+/**
+ * One read, degrading to `fallback` and naming itself in `attempts` when it does not answer.
+ *
+ * EXPORTED FOR `runs/fleetLoad.ts`, which loads the same `/api/infra/*` routes for one run's Fleets
+ * and must degrade identically. A second copy of this would be a second set of rules about what a
+ * 404 means, and the whole point of {@link why} is that those rules are stated once.
+ */
+export async function part<T>(
   url: string,
   fallback: T,
   attempts: Attempt[],
@@ -258,15 +265,19 @@ async function part<T>(
  * empty converge strip — this console asserting that a stack has never converged, which is false for
  * every stack on the live volume.
  */
-async function attempt<T>(
+export async function attempt<T>(
   url: string,
   fallback: T,
   attempts: Attempt[],
   fetchImpl: typeof fetch,
-  label: string
+  label: string,
+  /** Statuses that are a normal ANSWER rather than a failed read. The run page's Fleet reads need
+   *  this — a 404 from `/ops` is Temporal's own retention and from `/state` is a Fleet whose first
+   *  converge has not written a checkpoint — and both must come back `failed: false`. */
+  normal: readonly number[] = []
 ): Promise<{ value: T; failed: boolean }> {
   const own: Attempt[] = [];
-  const value = await part<T>(url, fallback, own, fetchImpl, [], label);
+  const value = await part<T>(url, fallback, own, fetchImpl, normal, label);
   attempts.push(...own);
   return { value, failed: own.length > 0 };
 }
