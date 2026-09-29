@@ -135,10 +135,38 @@ export function parseRecord(line: Record<string, unknown>, runId: string): LogRe
   // envelope (`node_id`, `actor_id`, `logger`, `task_queue`…). Skipping both leaves `fields` holding
   // only what the emitter stamped with `extra={...}` (say.py) — the host/endpoint/point/record it is
   // ABOUT, plus `error` (the full exception, JsonFormatter puts exc_info there). That is the record.
+  //
+  // THE SET WAS INCOMPLETE AND THAT IS WHAT MADE THE RAIL UNREADABLE. Measured on a canary line:
+  // fifteen fields rendered under the message, of which SIX said anything —
+  //
+  //   part=actor tenant=default activity_id=8 activity_type=RunBatch axis=steps build_id=1.1.1
+  //   done=3 phase=sweep program=alpha queue=canary-1.1.1-s-2e3b028e01c2 role=actor rows=2
+  //   structured=true total=5 worker=67aadf0236f4 workflow_run_id=01a0ed4c-ee3e-7adf-…
+  //
+  // `axis done total phase program rows` is the progress fact and is worth reading. Everything
+  // else is the SAME on every line of the run, so it cost a wrapped second line per entry to say
+  // nothing, and the fact was buried in the middle of it. Three kinds were escaping:
+  //
+  //   • TEMPORAL/RUNTIME ENVELOPE the set already meant to exclude and simply missed —
+  //     `queue` (the set had `task_queue` and not its other spelling), `workflow_run_id`,
+  //     `activity_id`, `activity_type`, `build_id`, `part`, `role`, `tenant`.
+  //   • FIELDS ALREADY LIFTED ONTO THE RECORD — `worker` is parsed into `LogRecord.worker` below
+  //     and was then repeated here, so the rail drew it twice.
+  //   • SHIPPER ARTEFACTS — `structured` and `ship_time` are stamped by `logline.py` to record how
+  //     IT parsed the line. They are facts about the log pipeline, never about the Run, and a
+  //     reader has no use for either.
+  //
+  // The rule the set encodes is unchanged: what remains is what the EMITTER stamped — the
+  // host/endpoint/point/record a line is about, `error`, and the declared progress fact.
   const SKIP = new Set([
-    'level', 'LEVEL', 'ts', 'msg', 'run_id', 'machine', 'unit', 'actor', 'incomplete',
-    'node_id', 'actor_id', 'actor_version', 'logger', 'task_queue', 'namespace',
-    'workflow_id', 'workflow_type', 'attempt',
+    // Structural — parsed into the record above.
+    'level', 'LEVEL', 'ts', 'msg', 'run_id', 'machine', 'unit', 'actor', 'worker', 'incomplete',
+    // Temporal / runtime envelope — on every line, and never about the record.
+    'node_id', 'actor_id', 'actor_version', 'logger', 'task_queue', 'queue', 'namespace',
+    'workflow_id', 'workflow_type', 'workflow_run_id', 'attempt',
+    'activity_id', 'activity_type', 'build_id', 'part', 'role', 'tenant',
+    // Shipper artefacts — how `logline.py` parsed the line, not what the line says.
+    'structured', 'ship_time',
   ]);
   const fields: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(line)) {
