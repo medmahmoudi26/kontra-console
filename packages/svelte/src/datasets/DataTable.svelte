@@ -83,6 +83,22 @@
      * assertion below is there because the two props look independent and are not.
      */
     cellValue?: (row: unknown, column: number) => unknown;
+    /**
+     * COLUMNS AN OPERATOR CAN DRAG, AND WIDTHS THAT SURVIVE A RELOAD.
+     *
+     * Absent means the table behaves exactly as it always has — no grips, no stored state, auto
+     * layout. Present, it is the localStorage key the widths live under, so two tables on one page
+     * keep separate preferences and neither inherits the other's.
+     *
+     * ── WIDTHS ARE KEYED BY COLUMN LABEL, NOT BY INDEX ────────────────────────────────────────
+     *
+     * The preview table's columns are a DATASET's columns: open `crawl4ai` and then `scope_paid`
+     * and column 2 is `status` in one and `platform` in the other. Stored by index, the second
+     * dataset would silently inherit the first's widths — a `host` column sized for a status code.
+     * A label is what the operator actually dragged, so a width follows the column it belongs to
+     * and a dataset that has never been resized simply has none.
+     */
+    resizeKey?: string;
   }
 
   let {
@@ -95,7 +111,107 @@
     maxHeight,
     textOf,
     cellValue,
+    resizeKey,
   }: Props = $props();
+
+  /** Narrower than this and a column is a sliver with no content — a drag that can lose a column
+   *  entirely is a drag an operator cannot undo without clearing storage. */
+  const MIN_COL = 56;
+  const STORE = 'kontra.console.table.';
+
+  /**
+   * Stored widths, by column label. Read once at construction rather than in an effect: the key is
+   * a prop that is known at that point, and an effect would re-read it on every unrelated change.
+   *
+   * NEVER THROWS. `localStorage` is absent in SSR and throws outright in a browser with storage
+   * disabled; a table that will not render because it could not remember a column width is a far
+   * worse failure than a table with default widths.
+   */
+  function loadWidths(): Record<string, number> {
+    if (!resizeKey || typeof localStorage === 'undefined') return {};
+    try {
+      const raw = localStorage.getItem(STORE + resizeKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'number' && Number.isFinite(v) && v >= MIN_COL) out[k] = v;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  let widths = $state<Record<string, number>>(loadWidths());
+
+  /**
+   * FIXED LAYOUT ONLY ONCE A WIDTH EXISTS, which is what keeps the default appearance unchanged.
+   *
+   * `table-layout: fixed` is what makes a dragged width hold — under auto layout the browser treats
+   * `width` as a suggestion and the column springs back to fit its content. But switching to fixed
+   * with no widths set would divide the table into equal columns, so a table nobody has touched
+   * would look different for no reason. So auto until the first drag, and the drag itself freezes
+   * what auto chose (see {@link startResize}) before anything moves.
+   */
+  const sized = $derived(Object.keys(widths).length > 0);
+
+  let dragging: { label: string; startX: number; startW: number } | null = null;
+
+  function startResize(event: PointerEvent, label: string): void {
+    if (!resizeKey) return;
+    const grip = event.currentTarget as HTMLElement;
+    const th = grip.parentElement;
+    if (!th) return;
+    // A GRIP IS NOT A HEADER CLICK, and on the listing table a stray click three hundred pixels
+    // away would open whatever row the pointer came to rest over.
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!sized) {
+      // Freeze every column at what auto layout chose, so the switch to fixed moves nothing except
+      // the column being dragged.
+      const head = th.closest('tr');
+      const snap: Record<string, number> = {};
+      head?.querySelectorAll('th').forEach((el, i) => {
+        const name = columns[i]?.label;
+        if (name) snap[name] = Math.round(el.getBoundingClientRect().width);
+      });
+      widths = snap;
+    }
+    dragging = {
+      label,
+      startX: event.clientX,
+      startW: widths[label] ?? Math.round(th.getBoundingClientRect().width),
+    };
+    grip.setPointerCapture(event.pointerId);
+  }
+
+  function moveResize(event: PointerEvent): void {
+    if (!dragging) return;
+    const next = Math.max(MIN_COL, dragging.startW + (event.clientX - dragging.startX));
+    widths = { ...widths, [dragging.label]: Math.round(next) };
+  }
+
+  /** Persisted on RELEASE, not on every move: a drag is dozens of pointer events and localStorage
+   *  is synchronous, so writing per frame would put a disk round-trip inside the drag. */
+  function endResize(): void {
+    if (!dragging) return;
+    dragging = null;
+    if (!resizeKey || typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(STORE + resizeKey, JSON.stringify(widths));
+    } catch {
+      /* storage full or disabled — the widths still hold for this session */
+    }
+  }
+
+  /** A stored width wins over the caller's declared one; the caller's is the starting point. */
+  function widthOf(c: Column): string | undefined {
+    const w = widths[c.label];
+    if (w) return `width:${w}px`;
+    return c.width ? `width:${c.width}` : undefined;
+  }
 
   // IN AN EFFECT, so it reads the props reactively and fires if a caller starts passing both later
   // — and so `svelte-check` is right rather than merely quiet. Loud in development, absent in
@@ -163,11 +279,31 @@
   <p class="muted">{empty}</p>
 {:else}
   <div class="wrap" style={maxHeight ? `max-height:${maxHeight}` : undefined}>
-    <table>
+    <table class:sized>
       <thead>
         <tr>
           {#each columns as c (c.label)}
-            <th class:num={c.numeric} style={c.width ? `width:${c.width}` : undefined}>{c.label}</th>
+            <th class:num={c.numeric} style={widthOf(c)}>
+              {c.label}
+              {#if resizeKey}
+                <!-- A SEPARATOR, NOT A BUTTON. It divides two columns and adjusts their
+                     proportion, which is exactly what `role="separator"` describes; a button
+                     would promise an action and announce nothing useful to a screen reader.
+                     `touch-action: none` is what lets the same grip be dragged with a finger —
+                     without it the browser claims the gesture as a scroll and the column never
+                     moves. -->
+                <span
+                  class="grip"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize {c.label}"
+                  onpointerdown={(e) => startResize(e, c.label)}
+                  onpointermove={moveResize}
+                  onpointerup={endResize}
+                  onpointercancel={endResize}
+                ></span>
+              {/if}
+            </th>
           {/each}
         </tr>
         {#if textOf}
@@ -249,6 +385,54 @@
     border-collapse: collapse;
     width: 100%;
     font-size: var(--t-small);
+  }
+
+  /* Only once a width has been dragged — see `sized`. Auto layout until then, so a table nobody
+     has touched looks exactly as it did. */
+  table.sized {
+    table-layout: fixed;
+  }
+
+  /* A FIXED COLUMN HAS TO BE ALLOWED TO CLIP, or the content wins and the drag does nothing: under
+     `table-layout: fixed` an unbreakable string still overflows its cell unless it is told it may
+     be cut. The cell inspector is what makes that safe — a clipped value is one click from being
+     read in full, which is the property the hand-rolled preview table lacked. */
+  table.sized :global(td) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  th {
+    position: relative;
+  }
+
+  .grip {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 9px;
+    cursor: col-resize;
+    /* Claims the gesture from the scroller, which is what makes a finger drag work at all. */
+    touch-action: none;
+    user-select: none;
+  }
+
+  .grip::after {
+    content: '';
+    position: absolute;
+    top: 25%;
+    bottom: 25%;
+    right: 4px;
+    width: 1px;
+    background: var(--line);
+  }
+
+  .grip:hover::after,
+  .grip:active::after {
+    background: var(--accent, var(--dim));
+    width: 2px;
   }
 
   /* STICKY, because a table you have to scroll is a table whose headers you lose. */

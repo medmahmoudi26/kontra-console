@@ -303,14 +303,22 @@ test('all FIVE poll states are on one page and no two share a form', async ({ pa
   expect(new Set(forms.slice(0, 4).map((f) => f.border)).size).toBe(4);
   expect(new Set(forms.slice(0, 4).map((f) => f.colour)).size).toBe(4);
 
-  // AND THE FIFTH, WHOSE BORDER IS NOT ITS OWN. Recorded as a measurement rather than asserted as a
-  // pass: `unknown` reuses `dashed`, so against `nothing-polling` it is separated by colour, glyph and
-  // word but NOT by border style. Both of the states it must never be confused with per
-  // `machines.ts:43-48` are therefore one axis short of the four. If a future edit fixes it, this
-  // assertion is the one to flip.
+  // AND THE FIFTH, WHICH NOW HAS A BORDER OF ITS OWN — this is the flip the previous version of
+  // this comment asked for, taken.
+  //
+  // It used to read: "`unknown` reuses `dashed`, so against `nothing-polling` it is separated by
+  // colour, glyph and word but NOT by border style… If a future edit fixes it, this assertion is
+  // the one to flip." That edit landed in `Infra.svelte` — `.w.unknown` is `groove`, with its own
+  // comment giving the reason ("`unknown` shared `nothing-polling`'s dashed edge and differed only
+  // by colour… `groove` is the remaining style that still reads at 3px") — and the assertion was
+  // left behind, so the suite was holding the surface to the shape it had just stopped having.
+  //
+  // MEASURED: `groove 3px` against `dashed 3px`. The five states are now five borders, which is
+  // what this test's own name claims, and `unknown` is separated from `nothing-polling` on all
+  // four axes rather than three.
   const unknown = forms[4]!;
   const nothing = forms[3]!;
-  expect(unknown.border).toBe(nothing.border);
+  expect(unknown.border).not.toBe(nothing.border);
   expect(unknown.colour).not.toBe(nothing.colour);
   expect(unknown.glyph).not.toBe(nothing.glyph);
 

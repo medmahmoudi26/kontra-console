@@ -23,6 +23,24 @@ export interface LiveRows {
   lastChunkAt: number | null;
   /** When the server took the reading (epoch ms). */
   at: number;
+  /**
+   * A BOUNDED WINDOW OF THE ROWS THEMSELVES (issue 05) — the newest first few, oldest-first.
+   *
+   * "1,203 rows" and "1,203 rows of the same 403 page" are the same number, and telling them apart
+   * is most of "is this run doing the right thing". The server bounds this by count AND by bytes
+   * (`ROW_TAIL_WINDOW` / `ROW_TAIL_WINDOW_BYTES`), reads it from the same durable path the count
+   * comes from, and never sends a row its store does not hold.
+   *
+   * ABSENT ON A REPLAYED SNAPSHOT, and that is deliberate rather than incidental: the server keeps
+   * the window out of its per-run ring, so a client that reconnects and replays gets the counts it
+   * missed and the rows on the next poll. `undefined` therefore means "this snapshot is not
+   * carrying rows", which is a different claim from `[]` — "the window was empty" — and a readout
+   * must not render the second when it was handed the first.
+   */
+  recent?: unknown[];
+  /** The byte budget cut the window short of its row count, so a reader knows why a wide-rowed Run
+   *  shows three rows where a narrow one shows five. */
+  clipped?: boolean;
 }
 
 /**
@@ -109,3 +127,16 @@ export function rowTailDegraded(state: RowTailState): boolean {
  * The subscription is torn down on unmount or when `runId`/`enabled` changes — an idle Dataset opens
  * no socket, so the server polls nothing for a Run nobody is watching.
  */
+
+/**
+ * The rows a readout should draw, and nothing it should infer.
+ *
+ * `null` means DO NOT DRAW THE WINDOW AT ALL — either nothing has arrived, or this snapshot is a
+ * replay that carries counts only. A component that treated that as an empty window would flash
+ * "no rows yet" over a Run whose count says otherwise, every time a client reconnected.
+ */
+export function rowTailWindow(state: RowTailState): { rows: unknown[]; clipped: boolean } | null {
+  const recent = state.snapshot?.recent;
+  if (!Array.isArray(recent)) return null;
+  return { rows: recent, clipped: state.snapshot?.clipped === true };
+}

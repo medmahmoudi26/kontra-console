@@ -253,13 +253,33 @@
     <p class="err" role="alert">{error}</p>
   {:else if loading}
     <p class="muted">reading the lake…</p>
+  {:else if open}
+    <!-- The listing, once the choice it exists to make has been made — see below. -->
+    <p class="muted crumb">
+      <button class="back" onclick={() => { open = undefined; preview = undefined; }}>
+        ← all {rows.length} dataset{rows.length === 1 ? '' : 's'}
+      </button>
+    </p>
   {:else}
+    <!--
+      ONE WIDE TABLE, NOT TWO STACKED ONES (issue 04).
+
+      Opening a Dataset used to leave the LISTING on screen and add a second table below it, so an
+      operator reading rows read two tables about the same subject — each with its own column
+      widths, its own scroll box, and its own filter row — and the one they came for was the one
+      below the fold. The listing is how you CHOOSE a Dataset; the rows are what you came to read.
+      Once the choice is made the listing is navigation that has already happened.
+
+      So it collapses to a summary line with a way back, and the rows get the whole surface. The
+      page still holds one table at a time, which is the claim the issue makes.
+    -->
     <p class="muted">{shown.length} of {rows.length} · click a row to look inside it</p>
     <DataTable
       {columns}
       rows={shown}
       maxHeight="28rem"
       textOf={rowText}
+      resizeKey="datasets-listing"
       onpick={(r) => void openRow(r as DatasetListingRow)}
       picked={(r) => open?.id === (r as DatasetListingRow).id}
       empty="No datasets. A run that pushes rows creates one."
@@ -353,9 +373,10 @@
           <DataTable
             columns={previewColumns}
             rows={preview.rows}
-            maxHeight="28rem"
+            maxHeight="34rem"
             textOf={previewText}
             cellValue={previewValue}
+            resizeKey="dataset-preview"
             empty="This dataset has no rows yet."
           >
             {#snippet cell(r)}
@@ -425,10 +446,19 @@
 <style>
   section { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
   .peek { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s-3); background: var(--panel); }
-  .peek header { display: flex; align-items: baseline; gap: var(--s-2); }
-  .peek h2 { font-size: var(--t-body); font-weight: 600; margin: 0; }
+  /* WRAPS, BECAUSE AT 390px IT DID NOT — and the page scrolled sideways, which ADR 0048 §4 says it
+     never may. MEASURED at 390px with a dataset open: 81px of document overflow, from this header
+     alone (the `.save` group is 220px and `close` sat at x=471). It survived because
+     `scripts/overflow.mjs` walks routes and never OPENS a dataset, so the one state that overflows
+     was the one state nothing visited. `e2e/datasets.spec.ts` now asserts it with a dataset open.
+
+     `min-width: 0` on the heading is the other half: a flex item's default `min-width: auto`
+     refuses to shrink below its content, so a long dataset name would push the row wide again even
+     with wrapping allowed. */
+  .peek header { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+  .peek h2 { font-size: var(--t-body); font-weight: 600; margin: 0; min-width: 0; overflow-wrap: anywhere; }
   .save { margin-left: auto; display: inline-flex; align-items: center; gap: var(--s-1);
-          font-size: var(--t-small); color: var(--dim); }
+          flex-wrap: wrap; font-size: var(--t-small); color: var(--dim); }
   .fmt {
     font-family: var(--mono); font-size: var(--t-small); text-transform: uppercase;
     color: var(--accent); background: none; cursor: pointer;
@@ -471,6 +501,22 @@
   }
 
   .muted { font-size: var(--t-small); color: var(--dim); margin: 0; max-width: 62ch; line-height: var(--lh-body); }
+
+  /* THE WAY BACK, once the listing has collapsed into it. A link and not a button-looking control:
+     it navigates within the page, and the close control on the panel header already carries the
+     button affordance for the same action. */
+  .crumb { max-width: none; }
+  .back {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--dim);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .back:hover { color: var(--fg); }
   .err {
     font-size: var(--t-small); color: var(--bad); margin: 0; padding: var(--s-2) var(--s-3);
     border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); border-radius: var(--radius);

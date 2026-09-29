@@ -177,3 +177,172 @@ test('arriving without the flag leaves the workbench on its own starter query', 
   // part of what they asked for, and scoping to one would hide rows they came to see.
   await expect(page.getByTestId('dataset-query').locator('textarea')).not.toHaveValue(/run_id/);
 });
+
+/**
+ * ONE WIDE TABLE, WITH COLUMNS AN OPERATOR CAN DRAG (issue 04).
+ *
+ * Both halves are geometric, which is why they are here and not in vitest: "how many tables are on
+ * screen" is a count of rendered elements, and "did the column get wider and stay wider" is a
+ * measured width across a reload. `CLAUDE.md` sets the bar — jsdom has no layout engine, so a
+ * `clientWidth` assertion there reads 0 whatever the code does.
+ */
+test('opening a dataset leaves ONE table on the page, not two stacked ones', async ({ page }) => {
+  await stub(page);
+  await page.goto('/');
+  await page.getByTestId('nav-datasets').click();
+
+  // The listing is the only table before a choice is made. (The workbench below has none until it
+  // has run a query.)
+  await expect(page.locator('table')).toHaveCount(1);
+
+  await page.getByText('exchanges_8x8').first().click();
+  await expect(page.getByTestId('dataset-preview')).toBeVisible();
+
+  // …and still the only one after, because the listing collapsed into the way back rather than
+  // staying on screen above the rows the operator came for.
+  await expect(page.locator('table')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /all 1 dataset/ })).toBeVisible();
+});
+
+test('the way back restores the listing', async ({ page }) => {
+  await openTheDataset(page);
+  await page.getByRole('button', { name: /all 1 dataset/ }).click();
+
+  await expect(page.getByTestId('dataset-preview')).toHaveCount(0);
+  await expect(page.locator('table')).toHaveCount(1);
+  await expect(page.getByText('click a row to look inside it')).toBeVisible();
+});
+
+test('a column can be dragged wider, and the width survives a reload', async ({ page }) => {
+  await openTheDataset(page);
+
+  const header = page.locator('table thead tr').first().locator('th').first();
+  const before = (await header.boundingBox())!.width;
+
+  const grip = header.locator('.grip');
+  await expect(grip).toBeVisible();
+  const box = (await grip.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  const after = (await header.boundingBox())!.width;
+  expect(after).toBeGreaterThan(before + 100);
+
+  // THE HALF THAT MATTERS. A table an operator has to re-fit every visit reads as unfinished, so
+  // the width is asserted across a full reload rather than only across a re-render.
+  await page.reload();
+  await page.getByText('exchanges_8x8').first().click();
+  await expect(page.getByTestId('dataset-preview')).toBeVisible();
+  const restored = (await page.locator('table thead tr').first().locator('th').first().boundingBox())!.width;
+  expect(Math.abs(restored - after)).toBeLessThan(6);
+});
+
+test('dragging a column does not also open the cell inspector', async ({ page }) => {
+  await openTheDataset(page);
+
+  const grip = page.locator('table thead tr').first().locator('th').first().locator('.grip');
+  const box = (await grip.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+
+  // A grip is inside a `<th>`; a stray click reaching the table would be one click meaning two
+  // things, which is the property `DataTable` spends a prop comment refusing.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('the page still does not scroll sideways at 390px with a dataset open', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await openTheDataset(page);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+
+  // The table is what scrolls, inside its own box — ADR 0048 §4.
+  const scrolls = await page.locator('.wrap').first().evaluate((n) => n.scrollWidth > n.clientWidth);
+  expect(scrolls).toBe(true);
+});
+
+/**
+ * THE WORKBENCH READS A STREAM (issue 03).
+ *
+ * The old path asked for 200 rows and waited for one JSON body; this reads NDJSON frames. What is
+ * asserted here is what a unit test cannot see: that many frames become one table, that the column
+ * TYPES came off the wire rather than being re-derived from values, and that a failure arriving
+ * after a 200 keeps the rows it already delivered.
+ */
+const NDJSON = (frames: unknown[]): string => frames.map((f) => JSON.stringify(f)).join('\n') + '\n';
+
+async function stubStream(page: import('@playwright/test').Page, frames: unknown[]): Promise<void> {
+  await page.route('**/api/datasets/query/stream', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: NDJSON(frames) })
+  );
+}
+
+test('many frames become one table, and the types come off the wire', async ({ page }) => {
+  await stub(page);
+  await stubStream(page, [
+    { columns: [{ name: 'host', type: 'VARCHAR' }, { name: 'hits', type: 'BIGINT' }] },
+    { rows: [['a.com', 1], ['b.com', 2]] },
+    { rows: [['c.com', 3]] },
+    { done: { rows: 3, elapsedMs: 42 } },
+  ]);
+  await page.goto('/');
+  await page.getByTestId('nav-datasets').click();
+
+  // THE RUN BUTTON IS DISABLED ON AN EMPTY EDITOR, and the stubbed schema is empty so no starter
+  // query is seeded. Typing one is what a person does anyway.
+  await page.locator('textarea').first().fill('SELECT host, hits FROM whatever');
+  await page.locator('button.run').click();
+
+  // Three rows out of two separate frames.
+  await expect(page.getByText('3 rows · 42 ms')).toBeVisible();
+  await expect(page.getByText('c.com')).toBeVisible();
+
+  // The header carries DuckDB's own type. Inferring from values could not tell BIGINT from DOUBLE,
+  // and could not name the type of a column that arrived empty.
+  await expect(page.locator('table thead th').filter({ hasText: 'bigint' })).toBeVisible();
+});
+
+test('a failure after the first frame keeps the rows that arrived', async ({ page }) => {
+  await stub(page);
+  await stubStream(page, [
+    { columns: [{ name: 'host', type: 'VARCHAR' }] },
+    { rows: [['a.com'], ['b.com']] },
+    // No `done`. This is the 94-orphaned-partition shape: the read broke once it was already
+    // underway, long past the status line.
+    { error: 'IO Error: No files found that match the pattern' },
+  ]);
+  await page.goto('/');
+  await page.getByTestId('nav-datasets').click();
+  await page.locator('textarea').first().fill('SELECT host FROM whatever');
+  await page.locator('button.run').click();
+
+  // Both halves on screen: what arrived, and why it stopped. Dropping the rows would turn a
+  // partial answer into a blank one, which is strictly less information.
+  await expect(page.getByText('a.com')).toBeVisible();
+  await expect(page.getByText('b.com')).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('No files found');
+});
+
+test('a query rejected before any frame shows the engine sentence and no table', async ({ page }) => {
+  await stub(page);
+  await page.route('**/api/datasets/query/stream', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Catalog Error: Table with name nope does not exist!' }),
+    })
+  );
+  await page.goto('/');
+  await page.getByTestId('nav-datasets').click();
+  await page.locator('textarea').first().fill('SELECT * FROM nope');
+  await page.locator('button.run').click();
+
+  await expect(page.getByRole('alert')).toContainText('Table with name nope does not exist');
+});

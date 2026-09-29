@@ -23,8 +23,9 @@
   import {
     cellText,
     fetchSchema,
-    runQuery,
     starterSql,
+    streamQuery,
+    type QueryColumn,
     type QueryResult,
     type SchemaEntry,
   } from '@kontra/console-core/datasets/query';
@@ -69,22 +70,54 @@
     if (!sql && schema.length) sql = starterSql(schema[0]!.name);
   });
 
+  /**
+   * STREAMED, SO THE TABLE PAINTS WHILE THE RESULT IS STILL ARRIVING (issue 03).
+   *
+   * This asked for 200 rows and waited for the whole body. It now reads
+   * `POST /api/datasets/query/stream` — newline-delimited JSON, one frame per DuckDB chunk, no row
+   * ceiling — and hands each frame to the table as it lands. MEASURED on the live install:
+   * `injection_points_h1` is 9,159 rows in 349 ms across 5 frames, where the buffered route
+   * answered 5,000 and a `truncated` flag.
+   *
+   * `result` IS ASSIGNED ONCE PER FRAME RATHER THAN MUTATED, because Svelte 5's `$state` tracks the
+   * binding: pushing into `result.rows` in place updates the array and re-renders nothing, which
+   * looks exactly like a stream that stopped after its first chunk.
+   */
   async function run(): Promise<void> {
     running = true;
     rejected = '';
     unreachable = '';
-    const out = await runQuery(sql, { limit: 200 });
-    running = false;
-    if (out.ok) {
-      result = out.result;
-      return;
-    }
-    // THE TWO FAILURES ARE DRAWN DIFFERENTLY BECAUSE THEY ASK DIFFERENT THINGS OF THE READER: one
-    // is "fix your query", the other is "the surface is off or the server is down". Collapsing them
-    // into one red box makes a typo look like an outage.
     result = undefined;
-    if (out.rejected) rejected = out.detail;
-    else unreachable = out.detail;
+
+    await streamQuery(sql, {
+      head: (columns: QueryColumn[]) => {
+        // TYPES OFF THE WIRE. They are DuckDB's, carried on the schema frame — the old path
+        // re-derived them from the values, which cannot tell a BIGINT from a DOUBLE, or an empty
+        // result's columns from nothing at all.
+        result = { columns, rows: [], elapsedMs: 0, truncated: false };
+      },
+      rows: (chunk: unknown[][]) => {
+        if (!result) return;
+        result = { ...result, rows: [...result.rows, ...chunk] };
+      },
+      done: (summary) => {
+        if (result) result = { ...result, elapsedMs: summary.elapsedMs };
+      },
+      // THE TWO FAILURES ARE DRAWN DIFFERENTLY BECAUSE THEY ASK DIFFERENT THINGS OF THE READER: one
+      // is "fix your query", the other is "the surface is off or the server is down". Collapsing
+      // them into one red box makes a typo look like an outage.
+      //
+      // AND A THIRD NOW: a read that broke PART WAY THROUGH. The rows that arrived are real and
+      // stay on screen — dropping them would turn a partial answer into a blank one, which is
+      // strictly less information — with the reason beside them.
+      fail: (detail: string, opts: { rejected: boolean; partial: boolean }) => {
+        if (!opts.partial) result = undefined;
+        if (opts.rejected) rejected = detail;
+        else unreachable = detail;
+      },
+    });
+
+    running = false;
   }
 
   function insert(text: string): void {
@@ -213,10 +246,11 @@
               <button class="fmt" onclick={() => save(f)} title="download {result.rows.length} row(s) as {f.toUpperCase()}">{f}</button>
             {/each}
           </span>
-          {#if result.truncated}
-            <!-- CAPPED IS DRAWN. A truncated result that reads as complete is the failure this
-                 codebase names most often. -->
-            <span class="cap">capped at the limit — not the whole answer</span>
+          {#if running}
+            <!-- STILL ARRIVING. The count beside it is live, so a long scan visibly grows rather
+                 than sitting at nothing until the last chunk — which is the whole reason the
+                 result is streamed. -->
+            <span class="cap">streaming…</span>
           {/if}
         {/if}
       </div>
@@ -234,6 +268,7 @@
           maxHeight="26rem"
           textOf={resultText}
           cellValue={resultValue}
+          resizeKey="query-result"
           empty="The query ran and matched nothing. That is an answer."
         >
           {#snippet cell(row)}
