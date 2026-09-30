@@ -47,6 +47,7 @@ import {
   type MachineView,
   type PollerReading,
   type QueueAssignmentReading,
+  type LeaseSetWire,
   type StackReading,
   type StackStateWire,
 } from '@kontra/console-core/infra/machines';
@@ -65,6 +66,24 @@ import {
  * says it could not ask instead of answering from memory.
  */
 export const ROLES_URL = '/api/infra/roles';
+
+/** `GET /api/infra/leases` — see `infraRoutes.ts:FleetLeaseTable`. */
+export const LEASES_URL = '/api/infra/leases';
+
+/**
+ * Who holds every Fleet, in ONE read.
+ *
+ * NOT ONE READ PER STACK, unlike `/state` and `/history` above, and the difference is not taste: the
+ * page groups stacks into live and history, so this answer decides which SECTION every row is in.
+ * A per-stack read would be 28 Temporal queries on mount before the first row could be drawn, where
+ * `/state` is a file read. `readAllLeases` fans out on the server and keeps `fleets` apart from
+ * `unreachable`; both halves travel here, because merging them would turn "nobody could be asked"
+ * into "nobody is using it".
+ */
+interface LeaseTableWire {
+  fleets?: Record<string, LeaseSetWire | undefined>;
+  unreachable?: Record<string, string | undefined>;
+}
 
 /**
  * ONE STACK'S CONVERGE RECORDS — issue 13's route, and it does not exist yet either.
@@ -203,7 +222,12 @@ export function collapse(attempts: readonly Attempt[]): Missing[] {
   const out: Missing[] = [];
   const at = new Map<string, number>();
   for (const a of attempts) {
-    const key = `${a.label} ${a.status}`;
+    // NUL SEPARATES THE TWO HALVES because it cannot occur in either, so no label/status pair can
+    // collide with another. WRITTEN AS `\0`, NOT AS A RAW BYTE: an embedded 0x00 made this file
+    // `data` to file(1) and BINARY to grep, which then reported no matches for strings this file
+    // contains ten times over rather than reporting that it had skipped it. Same code point, same
+    // key, and the file stays searchable.
+    const key = `${a.label}\0${a.status}`;
     const seen = at.get(key);
     if (seen === undefined) {
       at.set(key, out.length);
@@ -303,13 +327,18 @@ export async function loadInfra(
   const g = <T,>(url: string, fallback: T, normal?: readonly number[], label?: string) =>
     part<T>(url, fallback, attempts, fetchImpl, normal, label);
 
-  const [listed, pollers, roles] = await Promise.all([
+  const [listed, pollers, roles, ledgers] = await Promise.all([
     g<{ stacks?: string[] }>('/api/infra/stacks', {}),
     // Every actor and workflow queue the registry knows, in one round trip. `routes/pollers.ts`:
     // "ONE ROUND TRIP, NOT N. The page knows N queues and polls; asking per queue would open a
     // describe per actor per poll against the shared Temporal connection."
     g<Record<string, PollerReading>>('/api/pollers', {}),
     g<RolesWire>(ROLES_URL, {}),
+    // A FAILED READ FALLS BACK TO `{}`, which leaves `fleets` undefined — and `machines.ts` reads
+    // that as `unasked` for every stack rather than as `released`. That is the difference between a
+    // page saying "this control plane does not serve that route" and a page quietly claiming nothing
+    // is running, and `attempts` carries the URL either way.
+    g<LeaseTableWire>(LEASES_URL, {}),
   ]);
 
   const fqns = (listed.stacks ?? []).filter((f) => typeof f === 'string' && f.includes('/'));
@@ -384,6 +413,11 @@ export async function loadInfra(
       // Only the stacks whose history actually answered. A failed read is an ABSENT KEY.
       history: Object.fromEntries(historyRows.filter((r): r is readonly [string, ConvergeWire[]] => r[1] !== undefined)),
       images: Object.fromEntries(resolved),
+      // BOTH HALVES, SEPARATELY. `fleets` answers "who holds it"; `unreachable` answers "nobody could
+      // say", and a stack in the second must not be counted as released — those are the Machines that
+      // might still be billing. Absent entirely (a 404 on the route) leaves every stack `unasked`.
+      ...(ledgers.fleets === undefined ? {} : { leases: ledgers.fleets }),
+      ...(ledgers.unreachable === undefined ? {} : { leasesUnreachable: ledgers.unreachable }),
     }),
     missing: collapse(attempts),
     roles: roles.roles ?? [],

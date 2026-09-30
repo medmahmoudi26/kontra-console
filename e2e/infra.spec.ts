@@ -214,6 +214,21 @@ interface Stubs {
    *               registry base. Must be `unknown`, NEVER drift.
    */
   resolve?: 'absent' | 'same' | 'moved' | 'silent';
+  /**
+   * Who holds the Fleet, which is what decides whether it is LIVE or history.
+   *
+   *   `held`        — a Lease with a holder. The Fleet is live and its cost is a bill.
+   *   `released`    — the ledger answered with no Leases. History — and an ORPHAN SUSPECT, because
+   *                   this Fleet's checkpoint still records four Machines. This is the shape that put
+   *                   `8 machines · $192.00/mo` on the page for zero live droplets.
+   *   `unreachable` — the ledger could not be read. `unknown`, and deliberately NOT an orphan:
+   *                   absence of evidence is not evidence.
+   *   `absent`      — 404. Every Fleet `unasked`, and the page must SAY the route is missing rather
+   *                   than render an empty live section as though nothing were running.
+   *
+   * Defaults to `held`, so a test that does not care is testing a live Fleet.
+   */
+  leases?: 'held' | 'released' | 'unreachable' | 'absent';
 }
 
 async function stub(page: import('@playwright/test').Page, s: Stubs = {}): Promise<void> {
@@ -252,6 +267,26 @@ async function stub(page: import('@playwright/test').Page, s: Stubs = {}): Promi
       if (mode === 'absent') return json({ error: 'not found' }, 404);
       if (mode === 'silent') return json({ image: '' });
       return json({ image: `127.0.0.1:5000/nscheck@${mode === 'same' ? RUNNING : IN_REGISTRY}` });
+    }
+    if (path === '/api/infra/leases') {
+      const mode = s.leases ?? 'held';
+      if (mode === 'absent') return json({ error: 'not found' }, 404);
+      if (mode === 'unreachable') {
+        // Kept in `unreachable`, never in `fleets` with an empty list — that merge is what would turn
+        // "nobody could be asked" into "nobody is using it".
+        return json({ fleets: {}, unreachable: { [FLEET]: 'temporal is unwell' } });
+      }
+      return json({
+        fleets: {
+          [FLEET]: {
+            fleet: FLEET,
+            leases:
+              mode === 'held'
+                ? [{ lease: 'wf-hunt-0.1.0#1', holder: 'wf-hunt-0.1.0', expiresAt: now + 60_000 }]
+                : [],
+          },
+        },
+      });
     }
     if (path === '/api/infra/roles') {
       // WITHOUT THE ROUTE the console must say it could not ask, not answer from a hardcoded list.
@@ -390,7 +425,7 @@ test('pollers matching no Machine appear under Unattributed, including one that 
 
   // THE THIRTEENTH POLLER. The Fleet still reports four Machines: the two above are not Machines that
   // vanished, and dropping them is what makes a 12-Machine Fleet report thirteen pollers.
-  await expect(page.getByTestId('group-fleets')).toContainText('4 machines');
+  await expect(page.getByTestId('group-fleets-live')).toContainText('4 machines');
 
   expect(errors).toEqual([]);
 });

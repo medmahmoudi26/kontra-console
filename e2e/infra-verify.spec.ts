@@ -478,7 +478,10 @@ test('with the control plane not answering at all, the section renders and says 
 
   // The two empty halves say which emptiness they are, rather than drawing nothing.
   await expect(page.getByTestId('group-control')).toContainText('no control stack in either state root');
-  await expect(page.getByTestId('group-fleets')).toContainText('no Fleet has been converged');
+  // TWO FLEET SECTIONS NOW, and each says which emptiness it is: nothing is HELD, and nothing has
+  // ever been converged. Collapsing them was what let a stale checkpoint be read as live capacity.
+  await expect(page.getByTestId('group-fleets-live')).toContainText('no Fleet is held');
+  await expect(page.getByTestId('group-fleets-history')).toContainText('no Fleet has been converged');
   await expect(page.getByTestId('group-unattributed')).toContainText('every poller attributes to a Machine');
 
   // NO UNCAUGHT EXCEPTION. This is the claim `CLAUDE.md` says cannot be made without a browser: a view

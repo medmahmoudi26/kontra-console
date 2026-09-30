@@ -203,6 +203,22 @@ export interface MachineInput {
    * `drift.ts:imageKey(actor, version)`. Absent or empty is `unknown`, never drift.
    */
   images?: Readonly<Record<string, ResolvedImage | undefined>>;
+  /**
+   * Each stack's Lease ledger by fqn — `GET /api/infra/leases`, the `fleets` half.
+   *
+   * ABSENT IS `unasked`, NOT `released`. Same structural choice as {@link history}: a control plane
+   * that does not serve the route leaves every stack unasked, and the page says so rather than
+   * reporting an empty live section as though nothing were running.
+   */
+  leases?: Readonly<Record<string, LeaseSetWire | undefined>>;
+  /**
+   * The stacks whose ledger could not be read, and why — the `unreachable` half of the same read.
+   *
+   * A SECOND FIELD RATHER THAN A SENTINEL IN THE FIRST, because the route keeps them apart and
+   * flattening them here would throw away the only thing that separates "nobody holds it" from
+   * "nobody could say".
+   */
+  leasesUnreachable?: Readonly<Record<string, string | undefined>>;
 }
 
 // ── READING A CHECKPOINT ──────────────────────────────────────────────────────────────────────────
@@ -476,6 +492,39 @@ export interface DriftNote {
   drift: DriftReading;
 }
 
+/** `GET /api/infra/leases`, as `infraRoutes.ts:FleetLeaseTable` sends one entry. */
+export interface LeaseSetWire {
+  fleet?: string;
+  leases?: readonly { lease?: string; holder?: string; expiresAt?: number }[];
+  /** Set once the Lease workflow ran the teardown — "by the last one out, or by a hand?". */
+  destroyed?: boolean;
+}
+
+/**
+ * Whether anybody is holding this stack, which is what makes a Fleet LIVE.
+ *
+ * ── FOUR STATES, FOR THE REASON THE POLL STATES ARE FOUR ─────────────────────────────────────────
+ *
+ * A **Lease** (ADR 0037) is the system's own answer to "somebody is using this": the Machines are
+ * destroyed when the last one drops. So a held stack is live BY CONSTRUCTION rather than by a
+ * liveness probe, and a released one is history — no filtering, no threshold, no staleness guess.
+ *
+ * `released` AND `unknown` ARE NOT THE SAME AND MERGING THEM IS THE BUG. `released` means the ledger
+ * answered and nobody holds it. `unknown` means the ledger could not be read, so these Machines might
+ * still exist and still be billing — the one case that must never render as "nothing here". That is
+ * the same distinction `machines.ts` already keeps between `unknown` and `nothing-polling`, and the
+ * same one `readAllLeases` keeps between its `fleets` and `unreachable` fields.
+ *
+ * `unasked` is the fourth because the route can be absent entirely — a control plane that does not
+ * serve `/api/infra/leases` must not have every stack read as released, which would empty the live
+ * section and quietly claim nothing is running.
+ */
+export type Holding =
+  | { state: 'held'; holders: readonly string[] }
+  | { state: 'released' }
+  | { state: 'unknown'; why: string }
+  | { state: 'unasked' };
+
 export interface StackRow {
   fqn: string;
   project: string;
@@ -494,6 +543,30 @@ export interface StackRow {
   declared: readonly ServingRow[];
   /** Sum of `priceMonthly` across this stack's Machines. `0` when nothing priced. */
   priceMonthly: number;
+  /**
+   * Who holds this stack — see {@link Holding}. The axis the page splits its sections on.
+   *
+   * NOT DERIVED FROM THE CHECKPOINT, deliberately. A checkpoint records what Pulumi last DID, never
+   * what IS: a Fleet killed without a Pulumi destroy leaves one asserting `status: active` droplets
+   * forever, which is how `cl0-s2` and `crlf-s2` put `8 machines · $192.00/mo` on the Settings page
+   * with zero droplets alive. {@link priceMonthly} above is still what the checkpoint recorded — it
+   * is this field that says whether that number is a bill or a memory.
+   */
+  holding: Holding;
+  /**
+   * The checkpoint claims Machines that nothing is holding.
+   *
+   * THE DIVERGENCE IS THE SIGNAL, and it is worth more than suppressing the number. Dropping
+   * unheld Machines from the total would make this page read correctly today and blind it to the
+   * case that actually costs money: droplets still alive with no Lease and no Run, which is exactly
+   * what a `terminate` instead of a `cancel` leaves behind. So the unheld total is not hidden, it is
+   * NAMED — and a reader gets a row to act on ("reconcile or destroy that stack") rather than a
+   * figure with a warning taped to it.
+   *
+   * FALSE WHEN NOBODY COULD BE ASKED. `unknown` is not evidence of an orphan, only absence of
+   * evidence; flagging it would cry wolf on every Temporal hiccup.
+   */
+  orphanSuspect: boolean;
   /**
    * This stack's recent life, one tick per Pulumi converge — `infra/history.ts`.
    *
@@ -538,10 +611,46 @@ export interface UnattributedRow {
 
 export interface MachineView {
   control: readonly StackRow[];
+  /**
+   * Every Fleet stack, live or not — kept so a caller that wants the whole set still has it.
+   *
+   * THE PAGE SHOULD PREFER {@link liveFleets} AND {@link pastFleets}. Rendering `fleets` under one
+   * heading is what produced `8 machines · $192.00/mo` for zero live droplets: two stacks whose
+   * checkpoints still assert `status: active` droplets, counted as capacity because a checkpoint was
+   * read as an observation instead of as a record of what Pulumi last did.
+   */
   fleets: readonly StackRow[];
+  /**
+   * The Fleets somebody is holding — `holding.state === 'held'`.
+   *
+   * LIVE BY CONSTRUCTION, NOT BY FILTERING. A Lease (ADR 0037) is what keeps Machines alive; they are
+   * destroyed when the last one drops. So this section cannot diverge from the actual fleet, which is
+   * the property asked for — not "the number is corrected", but "the number is derived from the thing
+   * that makes a Fleet exist".
+   */
+  liveFleets: readonly StackRow[];
+  /**
+   * The Fleets nobody is holding, plus the ones nobody could be asked about.
+   *
+   * HISTORY IS AN HONEST PLACE FOR A STALE CHECKPOINT. "Last converged 2026-09-28 21:31, 4 droplets
+   * at the time" is true, and nobody reads history as a bill. The same figure under a LIVE heading is
+   * a claim about now.
+   */
+  pastFleets: readonly StackRow[];
+  /** The rows worth acting on: a checkpoint asserting Machines that nothing holds. */
+  orphanSuspects: readonly StackRow[];
   unattributed: readonly UnattributedRow[];
-  /** Machines across every stack — the number the group headers count. */
+  /** Machines across every stack — live or not. */
   machines: number;
+  /**
+   * Machines across the HELD Fleets only — what a "live" header may count.
+   *
+   * SEPARATE FIELD RATHER THAN A CHANGED MEANING for {@link machines}, so a caller still reading the
+   * old one gets the old answer instead of a silently different number.
+   */
+  liveMachines: number;
+  /** List price per month across the HELD Fleets only. The only total that is a bill. */
+  livePriceMonthly: number;
 }
 
 // ── THE FOLD ──────────────────────────────────────────────────────────────────────────────────────
@@ -703,6 +812,28 @@ function wantedFromPlacements(placements: readonly PlacementReading[]): Wanted[]
  * ORDER IS NAME ORDER in both halves, because the prefix rule above is name order and a console that
  * listed Machines in checkpoint order would put the Workers under the wrong boxes on a packed Fleet.
  */
+/**
+ * Which of the four {@link Holding} states this stack is in.
+ *
+ * ORDER MATTERS AND IT IS NOT ALPHABETICAL. `unreachable` is checked BEFORE `fleets`, because a
+ * stack that failed can also carry a stale entry from a previous read, and treating it as released
+ * would be the exact conflation this type exists to prevent. Absent from both is `unasked` — the
+ * route was never answered for this stack — which is different again from answering "nobody".
+ */
+function holdingOf(fqn: string, input: MachineInput): Holding {
+  const why = input.leasesUnreachable?.[fqn];
+  if (why !== undefined && why !== '') return { state: 'unknown', why };
+  if (input.leases === undefined) return { state: 'unasked' };
+  const set = input.leases[fqn];
+  if (set === undefined) return { state: 'unasked' };
+  const holders = (set.leases ?? [])
+    // A Lease with no holder is still a Lease — `LeaseView.holder` is empty for one nobody can be
+    // asked about (`destroy_on_exit=False` takes one), and it still keeps the Machines alive. So an
+    // unattributed holder is named as such rather than dropped, which would read as released.
+    .map((l) => (l?.holder ?? '').trim() || 'unattributed');
+  return holders.length > 0 ? { state: 'held', holders } : { state: 'released' };
+}
+
 export function deriveMachines(input: MachineInput): MachineView {
   const controlProject = input.controlProject ?? CONTROL_PROJECT;
   const { now, pollers } = input;
@@ -776,6 +907,8 @@ export function deriveMachines(input: MachineInput): MachineView {
       if (!notes.has(key)) notes.set(key, { key, title: r.title, version: r.version, drift: r.drift });
     }
 
+    const holding = holdingOf(s.fqn, input);
+
     return {
       fqn: s.fqn,
       project: s.project,
@@ -785,6 +918,10 @@ export function deriveMachines(input: MachineInput): MachineView {
       machines: machines.map((m) => ({ ...m, key: `${s.fqn}::${m.name}`, serving: serving.get(m.name) ?? [] })),
       declared,
       priceMonthly: machines.reduce((n, m) => n + (m.priceMonthly ?? 0), 0),
+      holding,
+      // `released` only. `unknown` is absence of evidence and `unasked` is not even a question
+      // asked, so neither is grounds to call a stack orphaned.
+      orphanSuspect: holding.state === 'released' && machines.length > 0,
       ...(records === undefined ? {} : { converges: strip(records) }),
       driftNotes: [...notes.values()],
     };
@@ -812,10 +949,23 @@ export function deriveMachines(input: MachineInput): MachineView {
   }
   unattributed.sort((a, b) => a.key.localeCompare(b.key));
 
+  const fleets = stacks.filter((s) => s.kind === 'fleet');
+  // HELD IS THE ONLY THING THAT COUNTS AS LIVE. `released`, `unknown` and `unasked` all mean "not
+  // known to be in use", and lumping any of them in with `held` is how a stale checkpoint becomes a
+  // bill. `unknown` in particular is NOT live — but it is not safely dead either, which is why it
+  // lands in history where its recorded Machines can still be seen.
+  const liveFleets = fleets.filter((s) => s.holding.state === 'held');
+  const pastFleets = fleets.filter((s) => s.holding.state !== 'held');
+
   return {
     control: stacks.filter((s) => s.kind === 'control'),
-    fleets: stacks.filter((s) => s.kind === 'fleet'),
+    fleets,
+    liveFleets,
+    pastFleets,
+    orphanSuspects: fleets.filter((s) => s.orphanSuspect),
     unattributed,
     machines: stacks.reduce((n, s) => n + s.machines.length, 0),
+    liveMachines: liveFleets.reduce((n, s) => n + s.machines.length, 0),
+    livePriceMonthly: liveFleets.reduce((n, s) => n + s.priceMonthly, 0),
   };
 }

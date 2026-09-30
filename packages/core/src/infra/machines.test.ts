@@ -683,3 +683,183 @@ describe('registry drift, attached to the Worker that pinned the digest', () => 
     expect(declared.drift).toBeUndefined();
   });
 });
+
+/**
+ * WHO HOLDS A FLEET, which is what makes it live.
+ *
+ * These pin the bug that put `8 machines · $192.00/mo` on the Settings page for ZERO live droplets.
+ * The cause was not arithmetic: `kontra-fleet/cl0-s2` and `crlf-s2` are two real stacks whose
+ * checkpoints still record four `status: active` droplets each at $24/mo, frozen since the moment
+ * their Fleets were killed WITHOUT a Pulumi destroy. A checkpoint records what Pulumi last DID and
+ * never what IS, so the panel was faithfully reporting a stale belief as live capacity.
+ *
+ * A Lease (ADR 0037) is the system's own answer to "somebody is using this" — the Machines are
+ * destroyed when the last one drops — so liveness comes from the ledger and the live total reaches
+ * zero BY CONSTRUCTION rather than by filtering a number somebody might later un-filter.
+ */
+function stackOf(fqn: string, machines: Array<[name: string, price: number]>): StackReading {
+  const [project = '', stack = ''] = fqn.split('/');
+  return {
+    fqn,
+    project,
+    stack,
+    machines: machines.map(([name, priceMonthly]) => ({ name, size: 's-2vcpu-4gb', priceMonthly })),
+    placements: [],
+  };
+}
+
+const CL0 = stackOf('kontra-fleet/cl0-s2', [
+  ['kf-cl0-s2-01', 24],
+  ['kf-cl0-s2-02', 24],
+  ['kf-cl0-s2-03', 24],
+  ['kf-cl0-s2-04', 24],
+]);
+
+function rowFor(fqn: string, over: Partial<MachineInput>) {
+  return deriveMachines(input(over)).fleets.find((s) => s.fqn === fqn);
+}
+
+describe('holding: which Fleets are live, and which are history', () => {
+  it('a ledger with a holder is held, and names the Run — Mohamed’s "used by which workflow"', () => {
+    const row = rowFor('kontra-fleet/cl0-s2', {
+      stacks: [CL0],
+      leases: { 'kontra-fleet/cl0-s2': { leases: [{ holder: 'wf-hunt-0.1.0' }] } },
+    });
+    expect(row?.holding).toEqual({ state: 'held', holders: ['wf-hunt-0.1.0'] });
+    // Held, so the checkpoint's price is a BILL and this row belongs in the live section.
+    expect(row?.priceMonthly).toBe(96);
+    expect(row?.orphanSuspect).toBe(false);
+  });
+
+  it('a ledger that answered with no leases is released — this is the $192.00 bug', () => {
+    const row = rowFor('kontra-fleet/cl0-s2', {
+      stacks: [CL0],
+      leases: { 'kontra-fleet/cl0-s2': { leases: [] } },
+    });
+    // Nobody holds it, so it is history. The row still reports what the checkpoint recorded — that
+    // is not a lie, it is what the checkpoint says — but it is no longer live capacity.
+    expect(row?.holding).toEqual({ state: 'released' });
+    expect(row?.priceMonthly).toBe(96);
+    // AND THE DIVERGENCE IS NAMED rather than hidden: four droplets nothing is holding is exactly
+    // the condition worth acting on, because those are the ones that might still be billing.
+    expect(row?.orphanSuspect).toBe(true);
+  });
+
+  it('a ledger that could not be read is unknown, NOT released', () => {
+    const row = rowFor('kontra-fleet/cl0-s2', {
+      stacks: [CL0],
+      leasesUnreachable: { 'kontra-fleet/cl0-s2': 'temporal is unwell' },
+    });
+    expect(row?.holding).toEqual({ state: 'unknown', why: 'temporal is unwell' });
+    // NOT an orphan. `unknown` is absence of evidence, not evidence of absence — flagging it would
+    // cry wolf on every Temporal hiccup, and a page that cries wolf gets ignored on the day it is right.
+    expect(row?.orphanSuspect).toBe(false);
+  });
+
+  it('unreachable wins over a stale entry for the same stack', () => {
+    const row = rowFor('kontra-fleet/cl0-s2', {
+      stacks: [CL0],
+      leases: { 'kontra-fleet/cl0-s2': { leases: [] } },
+      leasesUnreachable: { 'kontra-fleet/cl0-s2': 'query timed out' },
+    });
+    // Order is deliberate: a failed read that also carries a previous answer must not be believed.
+    expect(row?.holding.state).toBe('unknown');
+    expect(row?.orphanSuspect).toBe(false);
+  });
+
+  it('no leases read at all is unasked, so the live section is not falsely emptied', () => {
+    const row = rowFor('kontra-fleet/cl0-s2', { stacks: [CL0] });
+    // A control plane that does not serve `/api/infra/leases` must not have every Fleet read as
+    // released — that would claim nothing is running, which is the inverse of this whole bug.
+    expect(row?.holding).toEqual({ state: 'unasked' });
+    expect(row?.orphanSuspect).toBe(false);
+  });
+
+  it('a released stack with no Machines is not an orphan — this is a clean teardown', () => {
+    const row = rowFor('kontra-fleet/recon-c6', {
+      stacks: [stackOf('kontra-fleet/recon-c6', [])],
+      leases: { 'kontra-fleet/recon-c6': { leases: [], destroyed: true } },
+    });
+    // The real `recon-c6`: stopped so its scope exit ran, Pulumi destroyed the droplets and emptied
+    // the checkpoint. Nothing recorded, nothing held, nothing owed.
+    expect(row?.holding).toEqual({ state: 'released' });
+    expect(row?.priceMonthly).toBe(0);
+    expect(row?.orphanSuspect).toBe(false);
+  });
+
+  it('a Lease with no holder still holds the Fleet, and is named rather than dropped', () => {
+    const row = rowFor('kontra-fleet/cl0-s2', {
+      stacks: [CL0],
+      leases: { 'kontra-fleet/cl0-s2': { leases: [{ holder: '' }] } },
+    });
+    // `LeaseView.holder` is empty for a Lease nobody can be asked about — `destroy_on_exit=False`
+    // takes one — and it keeps the Machines alive regardless. Dropping it would read as released and
+    // send four live droplets to the history section.
+    expect(row?.holding).toEqual({ state: 'held', holders: ['unattributed'] });
+    expect(row?.orphanSuspect).toBe(false);
+  });
+
+  it('each stack is judged on its own ledger, not the set', () => {
+    const view = deriveMachines(
+      input({
+        stacks: [CL0, stackOf('kontra-fleet/live-one', [['kf-live-01', 24]])],
+        leases: {
+          'kontra-fleet/cl0-s2': { leases: [] },
+          'kontra-fleet/live-one': { leases: [{ holder: 'wf-scan-2.0.0' }] },
+        },
+      })
+    );
+    const byFqn = new Map(view.fleets.map((s) => [s.fqn, s]));
+    expect(byFqn.get('kontra-fleet/cl0-s2')?.holding.state).toBe('released');
+    expect(byFqn.get('kontra-fleet/live-one')?.holding.state).toBe('held');
+    // The live total is the held rows only, and it gets there without anything being filtered out.
+    const live = view.liveFleets;
+    expect(live.reduce((n, s) => n + s.priceMonthly, 0)).toBe(24);
+  });
+});
+
+describe('the $192.00 regression, with the real stacks', () => {
+  it('reports zero live machines and zero live cost while still showing what the checkpoints hold', () => {
+    const view = deriveMachines(
+      input({
+        stacks: [
+          CL0,
+          stackOf('kontra-fleet/crlf-s2', [
+            ['kf-crlf-s2-01', 24],
+            ['kf-crlf-s2-02', 24],
+            ['kf-crlf-s2-03', 24],
+            ['kf-crlf-s2-04', 24],
+          ]),
+        ],
+        // Neither has a Lease ledger any more: both Fleets died without a Pulumi destroy, so the
+        // workflow is gone and `readLeases` answers "nobody holds it" for each.
+        leases: {
+          'kontra-fleet/cl0-s2': { leases: [] },
+          'kontra-fleet/crlf-s2': { leases: [] },
+        },
+      })
+    );
+
+    // WHAT WAS ON SCREEN: 8 machines, $192.00/mo, under a live heading.
+    expect(view.machines).toBe(8);
+    expect(view.fleets.reduce((n, s) => n + s.priceMonthly, 0)).toBe(192);
+
+    // WHAT THE LIVE SECTION SAYS NOW. Zero, and not because 192 was filtered — because no stack is
+    // held, so there is nothing in the section to sum.
+    expect(view.liveFleets).toEqual([]);
+    expect(view.liveMachines).toBe(0);
+    expect(view.livePriceMonthly).toBe(0);
+
+    // AND THE EIGHT ARE NOT SWEPT UNDER THE RUG. They are history, and both are flagged: a
+    // checkpoint asserting droplets nothing holds is the case that actually costs money, and the
+    // reader gets two named rows to reconcile or destroy rather than a corrected total.
+    expect(view.pastFleets.map((s) => s.fqn)).toEqual([
+      'kontra-fleet/cl0-s2',
+      'kontra-fleet/crlf-s2',
+    ]);
+    expect(view.orphanSuspects.map((s) => s.fqn)).toEqual([
+      'kontra-fleet/cl0-s2',
+      'kontra-fleet/crlf-s2',
+    ]);
+  });
+});
