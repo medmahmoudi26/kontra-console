@@ -633,6 +633,21 @@
    * `Dataset 0` over a Dataset that had 10 rows.
    */
   /**
+   * DECLARED HERE BECAUSE `rowCount` READS THEM, and Svelte 5 runes are block-scoped bindings like
+   * any other `const`. These three sat 46 lines BELOW their first reader, which typechecks as
+   * "block-scoped variable used before its declaration" — four errors that `pnpm test` cannot see
+   * because it is a different gate. It survived at runtime only because a `$derived` body is lazy
+   * and every declaration in this block runs before anything reads one; a reorder, or a reader that
+   * runs during initialisation, turns it into a ReferenceError on the counter this page exists for.
+   * Caught by root-fe on review, not by me on either suite.
+   */
+  let liveRows = $state<RowTailState>(ROW_TAIL_START);
+  /** Records the store has taken for this Run so far — the in-flight truth. */
+  const liveRowCount = $derived(liveRows.snapshot?.rows ?? null);
+  /** The last few records, when the tail carried a window (slice 05). */
+  const liveWindow = $derived(rowTailWindow(liveRows));
+
+  /**
    * WHILE IT RUNS, THE TAIL; ONCE IT IS DONE, THE LAKE.
    *
    * The old spelling was `preview ? preview.rows.length : datasetsLoading ? '…' : '0'`, which is
@@ -667,7 +682,6 @@
    * been produced so far, here are the last few"; the lake says "this is what was committed, typed
    * and queryable". A Run in flight wants the first; a finished Run wants the second.
    */
-  let liveRows = $state<RowTailState>(ROW_TAIL_START);
 
   /**
    * Follow the row tail while the Run is open and still going.
@@ -684,11 +698,6 @@
     liveRows = ROW_TAIL_START;
     return followRows(id, (st) => { liveRows = st; });
   });
-
-  /** Records the store has taken for this Run so far — the in-flight truth. */
-  const liveRowCount = $derived(liveRows.snapshot?.rows ?? null);
-  /** The last few records, when the tail carried a window (slice 05). */
-  const liveWindow = $derived(rowTailWindow(liveRows));
 
   /**
    * HOW MANY OF THE LAST RECORDS TO DRAW. Ten, because that is what a reader watching a sweep asked
