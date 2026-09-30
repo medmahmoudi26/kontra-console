@@ -155,6 +155,19 @@
   );
 
   /**
+   * The run-grain name this row carries, or `''` when it has none.
+   *
+   * ONE SPELLING, BECAUSE THE CELL AND THE FILTER ARE A SCREEN APART. `rowText` and the snippet
+   * below both need "is there a second name at all", and a filter that answers it differently from
+   * the cell hides rows for a reason the reader cannot see. The rule also says what does NOT count:
+   * a derived name equal to the logical one is the same fact twice, not provenance.
+   */
+  function grainOf(row: DatasetListingRow): string {
+    const grain = row.nameLocal || row.name || '';
+    return grain && grain !== row.dataset ? grain : '';
+  }
+
+  /**
    * What each listing column shows, as text — the filter row's accessor.
    *
    * IT HAS TO MATCH THE CELLS, and the only thing keeping it honest is that both are in this file,
@@ -164,12 +177,13 @@
   function rowText(r: unknown, i: number): string {
     const row = r as DatasetListingRow;
     switch (i) {
-      case 0: return `${row.dataset ?? ''} ${row.nameLocal || row.name || ''}`;
-      case 1: return datasetBadge(row.state ?? 'open').label;
-      case 2: return String(row.rows ?? 0);
-      case 3: return bytes(row.bytes ?? 0);
-      case 4: return dispatchCell({ dt: row.dt ?? '', dispatches: row.dispatches ?? 0, kind: row.kind ?? 'output' });
-      case 5: return row.runId ?? '';
+      case 0: return row.dataset || grainOf(row) || '';
+      case 1: return grainOf(row);
+      case 2: return datasetBadge(row.state ?? 'open').label;
+      case 3: return String(row.rows ?? 0);
+      case 4: return bytes(row.bytes ?? 0);
+      case 5: return dispatchCell({ dt: row.dt ?? '', dispatches: row.dispatches ?? 0, kind: row.kind ?? 'output' });
+      case 6: return row.runId ?? '';
       default: {
         const at = (row as { expiresAt?: number }).expiresAt;
         return at ? untilText(at - now) : '';
@@ -191,6 +205,7 @@
 
   const columns: Column[] = [
     { label: 'dataset' },
+    { label: 'run-grain' },
     { label: 'state', width: '7rem' },
     { label: 'rows', numeric: true, width: '6rem' },
     { label: 'size', numeric: true, width: '6rem' },
@@ -289,23 +304,33 @@
         {@const badge = datasetBadge(row.state ?? 'open')}
         {@const phase = accrualPhase({ state: row.state ?? 'open', runId: row.runId })}
         <!-- `{@const}` must be an immediate child of a block, never nested inside an element. -->
-        {@const grain = row.nameLocal || row.name}
+        {@const grain = grainOf(row)}
         <td>
-          <!-- BOTH NAMES, BECAUSE ONE OF THEM IS WHAT YOU TYPE INTO SQL.
-               A Run's output has two: the LOGICAL name (`observations`) that every query and the
-               detail panel below use, and the run-grain name ADR 0029 §2 derives
-               (`wf-hunt-0.1.0--…--636677`) that identifies which Run produced this partition.
-               Showing only the derived one here while the panel showed only the logical one made a
-               click look like a rename, and left the name a reader needs for `FROM …` off screen
-               entirely. Logical leads; run-grain follows, dimmed, as the provenance it is. -->
+          <!-- THE LOGICAL NAME, AND IT LEADS BECAUSE IT IS WHAT YOU TYPE INTO SQL.
+               A Run's output has two names: this one (`observations`), which every query and the
+               detail panel use, and the run-grain name ADR 0029 §2 derives
+               (`wf-hunt-0.1.0--…--636677`), which says which Run produced the partition.
+               THEY USED TO SHARE THIS CELL under one `dataset` header, so two different facts read
+               as one sometimes-longer name — and a row with no derived name (`exchanges_k2`) looked
+               like a row with a shorter one rather than a row missing a second fact. They are two
+               columns now, each with its own header.
+               Dropping the logical name instead was the OLDER bug, and it is the one not to
+               reintroduce: it left the name a reader needs for `FROM …` off screen entirely and
+               made opening a dataset look like a rename. -->
           <span class="mono">{row.dataset || grain}</span>
-          {#if grain && grain !== row.dataset}
-            <span class="grain mono" title="Run-grain partition (ADR 0029 §2) — queries name {row.dataset}">{grain}</span>
-          {/if}
           <!-- RENAMED IS A FACT ABOUT THE ROW, not decoration: the name on screen is an override
-               and the stored one is what a query must use. -->
+               and the stored one is what a query must use. It stays with the logical name because
+               that is the name it qualifies. -->
           {#if row.renamed}<span class="tag" title="stored as {row.dataset}">renamed</span>{/if}
           {#if row.temporary}<span class="tag warn" title="dropped when its run ends">temp</span>{/if}
+        </td>
+        <td>
+          <!-- PROVENANCE, NOT A NAME — so it stays dimmed rather than competing with the logical
+               name, and an absent one is an em dash. An EMPTY cell reads as a rendering gap; "this
+               dataset is not a run output" is a fact about the row and is said. `grainOf` decides
+               what counts, so this cell and the filter cannot drift apart. -->
+          {#if grain}<span class="grain mono" title="Run-grain partition (ADR 0029 §2) — queries name {row.dataset}">{grain}</span>
+          {:else}<span class="dim" title="no run-grain partition — this dataset is not a run output">—</span>{/if}
         </td>
         <td><span class="badge {row.state ?? 'open'}" title={badge.title}>{badge.label}</span></td>
         <td class="num"><span class="cell-rows {phase}" title={accrualWords(phase).title}>{(row.rows ?? 0).toLocaleString()}</span></td>
@@ -493,10 +518,11 @@
   }
   /* The run-grain name is PROVENANCE, not identity — dimmed and smaller so the name a query
      uses stays the one the eye lands on. */
+  /* NO `margin-left`: it existed to separate the derived name from the logical one when they
+     shared a cell. In its own column that margin is a stray indent. */
   .grain {
     color: var(--dim);
     font-size: var(--t-small);
-    margin-left: var(--s-2);
     opacity: 0.75;
   }
 
