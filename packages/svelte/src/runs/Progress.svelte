@@ -210,20 +210,26 @@
               <div class="track"><div class="bar {s.kind} {st}" style:left={pct(s.t0)} style:width={width(s)}></div></div>
               {#if s.error}
                 {@const chain = causes(s.error)}
-                {#if rootCause(chain) && rootCause(chain) === bannerRoot}
-                  <!-- The same failure the banner already leads with. Pointing at it beats printing
-                       sixty lines of Pulumi twice on one screen. -->
-                  <p class="same">This is the failure named at the top.</p>
-                {:else}
-                  <div class="fix">
-                    <ul class="chain">
-                      {#each chain as c (c.msg)}
-                        <li class:root={c.root}><span class="who">{c.who}</span><span class="msg">{c.msg}</span></li>
-                      {/each}
-                    </ul>
-                    <details><summary>as Temporal recorded it</summary><pre>{s.error}</pre></details>
-                  </div>
-                {/if}
+                <!-- A FAILED STEP ALWAYS PRINTS ITS FAILURE.
+                     This used to render "This is the failure named at the top." and nothing else
+                     whenever the step's root cause matched the banner's — no chain, no raw record.
+                     The intent was not to print sixty lines of Pulumi twice, which is right; the
+                     effect was that a failed step showed NO error at all. On a run with several
+                     failed steps that is unreadable: every one of them points at the same banner,
+                     so nothing says which step hit what, and the one question the region exists to
+                     answer — why did THIS fail — has no answer anywhere on the page.
+                     Deduplication now collapses the CHAIN to its root line, instead of replacing
+                     the error with a cross-reference. The raw record stays one disclosure away. -->
+                {@const dupe = rootCause(chain) !== '' && rootCause(chain) === bannerRoot}
+                {@const shown = dupe ? chain.filter((c) => c.root) : chain}
+                <div class="fix">
+                  <ul class="chain">
+                    {#each shown as c (c.msg)}
+                      <li class:root={c.root}><span class="who">{c.who}</span><span class="msg">{c.msg}</span></li>
+                    {/each}
+                  </ul>
+                  <details><summary>as Temporal recorded it</summary><pre>{s.error}</pre></details>
+                </div>
               {/if}
             </div>
           </div>
@@ -299,7 +305,6 @@
     padding: var(--s-3); overflow-x: auto; max-height: 300px; font-size: var(--t-small);
     line-height: var(--lh-body); color: var(--dim); white-space: pre;
   }
-  .same { font-size: var(--t-small); color: var(--bad); margin: 0; }
 
   .tabs { display: flex; gap: var(--s-1); padding: 0 var(--s-4); border-bottom: 1px solid var(--line); background: var(--track); }
   .tabs button {

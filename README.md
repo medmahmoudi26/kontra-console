@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/kontra-logo-dark.svg">
+  <img src=".github/assets/kontra-logo-light.svg" alt="kontra" width="238" height="48">
+</picture>
+
 # kontra-console
 
 **The browser surface for [kontra](https://github.com/medmahmoudi26/kontra)** — several readings of a run, none of which substitutes for another.

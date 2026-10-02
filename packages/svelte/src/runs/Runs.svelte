@@ -39,7 +39,15 @@
     type RunIO,
   } from '@kontra/console-core/run/record';
   import { executionOf, materializationOf } from '@kontra/console-core/run/runState';
-  import { fetchLogs, type LogRecord } from '@kontra/console-core/run/logs';
+  import { type LogRecord } from '@kontra/console-core/run/logs';
+  import { LogStream } from '../logs/stream.svelte';
+  import { followRows } from '../datasets/liveRows';
+  import {
+    ROW_TAIL_START,
+    rowTailLabel,
+    rowTailWindow,
+    type RowTailState,
+  } from '@kontra/console-core/datasets/rowTail';
   import { fetchPreview, type DatasetPreview } from '@kontra/console-core/datasets/preview';
   import { plainText } from '@kontra/console-core/panels/prose';
   import { schemaFields, type FieldNode } from '@kontra/console-core/panels/schemaTree';
@@ -49,6 +57,10 @@
   import Asks from '../workflows/Asks.svelte';
   import Progress from './Progress.svelte';
   import Drawer from './Drawer.svelte';
+  import Rack from './Rack.svelte';
+  import { loadRack } from './fleetLoad';
+  import { fleetStacksOf, type Rack as RackView } from '@kontra/console-core/run/fleet';
+  import type { Missing } from '../infra/load';
 
   function runFromUrl(): string | null {
     const a = parseAddress(location.pathname + location.search);
@@ -63,9 +75,39 @@
   // detail
   let detail = $state<RunDetail | undefined>(undefined);
   let detailErr = $state('');
-  let logs = $state<LogRecord[]>([]);
-  let logsLoading = $state(false);
-  let logsErr = $state<string | null>(null);
+  /**
+   * THE LOG RAIL HAS ITS OWN SUBSCRIPTION, AND THAT IS THE WHOLE POINT OF THIS OBJECT.
+   *
+   * IT USED TO BE `fetchLogs(id)` INSIDE `refresh()`, AND `refresh()` ONLY RUNS WHEN THE RUN'S
+   * PAYLOAD DIFFERS. Read that sentence twice, because it is the bug: a Run spends its opening
+   * phase holding a Fleet lease and resolving a Bundle, during which NOTHING about the run's
+   * payload changes — so no frame is emitted, `refresh` is never called, and the rail is never
+   * re-read. MEASURED on canary-1790684761: 29s in `holdFleetLease`, then 33s in `resolveBundle`,
+   * and the page sat on `Logs 0` for 62 of the run's 110 seconds while the actor's lines were
+   * already queryable in VictoriaLogs. Then the run changed, `refresh` fired, and 85 lines landed
+   * at once. "Nothing, nothing, nothing, then everything" is not a rendering artefact — it is a
+   * rail slaved to the wrong clock.
+   *
+   * Logs do not change when the run's STATE changes; they change when something WRITES one. So
+   * they get the signal that actually corresponds: `/api/logs/tail`, scoped to this run, which is
+   * the same transport the Logs page has always used. `LogStream` backfills 300 lines on open so a
+   * cold view is not empty, holds tail frames until the backfill lands, and merges them without
+   * rendering the overlap twice.
+   *
+   * THIS IS NOT A POLL and `scripts/no-polling.mjs` is right to keep forbidding one. It is one
+   * server-sent stream per open run, which is what ADR 0048 §3 asks for in place of an interval.
+   */
+  const logStream = new LogStream();
+  const logs = $derived(logStream.lines as LogRecord[]);
+  /**
+   * Loading is "the tail has not connected AND the backfill has not answered". Either one landing
+   * means the rail can say something true, and `reachable` is what distinguishes a quiet fleet
+   * from a broken backend — see `stream.svelte.ts` for the 20-seconds-of-no-headers measurement
+   * that put that field there.
+   */
+  const logsLoading = $derived(logStream.phase === 'connecting' && !logStream.reachable);
+  /** The tail's sentence, or the backfill's when the tail is fine and the history is missing. */
+  const logsErr = $derived(logStream.error || logStream.historyError || null);
   let preview = $state<DatasetPreview | undefined>(undefined);
   let previewErr = $state('');
   /** The Dataset partitions the LAKE attributes to this run — the authority, see `record.ts`. */
@@ -98,6 +140,50 @@
   let historyLoading = $state(false);
   /** Which workflow type the declared schemas were read for, so a poll does not re-read them. */
   let schemasFor = $state('');
+
+  /**
+   * THE MACHINES THIS RUN STOOD UP — read from Pulumi, drawn by {@link Rack}.
+   *
+   * A SIXTH INDEPENDENT READ, on the same terms as the other five: it fails on its own and blanks
+   * nothing else. It is also the only one whose SUBJECT comes out of another read — the Fleet
+   * children are `RunEvent.link`s off the history this page already fetched, so there is no
+   * discovery request and no way to draw a Fleet this run did not start.
+   */
+  let rack = $state<RackView>({ fleets: [], machines: 0, priceMonthly: 0, converging: false });
+  let rackMissing = $state<readonly Missing[]>([]);
+  let rackLoading = $state(false);
+
+  const fleetLinks = $derived(fleetStacksOf(events));
+
+  /**
+   * A STABLE SIGNATURE OF THE FLEET SET, and the reason it is a string.
+   *
+   * `fleetLinks` is a fresh array on every history read, so an effect that depended on it would
+   * re-read Pulumi on EVERY frame the run stream delivers — and on a long crawl the stream delivers
+   * one every second or two because the batch counts are moving. That is three Fleets × two routes
+   * per frame, and one of those routes queries a CLOSED workflow, which Temporal serves by REPLAYING
+   * its history. Replaying three finished converges a second to re-learn that they are still
+   * finished is the polling this console removed, wearing a different hat.
+   *
+   * So the set is reduced to what would actually change the drawing, and the read is keyed on that.
+   * While a converge is in flight the second effect below keeps it moving instead.
+   */
+  const fleetKey = $derived(
+    fleetLinks.map((l) => `${l.fqn}:${l.execId ?? ''}:${l.closed}:${l.failed}`).join('|')
+  );
+
+  async function readRack(id: string): Promise<void> {
+    try {
+      const got = await loadRack(fleetLinks);
+      if (openRun !== id) return; // run A's Machines must never appear under run B's heading
+      rack = got.rack;
+      rackMissing = got.missing;
+    } catch (e) {
+      if (openRun === id) rackMissing = [{ url: 'the Fleet read', status: 0, why: say(e) }];
+    } finally {
+      if (openRun === id) rackLoading = false;
+    }
+  }
 
   /**
    * WHICH DRAWER IS OPEN — the Dataset rows and the log rail, out of the page's flow.
@@ -273,10 +359,9 @@
           .then((r) => { if (mine()) { io = r; ioGone = r === undefined; } })
           .catch((e: unknown) => { if (mine()) ioErr = say(e); }),
 
-        fetchLogs(id)
-          .then((r) => { if (mine()) { logs = r; logsErr = null; } })
-          .catch((e: unknown) => { if (mine()) logsErr = say(e); })
-          .finally(() => { if (mine()) logsLoading = false; }),
+        // NO LOG READ HERE. The rail is on `/api/logs/tail` (see `logStream`) precisely because
+        // this function does not run often enough to be a log clock — it runs when the RUN
+        // changed, and a run can be silent for a minute while its actor is not.
       ]);
     } finally {
       refreshing = false;
@@ -288,8 +373,6 @@
     const id = openRun;
     detail = undefined;
     detailErr = '';
-    logs = [];
-    logsErr = null;
     preview = undefined;
     previewErr = '';
     datasets = [];
@@ -303,12 +386,14 @@
     schemasFor = '';
     events = [];
     historyErr = '';
+    rack = { fleets: [], machines: 0, priceMonthly: 0, converging: false };
+    rackMissing = [];
+    rackLoading = false;
     drawer = null;
     seenLogs = 0;
     seenRows = 0;
     datasetsLoading = id !== null;
     historyLoading = id !== null;
-    logsLoading = id !== null;
     if (id === null) return;
     void refresh(id);
   });
@@ -359,11 +444,87 @@
     });
   });
 
+  /**
+   * FOLLOW THIS RUN'S LOGS FOR AS LONG AS IT IS OPEN — independently of the run's own stream.
+   *
+   * `run_id` is the field every shipped line carries (`control/images/logline.py` stamps it, and
+   * the actor's Temporal context supplies it), so one LogsQL term scopes the tail to this Run. It
+   * is JSON-quoted rather than interpolated bare because a Run id contains characters LogsQL reads
+   * as syntax, and an id that parses as a query is an id that silently matches the wrong lines.
+   *
+   * `start` returns its own teardown, so leaving the run closes the stream — `$effect` takes it
+   * directly.
+   */
+  $effect(() => {
+    const id = openRun;
+    if (id === null) return;
+    return logStream.start(`run_id:${JSON.stringify(id)}`);
+  });
+
   $effect(() => {
     const id = openRun;
     if (id === null || !settled) return;
     const timers = [1_500, 5_000].map((ms) => setTimeout(() => void refresh(id), ms));
     return () => timers.forEach(clearTimeout);
+  });
+
+  /**
+   * READ THE FLEETS WHEN THE SET OF THEM CHANGES — a Fleet started, or one closed.
+   *
+   * Keyed on {@link fleetKey} and not on the links array: see that derivation for what depending on
+   * the array itself would cost on a run whose stream is busy.
+   */
+  $effect(() => {
+    const id = openRun;
+    const key = fleetKey;
+    if (id === null || key === '') return;
+    // READS NOTHING THIS EFFECT WRITES. `rackLoading = rack.fleets.length === 0` was the first
+    // spelling and it is a self-triggering effect: reading `rack` makes it a dependency, `readRack`
+    // replaces `rack`, and the effect re-runs and reads again — a fetch loop with no timer in it,
+    // which every test in this repo would pass. Whether the region should say "reading…" is the
+    // component's decision and it already makes it (`loading && rack.fleets.length === 0`), so the
+    // flag here is unconditional and `readRack` clears it.
+    rackLoading = true;
+    void readRack(id);
+  });
+
+  /**
+   * KEEP READING WHILE A CONVERGE IS IN FLIGHT — and only while one is.
+   *
+   * ── THIS IS A POLL, AND IT IS THE ONE THING HERE THAT COULD NOT BE PUSHED ───────────────────────
+   *
+   * Everything else on this page rides `/api/runs/:id/stream`: one read server-side, fanned out to
+   * every tab, emitted only when the payload DIFFERS. That is the right shape and it cannot cover
+   * this. The stream's payload is `runs.read`, whose own header pins it as the single authority the
+   * stream may not outgrow — and a bring-up changes NOTHING in it. Measured on the canary: 34 of 57
+   * seconds are the Fleet, and the run view is byte-identical across all of them, so the stream is
+   * silent for exactly the window this region exists to draw.
+   *
+   * The other push would be a second SSE route for the Fleet. It is gated by
+   * `KONTRA_STATE_TOKEN` — correctly, it names Machines — and `EventSource` cannot send a bearer and
+   * does not go through this console's wrapped `fetch` (`core/run/logstream.ts`), so subscribing to a
+   * gated stream means hand-parsing SSE frames off a `fetch` body. That is the better end state and
+   * it is not what makes this feature work; it is noted rather than pretended away.
+   *
+   * ── SO IT IS BOUNDED THREE WAYS, AND EACH BOUND IS LOAD-BEARING ────────────────────────────────
+   *
+   *   • Only while Pulumi is actually converging. `rack.converging` is TEMPORAL's status for the
+   *     stack workflow, not the phase it stored — see `deriveRack`. The moment the last converge
+   *     ends this effect stops scheduling, which is why there is no `clearInterval` anywhere: the
+   *     chain has no next link.
+   *   • Only while the RUN is unsettled, the same guard the elapsed clock above uses. A settled run
+   *     whose converge still reports RUNNING is a wedge, and re-reading it every two seconds for as
+   *     long as the tab is open would neither learn nor fix anything.
+   *   • Only while this run is open. `readRack` drops its answer if the reader moved on.
+   *
+   * A `setTimeout` chain rather than `setInterval`, for `Progress`'s reason: each wakeup is armed by
+   * the answer before it, so a slow read cannot queue three more behind itself.
+   */
+  $effect(() => {
+    const id = openRun;
+    if (id === null || !rack.converging || detail?.settled !== false) return;
+    const t = setTimeout(() => void readRack(id), 2_000);
+    return () => clearTimeout(t);
   });
 
   /**
@@ -471,18 +632,147 @@
    * lie every other region on this page is written to avoid. Measured live: the handle read
    * `Dataset 0` over a Dataset that had 10 rows.
    */
+  /**
+   * DECLARED HERE BECAUSE `rowCount` READS THEM, and Svelte 5 runes are block-scoped bindings like
+   * any other `const`. These three sat 46 lines BELOW their first reader, which typechecks as
+   * "block-scoped variable used before its declaration" — four errors that `pnpm test` cannot see
+   * because it is a different gate. It survived at runtime only because a `$derived` body is lazy
+   * and every declaration in this block runs before anything reads one; a reorder, or a reader that
+   * runs during initialisation, turns it into a ReferenceError on the counter this page exists for.
+   * Caught by root-fe on review, not by me on either suite.
+   */
+  let liveRows = $state<RowTailState>(ROW_TAIL_START);
+  /** Records the store has taken for this Run so far — the in-flight truth. */
+  const liveRowCount = $derived(liveRows.snapshot?.rows ?? null);
+  /** The last few records, when the tail carried a window (slice 05). */
+  const liveWindow = $derived(rowTailWindow(liveRows));
+
+  /**
+   * WHILE IT RUNS, THE TAIL; ONCE IT IS DONE, THE LAKE.
+   *
+   * The old spelling was `preview ? preview.rows.length : datasetsLoading ? '…' : '0'`, which is
+   * the lake and only the lake — so this counter read `0` for the entire productive part of every
+   * Run and then jumped to its final value in one step.
+   */
   const rowCount = $derived<string>(
-    preview ? String(preview.rows.length) : datasetsLoading ? '…' : '0'
+    !settled && liveRowCount !== null
+      ? String(liveRowCount)
+      : preview
+        ? String(preview.rows.length)
+        : datasetsLoading
+          ? '…'
+          : '0'
   );
+
+  /**
+   * ROWS AS THEY LAND, NOT ROWS AFTER THE COMMIT.
+   *
+   * `preview` is the LAKE's answer, and the lake only has rows after `publishBatch` — which is one
+   * commit at the END of a Run. MEASURED on canary-1790684761: the sweep pushed 40 records between
+   * 12:27:04 and 12:27:46 and `publishBatch` ran at 12:27:46, so every one of those forty appeared
+   * in the same instant, 104 seconds into a 110-second run. That is not a rendering artefact and no
+   * amount of re-reading the lake fixes it: for the whole sweep there is genuinely nothing there.
+   *
+   * The rows DO exist while the sweep runs — as claim-checked unit objects in the store, which is
+   * what `/api/datasets/rows/stream` counts and samples. That endpoint has existed and nothing on
+   * this page subscribed to it, so the surface built to show a dataset filling up was reading the
+   * one source that cannot show it filling up.
+   *
+   * BOTH ARE KEPT, because they answer different questions. The tail says "this many records have
+   * been produced so far, here are the last few"; the lake says "this is what was committed, typed
+   * and queryable". A Run in flight wants the first; a finished Run wants the second.
+   */
+
+  /**
+   * Follow the row tail while the Run is open and still going.
+   *
+   * STOPS AT `settled`, deliberately. The tail counts objects in the store; once the batch is
+   * published the LAKE is the authority and the two would disagree at the margin — a Run showing a
+   * live count beside a committed one is the page arguing with itself. The endpoint caps
+   * concurrent streams per client and per run, so dropping the subscription the moment it stops
+   * being the better answer is also the polite thing to do with a bounded resource.
+   */
+  $effect(() => {
+    const id = openRun;
+    if (id === null || settled) return;
+    liveRows = ROW_TAIL_START;
+    return followRows(id, (st) => { liveRows = st; });
+  });
+
+  /**
+   * HOW MANY OF THE LAST RECORDS TO DRAW. Ten, because that is what a reader watching a sweep asked
+   * for — enough to see a pattern, few enough to read at a glance while it moves.
+   *
+   * The SERVER caps the window at `ROW_TAIL_WINDOW` (50) and, more to the point, at 16 KB — so a
+   * deep selection on wide rows yields fewer rows than asked and `clipped` says so. This control
+   * chooses how many of what arrived to render; it cannot make the stream send more than it budgets.
+   */
+  const TAIL_DEPTHS = [5, 10, 25, 50] as const;
+  const TAIL_STORE = 'kontra.console.rowtail.depth';
+  let tailDepth = $state<number>(readTailDepth());
+
+  function readTailDepth(): number {
+    try {
+      const raw = Number(localStorage.getItem(TAIL_STORE));
+      return TAIL_DEPTHS.includes(raw as (typeof TAIL_DEPTHS)[number]) ? raw : 10;
+    } catch {
+      return 10; // private mode, or no storage — the default is not worth an error
+    }
+  }
+  function setTailDepth(n: number): void {
+    tailDepth = n;
+    try {
+      localStorage.setItem(TAIL_STORE, String(n));
+    } catch {
+      /* a preference that cannot be saved is still a preference for this tab */
+    }
+  }
+
+  /**
+   * The window as a TABLE — the union of every key across the drawn rows, in first-seen order.
+   *
+   * UNION AND NOT `Object.keys(rows[0])`, because a record that gained a field mid-sweep would
+   * otherwise have it silently dropped for the whole window, which is the wrong half of "show me
+   * what is landing". First-seen order rather than sorted, so the shape the actor emits is the
+   * shape the reader sees.
+   */
+  const liveTable = $derived.by(() => {
+    /*
+     * ONE LEVEL OF UNWRAPPING, AND IT IS NOT COSMETIC.
+     *
+     * A window entry is one OBJECT IN THE STORE, and a pushed record is stored as a JSON list
+     * holding it — so the wire carries `[[{…}], [{…}]]`, not `[{…}, {…}]`. Rendering that
+     * un-flattened is what produced a column-less table of raw JSON: every entry is an Array, so
+     * `Object.keys` finds no fields and the whole record collapses into one cell.
+     *
+     * The counts agree with the flattening rather than fighting it — `rows` counts objects and each
+     * object here holds one record, so flattening keeps "6 rows" and six table rows the same claim.
+     * A blob that ever holds several records still renders correctly; it just contributes several.
+     */
+    const all = (liveWindow?.rows ?? []).flatMap((e) => (Array.isArray(e) ? e : [e]));
+    // The LAST `tailDepth`, because a tail is the newest end.
+    const rows = all.slice(Math.max(0, all.length - tailDepth));
+    const cols: string[] = [];
+    for (const r of rows) {
+      if (r !== null && typeof r === 'object' && !Array.isArray(r)) {
+        for (const k of Object.keys(r as Record<string, unknown>)) {
+          if (!cols.includes(k)) cols.push(k);
+        }
+      }
+    }
+    return { rows, cols, clipped: liveWindow?.clipped ?? false, total: all.length };
+  });
 
   /** Something arrived in a feed that nobody has opened since. */
   const unreadLogs = $derived(drawer !== 'logs' && logs.length > seenLogs);
-  const unreadRows = $derived(drawer !== 'dataset' && (preview?.rows.length ?? 0) > seenRows);
+  const unreadRows = $derived(
+    drawer !== 'dataset' && Math.max(preview?.rows.length ?? 0, liveRowCount ?? 0) > seenRows
+  );
 
   function openDrawer(which: 'logs' | 'dataset'): void {
     drawer = drawer === which ? null : which;
     if (drawer === 'logs') seenLogs = logs.length;
-    if (drawer === 'dataset') seenRows = preview?.rows.length ?? 0;
+    if (drawer === 'dataset') seenRows = Math.max(preview?.rows.length ?? 0, liveRowCount ?? 0);
   }
 
   function ago(ms: number): string {
@@ -665,6 +955,19 @@
          waiting for. -->
     <Asks runId={openRun} {revision} />
 
+    <!-- THE INFRASTRUCTURE, ABOVE PROGRESS AND FOR THE SAME REASON PROGRESS IS ABOVE THE DATASET.
+
+         Progress exists because "for the first half-minute it is the only region with anything in
+         it". On a run that provisions, that half-minute IS the Fleet: Progress can say `Bring the
+         Fleet up · 34s so far` and nothing more, because a step is one row in a reduction of the
+         event log and a converge emits one child-workflow event and then goes quiet for minutes.
+         The facts underneath it — four Droplets in two regions, two of them made, one being made,
+         a Worker installing on the third — are in Pulumi's checkpoint the whole time and reached no
+         surface in this console.
+
+         It renders NOTHING for a run with no Fleet children, which is most of them. -->
+    <Rack {rack} missing={rackMissing} now={elapsed} loading={rackLoading} />
+
     <!-- PROGRESS — WHAT THE RUN IS DOING, and the region the page leads with after Input.
 
          It sits here because for the first 34 seconds of a canary it is the only region with
@@ -773,6 +1076,68 @@
             <p class="err" role="alert">{datasetsErr}</p>
           {:else if previewErr}
             <p class="err">{previewErr}</p>
+          {:else if !settled && liveRowCount !== null}
+            <!-- THE RUN IS STILL GOING, SO THE LAKE IS THE WRONG AUTHORITY TO ASK.
+                 `publishBatch` is one commit at the end; until it runs, the records exist as
+                 claim-checked objects in the store and `/api/datasets/rows/stream` is what can see
+                 them. Showing "This run wrote no rows to the lake" here is technically true and
+                 reads as a failure, for the entire productive part of the Run. -->
+            <p class="live-rows mono" data-testid="live-row-count">
+              {rowTailLabel(liveRows, Date.now())}
+            </p>
+            {#if liveTable.rows.length > 0}
+              <div class="tailbar">
+                <label class="small">
+                  tail
+                  <select
+                    data-testid="live-tail-depth"
+                    value={tailDepth}
+                    onchange={(e) => setTailDepth(Number((e.currentTarget as HTMLSelectElement).value))}
+                  >
+                    {#each TAIL_DEPTHS as d (d)}<option value={d}>{d}</option>{/each}
+                  </select>
+                  rows
+                </label>
+                <span class="muted small">
+                  showing {liveTable.rows.length} of the last {liveTable.total} the stream carried
+                </span>
+              </div>
+              <div class="tbl-wrap">
+                <table data-testid="live-row-tail">
+                  {#if liveTable.cols.length > 0}
+                    <thead>
+                      <tr>{#each liveTable.cols as c (c)}<th>{c}</th>{/each}</tr>
+                    </thead>
+                    <tbody>
+                      {#each liveTable.rows as r, ri (ri)}
+                        <tr data-testid="live-row">
+                          {#each liveTable.cols as c (c)}
+                            <td>{cell((r as Record<string, unknown>)?.[c])}</td>
+                          {/each}
+                        </tr>
+                      {/each}
+                    </tbody>
+                  {:else}
+                    <!-- Records that are not objects (a bare scalar push) still deserve to be seen. -->
+                    <tbody>
+                      {#each liveTable.rows as r, ri (ri)}
+                        <tr data-testid="live-row"><td>{cell(r)}</td></tr>
+                      {/each}
+                    </tbody>
+                  {/if}
+                </table>
+              </div>
+              {#if liveTable.clipped}
+                <p class="muted small">
+                  the window is byte-bounded at 16 KB — wider records mean fewer of them, and the
+                  ones over budget are skipped rather than shown half-written
+                </p>
+              {/if}
+            {:else}
+              <p class="muted">
+                records are landing in the store; the typed rows appear here when the batch commits
+              </p>
+            {/if}
           {:else if !shownDataset}
             <p class="muted">This run wrote no rows to the lake.</p>
           {:else if !preview}
@@ -1119,6 +1484,18 @@
    * out of these `overflow: visible` boxes and into `.dbody`, which is the scroll container of last
    * resort and the reason the floor is safe to set at all.
    */
+  .live-rows { margin: 0 0 .5rem; opacity: .9; }
+  .tailbar {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin: 0 0 .5rem;
+  }
+  .tailbar label { display: inline-flex; align-items: center; gap: .35rem; }
+  .tailbar select { font: inherit; padding: .1rem .25rem; }
+  .small { font-size: .85em; }
+
   .region.dataset.fills,
   .region.log {
     display: flex;

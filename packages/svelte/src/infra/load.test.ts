@@ -42,6 +42,10 @@ describe('why a read failed, in words', () => {
 describe('loadInfra', () => {
   it('reads the stack list, then each stack, and joins the pollers', async () => {
     const { fetch, asked } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: ['kontra-fleet/dns'] } },
       '/api/infra/stacks/kontra-fleet%2Fdns/state': {
         body: {
@@ -76,6 +80,10 @@ describe('loadInfra', () => {
 
   it('describes each role queue separately, because /api/pollers only carries actor queues', async () => {
     const { fetch, asked } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: [] } },
       '/api/pollers': { body: {} },
       [ROLES_URL]: {
@@ -106,6 +114,10 @@ describe('loadInfra', () => {
 
   it('names the read that failed rather than rendering a partial page as a whole one', async () => {
     const { fetch } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { status: 503, body: { error: 'no token' } },
       '/api/pollers': { body: {} },
     });
@@ -126,6 +138,10 @@ describe('loadInfra', () => {
     // `readStack` answers 404 for it and `infra/state.ts:18` calls that a normal answer. A warning
     // here would put a fault on a page that is telling the truth.
     const { fetch } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: ['kontra-fleet/dns'] } },
       '/api/infra/stacks/kontra-fleet%2Fdns/state': { status: 404, body: { error: 'no such stack' } },
       '/api/pollers': { body: {} },
@@ -140,6 +156,10 @@ describe('loadInfra', () => {
 
   it('a fqn with no slash is refused before it becomes a request', async () => {
     const { fetch, asked } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: ['nonsense', 'kontra-fleet/dns'] } },
       '/api/infra/stacks/kontra-fleet%2Fdns/state': { body: {} },
       '/api/pollers': { body: {} },
@@ -186,6 +206,10 @@ describe('the converge records', () => {
 
   it('feeds the strip, oldest tick first', async () => {
     const { fetch } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       ...stacks,
       ...state,
       ...rest,
@@ -208,6 +232,10 @@ describe('the converge records', () => {
 
   it('tolerates a bare array, because the route that will send it does not exist yet', async () => {
     const { fetch } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       ...stacks,
       ...state,
       ...rest,
@@ -221,6 +249,10 @@ describe('the converge records', () => {
 
   it('is reported once when the route is missing, not once per stack', async () => {
     const { fetch } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: ['kontra-fleet/a', 'kontra-fleet/b', 'kontra-fleet/c'] } },
       '/api/infra/stacks/kontra-fleet%2Fa/state': { body: { outputs: {} } },
       '/api/infra/stacks/kontra-fleet%2Fb/state': { body: { outputs: {} } },
@@ -244,6 +276,10 @@ describe('the registry resolve', () => {
   /** One Fleet running one digest-pinned Worker — what `kontra deploy` + `kontra fleet` produce. */
   function docker(extra: Record<string, Answer> = {}) {
     return stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: ['kontra-docker-fleet/canary'] } },
       '/api/infra/stacks/kontra-docker-fleet%2Fcanary/state': {
         body: {
@@ -310,6 +346,10 @@ describe('the registry resolve', () => {
 
   it('asks once per distinct actor@version, however many Machines run it', async () => {
     const { fetch, asked } = stub({
+      // The ledger read, answered and empty — see `holdingOf`. Explicit in every stub rather than
+      // defaulted by the helper, because a helper that quietly satisfies a read is the opposite of
+      // this module's rule that a failed part is NAMED.
+      '/api/infra/leases': { body: { fleets: {} } },
       '/api/infra/stacks': { body: { stacks: ['kontra-docker-fleet/canary'] } },
       '/api/infra/stacks/kontra-docker-fleet%2Fcanary/state': {
         body: {
@@ -336,5 +376,84 @@ describe('the registry resolve', () => {
     expect(asked.filter((u) => u.startsWith('/api/infra/registry/resolve'))).toEqual([
       '/api/infra/registry/resolve?actor=canary&version=0.1.1',
     ]);
+  });
+});
+
+describe('the lease ledger decides which section a Fleet is in', () => {
+  /** The minimum that makes one Fleet stack exist, so each test below varies only the ledger. */
+  function oneFleet(ledger: Answer) {
+    return stub({
+      '/api/infra/leases': ledger,
+      '/api/infra/stacks': { body: { stacks: ['kontra-fleet/cl0-s2'] } },
+      '/api/infra/stacks/kontra-fleet%2Fcl0-s2/state': {
+        body: {
+          outputs: { inventory: { 'kf-cl0-s2-01': { name: 'kf-cl0-s2-01' } } },
+          resources: [
+            {
+              type: 'digitalocean:index/droplet:Droplet',
+              name: 'kf-cl0-s2-01',
+              synthetic: false,
+              detail: { name: 'kf-cl0-s2-01', status: 'active', priceMonthly: 24 },
+            },
+          ],
+        },
+      },
+      '/api/pollers': { body: {} },
+      [ROLES_URL]: { body: { roles: [], assignments: [] } },
+      [historyUrl('kontra-fleet/cl0-s2')]: { body: { records: [] } },
+    });
+  }
+
+  it('a held Fleet is live, and its cost is the only total that is a bill', async () => {
+    const { fetch } = oneFleet({
+      body: { fleets: { 'kontra-fleet/cl0-s2': { leases: [{ holder: 'wf-hunt-0.1.0' }] } } },
+    });
+    const { view, missing } = await loadInfra(fetch, NOW);
+
+    expect(missing).toEqual([]);
+    expect(view.liveFleets.map((s) => s.fqn)).toEqual(['kontra-fleet/cl0-s2']);
+    expect(view.liveMachines).toBe(1);
+    expect(view.livePriceMonthly).toBe(24);
+    expect(view.orphanSuspects).toEqual([]);
+  });
+
+  it('a released Fleet is history and is flagged, while its recorded cost stays visible', async () => {
+    const { fetch } = oneFleet({ body: { fleets: { 'kontra-fleet/cl0-s2': { leases: [] } } } });
+    const { view } = await loadInfra(fetch, NOW);
+
+    // The real shape of the $192.00 bug, end to end through the loader: the droplet is still in the
+    // checkpoint, nobody holds it, so nothing is live and the row is named as worth reconciling.
+    expect(view.liveFleets).toEqual([]);
+    expect(view.liveMachines).toBe(0);
+    expect(view.livePriceMonthly).toBe(0);
+    expect(view.pastFleets.map((s) => s.fqn)).toEqual(['kontra-fleet/cl0-s2']);
+    expect(view.orphanSuspects.map((s) => s.fqn)).toEqual(['kontra-fleet/cl0-s2']);
+    // Not hidden — history still reports what the checkpoint recorded.
+    expect(view.pastFleets[0]!.priceMonthly).toBe(24);
+  });
+
+  it('a Fleet whose ledger could not be read is unknown, and is NOT flagged as an orphan', async () => {
+    const { fetch } = oneFleet({
+      body: { fleets: {}, unreachable: { 'kontra-fleet/cl0-s2': 'temporal is unwell' } },
+    });
+    const { view } = await loadInfra(fetch, NOW);
+
+    expect(view.pastFleets[0]!.holding).toEqual({ state: 'unknown', why: 'temporal is unwell' });
+    // Absence of evidence. Flagging it would put a warning on the page every time Temporal hiccups.
+    expect(view.orphanSuspects).toEqual([]);
+  });
+
+  it('a control plane that does not serve the route leaves every Fleet unasked, and SAYS so', async () => {
+    const { fetch } = oneFleet({ status: 404, body: { error: 'not found' } });
+    const { view, missing } = await loadInfra(fetch, NOW);
+
+    // The read failing must not read as "nobody holds anything", which would empty the live section
+    // and claim nothing is running — the inverse of the bug this whole change is about.
+    expect(view.pastFleets[0]!.holding).toEqual({ state: 'unasked' });
+    expect(view.liveFleets).toEqual([]);
+    expect(view.orphanSuspects).toEqual([]);
+    // AND IT IS NAMED. A silently degraded page is what `collapse` and `missing` exist to prevent.
+    expect(missing.map((m) => m.url)).toContain('/api/infra/leases');
+    expect(missing[0]!.why).toBe('this control plane does not serve that route');
   });
 });

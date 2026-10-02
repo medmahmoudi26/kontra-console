@@ -171,15 +171,58 @@
   const control = $derived(loaded?.view.control ?? []);
   const unattributed = $derived(loaded?.view.unattributed ?? []);
 
+  /**
+   * THREE SECTIONS, BECAUSE A CHECKPOINT IS NOT AN OBSERVATION.
+   *
+   * This page showed `8 machines · $192.00/mo` for zero live droplets. Nothing was miscounted: two
+   * Fleets were killed without a Pulumi destroy, so their checkpoints still record four `status:
+   * active` droplets each, and a total that sums every checkpoint read them as capacity. A checkpoint
+   * says what Pulumi last DID; only a Lease says what is in use.
+   *
+   * So live is derived from the ledger and CANNOT diverge from the actual fleet — the property asked
+   * for. History is where a stale checkpoint is honest: "last converged 21:31, 4 droplets at the
+   * time" is true, and nobody reads history as a bill.
+   */
+  const liveFleets = $derived(loaded?.view.liveFleets ?? []);
+  const pastFleets = $derived(loaded?.view.pastFleets ?? []);
+  const orphanSuspects = $derived(loaded?.view.orphanSuspects ?? []);
+
   const controlMachines = $derived(control.reduce((n, s) => n + s.machines.length, 0));
-  const fleetMachines = $derived(fleets.reduce((n, s) => n + s.machines.length, 0));
-  const fleetPrice = $derived(fleets.reduce((n, s) => n + s.priceMonthly, 0));
+  /** HELD ONLY — the one total that is a bill. See {@link liveFleets}. */
+  const liveMachines = $derived(loaded?.view.liveMachines ?? 0);
+  const livePrice = $derived(loaded?.view.livePriceMonthly ?? 0);
+  /** What the checkpoints of the UNHELD Fleets still record. Shown in history, never as a bill. */
+  const pastPrice = $derived(pastFleets.reduce((n, s) => n + s.priceMonthly, 0));
 
   /** `1 machine` / `12 machines`, and the price only when something priced. 0 is unknown, never free. */
   function stackSub(s: StackRow): string {
     const bits = [`${s.machines.length} machine${s.machines.length === 1 ? '' : 's'}`];
     if (s.priceMonthly > 0) bits.push(`$${s.priceMonthly.toFixed(2)}/mo`);
+    const h = holdingWords(s);
+    if (h !== '') bits.push(h);
     return bits.join(' · ');
+  }
+
+  /**
+   * Who holds this stack, in words — Mohamed's "used by which workflow".
+   *
+   * EACH OF THE FOUR STATES GETS ITS OWN SENTENCE, because three of them are easy to misread as each
+   * other and the consequences differ. `released` with Machines recorded is the one that costs money
+   * and it says what to do; `unknown` says the opposite — do not trust this either way.
+   */
+  function holdingWords(s: StackRow): string {
+    switch (s.holding.state) {
+      case 'held':
+        return `used by ${s.holding.holders.join(', ')}`;
+      case 'released':
+        // The orphan case names itself. A Fleet released with nothing recorded is an ordinary,
+        // finished Fleet and needs no adornment.
+        return s.orphanSuspect ? 'held by nothing — reconcile or destroy' : 'released';
+      case 'unknown':
+        return `ledger unreadable — ${s.holding.why}`;
+      case 'unasked':
+        return 'ledger not read';
+    }
   }
 </script>
 
@@ -221,18 +264,34 @@
     <dl data-testid="infra-facts">
       <dt>machines</dt>
       <dd>
-        {loaded.view.machines}
-        <span class="sep">· {controlMachines} control · {fleetMachines} fleet</span>
+        <!-- LIVE LEADS, because this is the number a reader takes as "what am I running". The total
+             across every checkpoint is still here, named as what it is: recorded, not running. -->
+        {liveMachines}
+        <span class="sep"
+          >live · {controlMachines} control · {loaded.view.machines} recorded across all stacks</span
+        >
+      </dd>
+      <dt>live cost</dt>
+      <dd>
+        {livePrice > 0 ? `$${livePrice.toFixed(2)}/mo` : '$0.00/mo'}
+        <span class="sep"
+          >held Fleets only{pastPrice > 0
+            ? ` · $${pastPrice.toFixed(2)}/mo recorded on Fleets nothing holds`
+            : ''}</span
+        >
       </dd>
       <dt>stacks</dt>
       <dd>
         {control.length + fleets.length}
-        <span class="sep">· {control.length} control · {fleets.length} fleet</span>
+        <span class="sep"
+          >· {control.length} control · {liveFleets.length} live · {pastFleets.length} history</span
+        >
       </dd>
-      {#if fleetPrice > 0}
-        <dt>fleet list price</dt>
-        <dd class="mono">${fleetPrice.toFixed(2)}/mo</dd>
-      {/if}
+      <!-- `fleet list price` USED TO LIVE HERE, summing every Fleet checkpoint, and it is where the
+           `$192.00/mo` came from: two Fleets killed without a Pulumi destroy, their droplets still
+           written down as `active`. There is no honest single "fleet price" — held Fleets cost money
+           and unheld ones are a record — so the two are the `live cost` fact above and the recorded
+           figure in the history section, each next to the words that say which it is. -->
     </dl>
 
     {#snippet pollRow(r: ServingRow)}
@@ -441,24 +500,61 @@
     </div>
 
     <!-- ── FLEETS ──────────────────────────────────────────────────────────────────────────────── -->
-    <div class="group" data-testid="group-fleets">
+    <div class="group" data-testid="group-fleets-live">
       <div class="grouphead fleet">
-        <h3>Fleets</h3>
+        <h3>Live Fleets</h3>
         <span class="gsub">
-          {fleets.length} stack{fleets.length === 1 ? '' : 's'} · {fleetMachines} machine{fleetMachines === 1
+          {liveFleets.length} stack{liveFleets.length === 1 ? '' : 's'} · {liveMachines} machine{liveMachines ===
+          1
             ? ''
-            : 's'}{fleetPrice > 0 ? ` · $${fleetPrice.toFixed(2)}/mo` : ''}
+            : 's'}{livePrice > 0 ? ` · $${livePrice.toFixed(2)}/mo` : ''}
         </span>
         <span class="grule"></span>
       </div>
       <p class="muted">
-        Converged by <code>orchestrator-infra</code> on behalf of a Run. Tagged capacity, held by
-        Leases — the Machines are destroyed when the last one drops.
+        Held by a Lease right now, and by whom. The Machines are destroyed when the last Lease drops,
+        so this section is derived from the ledger rather than from what a checkpoint last recorded —
+        it cannot show capacity that is not in use.
       </p>
-      {#if fleets.length === 0}
+      {#if liveFleets.length === 0}
+        <p class="none mono">no Fleet is held</p>
+      {:else}
+        {#each liveFleets as s (s.fqn)}{@render stackBox(s)}{/each}
+      {/if}
+    </div>
+
+    <!-- ── FLEET HISTORY ───────────────────────────────────────────────────────────────────────── -->
+
+    <div class="group" data-testid="group-fleets-history">
+      <div class="grouphead fleet">
+        <h3>Fleet history</h3>
+        <span class="gsub">
+          {pastFleets.length} stack{pastFleets.length === 1 ? '' : 's'}{pastPrice > 0
+            ? ` · $${pastPrice.toFixed(2)}/mo recorded`
+            : ''}
+        </span>
+        <span class="grule"></span>
+      </div>
+      <p class="muted">
+        Converged at some point and held by nobody now. The Machine counts and prices here are what
+        each checkpoint last RECORDED, not what is running — a Fleet torn down without Pulumi leaves
+        its droplets written down as <code>active</code> forever.
+      </p>
+      {#if orphanSuspects.length > 0}
+        <!-- THE DIVERGENCE IS THE SIGNAL. A checkpoint asserting Machines that nothing holds is the
+             case that actually costs money — a `terminate` instead of a `cancel` leaves exactly this
+             — so it is named here rather than filtered out of the total above. -->
+        <p class="orphan mono" data-testid="orphan-warning">
+          {orphanSuspects.length} stack{orphanSuspects.length === 1 ? '' : 's'} record Machines that no
+          Lease holds. Either the Droplets are gone and the checkpoint is stale, or they are still
+          running and still billing — a refresh on {orphanSuspects.length === 1 ? 'it' : 'them'} says
+          which.
+        </p>
+      {/if}
+      {#if pastFleets.length === 0}
         <p class="none mono">no Fleet has been converged</p>
       {:else}
-        {#each fleets as s (s.fqn)}{@render stackBox(s)}{/each}
+        {#each pastFleets as s (s.fqn)}{@render stackBox(s)}{/each}
       {/if}
     </div>
 
@@ -582,6 +678,15 @@
   dd .sep { color: var(--dim); }
 
   /* The two halves. One engine each, and they never converge each other. */
+  .orphan {
+    font-size: var(--t-small);
+    color: var(--warn);
+    border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+    border-radius: var(--radius);
+    padding: var(--s-2) var(--s-3);
+    margin: 0;
+    line-height: var(--lh-body);
+  }
   .group { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-4); min-width: 0; }
   .grouphead { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
   .grouphead h3 {
