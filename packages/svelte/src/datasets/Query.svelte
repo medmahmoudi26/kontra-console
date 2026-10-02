@@ -233,10 +233,20 @@
       {/if}
 
       {#if result}
+<!-- THE RESULTS GRID GROWS WITH THE WINDOW, and 26rem is now its FLOOR rather than its ceiling.
+
+           `maxHeight` was the flat `26rem` — ~364px. On any window taller than about 800px the
+           grid showed eight rows and left the rest of the screen empty, so reading an 18-row
+           answer meant scrolling a box inside a page that had room for all of it. That is the same
+           complaint that made this table full-width: the grid was not using the space it had.
+
+           `100vh - 30rem` is the window minus what sits above the grid — nav, heading, the dataset
+           listing, the editor — plus a little air. `max(...)` keeps the old height as the LOWER
+           bound, so a short window is no worse than it was rather than collapsing to nothing. -->
         <DataTable
           columns={cols}
           rows={result.rows}
-          maxHeight="26rem"
+          maxHeight="max(26rem, calc(100vh - 30rem))"
           textOf={resultText}
           cellValue={resultValue}
           resizeKey="query-result"
