@@ -30,6 +30,7 @@
   import type { Snippet } from 'svelte';
 
   import CellInspector from './CellInspector.svelte';
+  import { MIN_COL, allColumnsSized } from './columnWidths';
 
   export interface Column {
     /** Header text. Uppercase labels are the one place `--t-micro` is allowed. */
@@ -114,9 +115,9 @@
     resizeKey,
   }: Props = $props();
 
-  /** Narrower than this and a column is a sliver with no content — a drag that can lose a column
-   *  entirely is a drag an operator cannot undo without clearing storage. */
-  const MIN_COL = 56;
+  /** Prefix for the per-table localStorage key. `MIN_COL` — the floor a column may be dragged to,
+   *  so a drag cannot lose a column entirely — lives in `./columnWidths` beside the predicate that
+   *  reads it. */
   const STORE = 'kontra.console.table.';
 
   /**
@@ -146,15 +147,34 @@
   let widths = $state<Record<string, number>>(loadWidths());
 
   /**
-   * FIXED LAYOUT ONLY ONCE A WIDTH EXISTS, which is what keeps the default appearance unchanged.
+   * FIXED LAYOUT ONLY ONCE EVERY COLUMN HAS A WIDTH, which is what keeps the default appearance
+   * unchanged.
    *
    * `table-layout: fixed` is what makes a dragged width hold — under auto layout the browser treats
    * `width` as a suggestion and the column springs back to fit its content. But switching to fixed
    * with no widths set would divide the table into equal columns, so a table nobody has touched
    * would look different for no reason. So auto until the first drag, and the drag itself freezes
    * what auto chose (see {@link startResize}) before anything moves.
+   *
+   * ── WHY `every` AND NOT `length > 0` ────────────────────────────────────────────────────────
+   *
+   * `resizeKey="dataset-preview"` is ONE key shared by the preview of EVERY dataset, and the map is
+   * keyed by column LABEL. So a map saved while looking at a 7-column result is loaded intact when
+   * a 20-column dataset is opened next. `length > 0` made that map switch the table to fixed layout
+   * while most of its columns had no entry — and under fixed layout a column with no width gets
+   * what is left after the sized ones take theirs, which is a sliver.
+   *
+   * MEASURED on `http_events_shutterfly` (20 columns) with a 6-entry map in storage: every column
+   * came out 88px, the header text unreadable. With labels that partially matched, the six sized
+   * columns rendered and the other fourteen crushed to the left — which is what it looks like in
+   * the wild.
+   *
+   * Requiring EVERY column to have a width means a stored map that does not cover this table is
+   * simply ignored, and auto layout — which sizes to content — stays in charge until the operator
+   * has actually sized this table. A map is never discarded, so going back to the other dataset
+   * still finds its widths.
    */
-  const sized = $derived(Object.keys(widths).length > 0);
+  const sized = $derived(allColumnsSized(columns, widths));
 
   let dragging: { label: string; startX: number; startW: number } | null = null;
 
@@ -387,10 +407,19 @@
     font-size: var(--t-small);
   }
 
-  /* Only once a width has been dragged — see `sized`. Auto layout until then, so a table nobody
-     has touched looks exactly as it did. */
+  /* Only once every column has a width — see `sized`. Auto layout until then, so a table nobody
+     has touched looks exactly as it did.
+
+     `width: max-content` is the other half of making a drag HOLD. With `width: 100%` the table is
+     forced to exactly the container's width, so the browser scales every specified width down to
+     fit — drag one column wider and the rest silently shrink to pay for it. Sizing to the sum of
+     the columns instead means a dragged width is the width, and `.wrap` (which owns `overflow`)
+     scrolls when they outgrow the box. `min-width: 100%` keeps a narrow table filling the panel
+     rather than leaving a gap down the right. */
   table.sized {
     table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
   }
 
   /* A FIXED COLUMN HAS TO BE ALLOWED TO CLIP, or the content wins and the drag does nothing: under
