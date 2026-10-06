@@ -98,8 +98,10 @@ This block was NOT read. That is different from a block that was empty.</pre>
     <pre class="hex" data-testid="report-block-hex">{#each hex as line, i (i)}<span class="off">{line.offset}</span>  {line.hex.padEnd(47, ' ')}  |{line.ascii}|
 {/each}</pre>
   {:else}
-    <pre data-testid="report-block-text">{#each lines as line, i (i)}{#each line as span, s (s)}{#if span.marker}<span class="marker">{span.text}</span>{:else}{span.text}{/if}{/each}{#if i < lines.length - 1}
-{/if}{/each}</pre>
+    <!-- The line break between lines is a literal `\n` rather than a newline inside an `{#if}`: Svelte
+         reads a block whose only content is whitespace as EMPTY and warns, and a warning nobody can
+         act on is a warning people learn to scroll past. -->
+    <pre data-testid="report-block-text">{#each lines as line, i (i)}{#each line as span, s (s)}{#if span.marker}<span class="marker">{span.text}</span>{:else}{span.text}{/if}{/each}{i < lines.length - 1 ? '\n' : ''}{/each}</pre>
   {/if}
 
   {#if copied}
