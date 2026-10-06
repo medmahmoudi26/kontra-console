@@ -59,6 +59,7 @@
   import Progress from './Progress.svelte';
   import Drawer from './Drawer.svelte';
   import Rack from './Rack.svelte';
+  import Report from '../report/Report.svelte';
   import { loadRack } from './fleetLoad';
   import { fleetStacksOf, type Rack as RackView } from '@kontra/console-core/run/fleet';
   import type { Missing } from '../infra/load';
@@ -68,7 +69,22 @@
     return a !== null && a.view === 'runs' ? a.run : null;
   }
 
+  /**
+   * Which face of the run the address asks for — its record, or its **Report** (ADR 0055).
+   *
+   * READ HERE BECAUSE THE SURFACE OWNS EVERYTHING BELOW ITS FIRST SEGMENT. `App.svelte` maps `runs` to
+   * this component and nothing else; a second surface for `/runs/<id>/report` is not available, so the
+   * report is a branch at the top of this one rather than a page of its own. That is also why it is a
+   * branch and not a tab: there is no page-level tab strip here to add to, and building one would be a
+   * change to 1700 lines this feature should not take on.
+   */
+  function tabFromUrl(): 'report' | null {
+    const a = parseAddress(location.pathname + location.search);
+    return a !== null && a.view === 'runs' ? a.tab : null;
+  }
+
   let openRun = $state<string | null>(runFromUrl());
+  let openTab = $state<'report' | null>(tabFromUrl());
   let rows = $state<RunRow[]>([]);
   let loading = $state(true);
   let error = $state('');
@@ -252,6 +268,7 @@
   $effect(() => {
     const onPop = (): void => {
       openRun = runFromUrl();
+      openTab = tabFromUrl();
     };
     addEventListener('popstate', onPop);
     return () => removeEventListener('popstate', onPop);
@@ -832,7 +849,11 @@
   }
 </script>
 
-{#if openRun === null}
+{#if openRun !== null && openTab === 'report'}
+  <!-- WHAT THE RUN FOUND, which is a different question from what it DID. The record below answers the
+       second; this answers the first (ADR 0055). -->
+  <Report runId={openRun} />
+{:else if openRun === null}
   <section class="list" data-testid="runs-list">
     <h1>Runs</h1>
     {#if loading}
@@ -861,7 +882,14 @@
   </section>
 {:else}
   <section class="detail" data-testid="run-detail">
-    <button class="back" onclick={() => open(null)}>‹ Runs</button>
+    <div class="detailnav">
+      <button class="back" onclick={() => open(null)}>‹ Runs</button>
+      <!-- THE WAY TO WHAT THE RUN FOUND (ADR 0055). An ordinary link and not a button: the report is an
+           address somebody pastes, so middle-click and copy-link have to work. -->
+      <a class="toreport" href={formatAddress({ view: 'runs', run: openRun, tab: 'report' })} data-testid="run-to-report">
+        Report ›
+      </a>
+    </div>
     <header class="head">
       <div class="idcol">
         <span class="rid mono" data-testid="run-detail-id">{openRun}</span>
@@ -1320,6 +1348,22 @@
     cursor: pointer;
     font-size: var(--t-small);
     padding: 0;
+  }
+
+  .detailnav {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+  }
+
+  .toreport {
+    font-size: var(--t-small);
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .toreport:hover {
+    text-decoration: underline;
   }
   .head {
     display: flex;

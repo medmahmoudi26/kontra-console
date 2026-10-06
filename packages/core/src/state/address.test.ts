@@ -201,22 +201,58 @@ describe('the runs surface', () => {
   // Runs is a live surface again: `/runs` and `/runs/<id>` are addresses the app owns, so they
   // ROUND-TRIP rather than redirect. The id rides its own store field, not the Workflows `run`.
   it('round-trips the run list', () => {
-    expect(parseAddress('/runs')).toEqual({ view: 'runs', run: null });
-    expect(formatAddress({ view: 'runs', run: null })).toBe('/runs');
+    expect(parseAddress('/runs')).toEqual({ view: 'runs', run: null, tab: null });
+    expect(formatAddress({ view: 'runs', run: null, tab: null })).toBe('/runs');
   });
 
   it('round-trips one run by its id — and does NOT redirect', () => {
-    expect(parseAddress('/runs/nscheck-123')).toEqual({ view: 'runs', run: 'nscheck-123' });
-    expect(formatAddress({ view: 'runs', run: 'nscheck-123' })).toBe('/runs/nscheck-123');
+    expect(parseAddress('/runs/nscheck-123')).toEqual({ view: 'runs', run: 'nscheck-123', tab: null });
+    expect(formatAddress({ view: 'runs', run: 'nscheck-123', tab: null })).toBe('/runs/nscheck-123');
   });
 
   it('keeps a dotted run id in the path — the ids this bit us on', () => {
-    expect(parseAddress('/runs/sweep-v1.2')).toEqual({ view: 'runs', run: 'sweep-v1.2' });
-    expect(formatAddress({ view: 'runs', run: 'sweep-v1.2' })).toBe('/runs/sweep-v1.2');
+    expect(parseAddress('/runs/sweep-v1.2')).toEqual({ view: 'runs', run: 'sweep-v1.2', tab: null });
+    expect(formatAddress({ view: 'runs', run: 'sweep-v1.2', tab: null })).toBe('/runs/sweep-v1.2');
   });
 
-  it('refuses a second segment under a run', () => {
+  // THE REPORT IS THE ONE WORD THAT MAY SIT UNDER A RUN (ADR 0055). A run's record is what
+  // `/runs/<id>` has always meant and still means; what the run FOUND is a different page and a
+  // different thing to paste, so it gets a segment rather than a query.
+  it('round-trips a run\'s report', () => {
+    expect(parseAddress('/runs/nscheck-123/report')).toEqual({
+      view: 'runs',
+      run: 'nscheck-123',
+      tab: 'report',
+    });
+    expect(formatAddress({ view: 'runs', run: 'nscheck-123', tab: 'report' })).toBe(
+      '/runs/nscheck-123/report'
+    );
+  });
+
+  it('keeps a dotted id under the report tab too', () => {
+    expect(parseAddress('/runs/sweep-v1.2/report')).toEqual({
+      view: 'runs',
+      run: 'sweep-v1.2',
+      tab: 'report',
+    });
+  });
+
+  it('still refuses every OTHER second segment, which is the point of a closed set', () => {
+    // The refusal was narrowed by exactly one word. A typo'd tab is a 404 in the app rather than a
+    // blank page that looks like a report with nothing in it.
     expect(parseAddress('/runs/a/b')).toBeNull();
+    expect(parseAddress('/runs/a/reports')).toBeNull();
+    expect(parseAddress('/runs/a/Report')).toBeNull();
+    expect(parseAddress('/runs/a/report/extra')).toBeNull();
+  });
+
+  it('reads an empty segment as absent, so `/runs//report` is a run CALLED report', () => {
+    // Not a hole this change opened: the path splitter drops empty segments, so `/runs//report` has
+    // always been `/runs/report`. Harmless, because a run may legally be called `report` and
+    // `/runs/report/report` then addresses its report — unambiguously. Written down because the first
+    // version of this test asserted `null` and was wrong about the mechanism rather than the design.
+    expect(parseAddress('/runs//report')).toEqual({ view: 'runs', run: 'report', tab: null });
+    expect(parseAddress('/runs/report/report')).toEqual({ view: 'runs', run: 'report', tab: 'report' });
   });
 });
 

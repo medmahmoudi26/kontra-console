@@ -119,7 +119,23 @@ export type Address =
   // reached from, so the id is the whole address — `/runs` is the list, `/runs/<id>` is one run. It
   // gets its OWN store field (`runsRun`) rather than sharing the Workflows surface's `runId`, so
   // landing on `/runs/<id>` never silently reselects a run on the page the operator just left.
-  | { view: 'runs'; run: string | null }
+  | {
+      view: 'runs';
+      run: string | null;
+      /**
+       * Which face of one run — its record, or its **Report** (ADR 0055).
+       *
+       * A SEGMENT AND NOT A QUERY, because it names a position in the path: `/runs/<id>/report` is the
+       * thing an operator pastes to say "read what this run found", and the run's record is what
+       * `/runs/<id>` already meant. `null` is the record, which keeps every existing address meaning
+       * exactly what it meant.
+       *
+       * ONE VALUE, not an open string. A tab this app does not have is not an address it could serve,
+       * and `parseAddress` returns `null` for anything else — the same refusal that `/runs/<id>/<x>`
+       * has always given, narrowed by exactly one word rather than opened up.
+       */
+      tab: 'report' | null;
+    }
   | { view: 'actors' | 'catalog' | 'logs' | 'secrets' | 'settings' }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 
@@ -143,6 +159,14 @@ export interface AddressedState {
   /** The **Run** the Runs surface has open — its OWN field, not `runId`. `/runs/<id>` addresses a
    *  run without touching which run the Workflows surface has selected. */
   runsRun: string | null;
+  /**
+   * Which face of that run is open: its record, or its **Report** (ADR 0055).
+   *
+   * OPTIONAL, so every existing caller of `addressOf` keeps compiling and keeps meaning the record.
+   * A store that has never heard of a report reads as `null` here, which is what `/runs/<id>` already
+   * addressed.
+   */
+  runsTab?: 'report' | null;
   datasetFocus: DatasetFocus | null;
 }
 
@@ -162,7 +186,7 @@ export function addressOf(s: AddressedState): Address {
     case 'datasets':
       return { view: 'datasets', dataset: s.datasetFocus };
     case 'runs':
-      return { view: 'runs', run: s.runsRun };
+      return { view: 'runs', run: s.runsRun, tab: s.runsTab ?? null };
     default:
       return { view: s.view };
   }
@@ -189,7 +213,7 @@ export function stateFor(address: Address): Partial<AddressedState> {
     case 'datasets':
       return { view: 'datasets', datasetFocus: address.dataset };
     case 'runs':
-      return { view: 'runs', runsRun: address.run };
+      return { view: 'runs', runsRun: address.run, runsTab: address.tab };
     default:
       return { view: address.view };
   }
@@ -236,12 +260,15 @@ export function formatAddress(address: Address): string {
       const search = query.toString();
       return `${PATHS.datasets}/${encodeURIComponent(address.dataset.name)}${search ? `?${search}` : ''}`;
     }
-    case 'runs':
+    case 'runs': {
       // A run id is whatever `--id` was, so it is encoded rather than trusted — the server still
       // matches on the first segment (`runs`), which is why a dotted id like `sweep-v1.2` survives.
-      return address.run === null
-        ? PATHS.runs
-        : `${PATHS.runs}/${encodeURIComponent(address.run)}`;
+      if (address.run === null) return PATHS.runs;
+      const base = `${PATHS.runs}/${encodeURIComponent(address.run)}`;
+      // The tab is a LITERAL and is not encoded: it is one of a closed set this module owns, not a
+      // name that came from anywhere else.
+      return address.tab === null ? base : `${base}/${address.tab}`;
+    }
     default:
       return PATHS[address.view];
   }
@@ -327,9 +354,13 @@ export function parseAddress(url: string): Address | null {
       return { view, workflow: first, run: second };
     }
     case 'runs':
-      // One id, nothing under it: a run is addressed by its id and a second segment is no URL this
-      // app could mean. `/runs` is the list; `/runs/<id>` is one run's record.
-      return second === null ? { view, run: first } : null;
+      /* ONE ID, AND ONE WORD UNDER IT. `/runs` is the list, `/runs/<id>` is the run's record, and
+         `/runs/<id>/report` is what it found (ADR 0055). Every other second segment is still `null`,
+         which is what this case has always answered — the refusal is narrowed by one word rather
+         than replaced by a wildcard, so a typo'd tab is a 404 in the app rather than a blank page. */
+      if (first === null) return second === null ? { view, run: null, tab: null } : null;
+      if (second === null) return { view, run: first, tab: null };
+      return second === 'report' ? { view, run: first, tab: 'report' } : null;
     case 'datasets': {
       if (second !== null) return null;
       if (first === null) return { view, dataset: null };
