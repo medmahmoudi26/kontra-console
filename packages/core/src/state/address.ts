@@ -265,9 +265,17 @@ export function formatAddress(address: Address): string {
       // matches on the first segment (`runs`), which is why a dotted id like `sweep-v1.2` survives.
       if (address.run === null) return PATHS.runs;
       const base = `${PATHS.runs}/${encodeURIComponent(address.run)}`;
-      // The tab is a LITERAL and is not encoded: it is one of a closed set this module owns, not a
-      // name that came from anywhere else.
-      return address.tab === null ? base : `${base}/${address.tab}`;
+      /* APPENDED ONLY WHEN THERE IS ONE, and the test is truthiness rather than `!== null` — which is
+         what the first version used, and it shipped `/runs/<id>/undefined` to two callers.
+
+         `tab` is REQUIRED by the type and `tsc` does enforce it, but MEASURED: `svelte-check` does not
+         report the same error inside a `.svelte` script block, so `Workflows.svelte` and `Runs.svelte`
+         both called this with the field absent and nothing objected until a browser did. The type is
+         the contract; this line is what makes a caller the type did not reach harmless.
+
+         The tab is a LITERAL and is not encoded: it is one of a closed set this module owns, not a
+         name that came from anywhere else. */
+      return address.tab ? `${base}/${address.tab}` : base;
     }
     default:
       return PATHS[address.view];

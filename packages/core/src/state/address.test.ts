@@ -218,6 +218,18 @@ describe('the runs surface', () => {
   // THE REPORT IS THE ONE WORD THAT MAY SIT UNDER A RUN (ADR 0055). A run's record is what
   // `/runs/<id>` has always meant and still means; what the run FOUND is a different page and a
   // different thing to paste, so it gets a segment rather than a query.
+  it('formats a run address whose tab is ABSENT as the record, not as /undefined', () => {
+    /* THE REGRESSION. `formatAddress` tested `tab === null`, so a caller that passed no tab at all —
+       which `Workflows.svelte` and `Runs.svelte` both did — produced `/runs/<id>/undefined`, and
+       starting a run from the Workflows surface navigated somewhere that does not parse. `tsc` DOES
+       reject the missing field; `svelte-check` does not report it inside a `.svelte` script block, so
+       the type never reached the two callers that mattered. A browser caught it. */
+    expect(formatAddress({ view: 'runs', run: 'nscheck-123' } as never)).toBe('/runs/nscheck-123');
+    expect(formatAddress({ view: 'runs', run: 'nscheck-123', tab: undefined } as never)).toBe(
+      '/runs/nscheck-123'
+    );
+  });
+
   it('round-trips a run\'s report', () => {
     expect(parseAddress('/runs/nscheck-123/report')).toEqual({
       view: 'runs',

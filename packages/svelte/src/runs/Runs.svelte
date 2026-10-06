@@ -261,7 +261,7 @@
   });
 
   function open(id: string | null): void {
-    history.pushState({}, '', formatAddress({ view: 'runs', run: id }));
+    history.pushState({}, '', formatAddress({ view: 'runs', run: id, tab: null }));
     openRun = id;
   }
 
