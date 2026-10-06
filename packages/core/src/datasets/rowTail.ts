@@ -15,6 +15,18 @@
  */
 
 
+/**
+ * One chunk of the window: the stored object and a stable id for it.
+ *
+ * The id is what makes the tail ACCUMULATE. The server re-sends its whole window every poll, so a
+ * client that appended blindly would repeat every chunk once per poll; keyed by id, a re-sent chunk
+ * is recognised and the tail only grows at the new end.
+ */
+export interface RowChunk {
+  id: string;
+  row: unknown;
+}
+
 /** One reading of the durable path, as the SSE `data:` payload carries it. */
 export interface LiveRows {
   /** Committed rows: the object count of `units/run=<id>/`. One blob is one pushed record. */
@@ -37,7 +49,7 @@ export interface LiveRows {
    * carrying rows", which is a different claim from `[]` — "the window was empty" — and a readout
    * must not render the second when it was handed the first.
    */
-  recent?: unknown[];
+  recent?: RowChunk[];
   /** The byte budget cut the window short of its row count, so a reader knows why a wide-rowed Run
    *  shows three rows where a narrow one shows five. */
   clipped?: boolean;
@@ -50,12 +62,32 @@ export interface LiveRows {
  */
 export type RowTailPhase = 'connecting' | 'live' | 'degraded';
 
+/**
+ * How many chunks the accumulated tail keeps.
+ *
+ * A tail that grows without bound is a leak on a Run that emits for hours, so this is the point at
+ * which the oldest end is dropped. It is far above the server's 50-chunk window, so the limit a
+ * reader meets in practice is what the stream delivered, not this.
+ */
+export const ROW_TAIL_KEEP = 500;
+
 export interface RowTailState {
   snapshot: LiveRows | null;
   phase: RowTailPhase;
+  /**
+   * Every chunk this client has seen, oldest-first — the tail itself.
+   *
+   * Accumulated rather than replaced, because the server's `recent` is a 50-chunk WINDOW re-sent
+   * whole on every poll: rendering it directly shows the same few rows forever while the count
+   * climbs past them. Deduped by {@link RowChunk.id} and capped at {@link ROW_TAIL_KEEP}.
+   *
+   * It is what this client SAW, which on a Run producing faster than the poll is a sample rather
+   * than the whole log — `rows` on the snapshot stays the authority on how many exist.
+   */
+  tail: RowChunk[];
 }
 
-export const ROW_TAIL_START: RowTailState = { snapshot: null, phase: 'connecting' };
+export const ROW_TAIL_START: RowTailState = { snapshot: null, phase: 'connecting', tail: [] };
 
 export type RowTailInbound =
   | { type: 'open' }
@@ -71,14 +103,31 @@ export type RowTailInbound =
 export function rowTailReduce(state: RowTailState, ev: RowTailInbound): RowTailState {
   switch (ev.type) {
     case 'snapshot':
-      return { snapshot: ev.snapshot, phase: 'live' };
+      return { snapshot: ev.snapshot, phase: 'live', tail: merge(state.tail, ev.snapshot.recent) };
     case 'error':
-      return { snapshot: state.snapshot, phase: 'degraded' };
+      return { ...state, phase: 'degraded' };
     case 'open':
-      return state.phase === 'degraded' ? { snapshot: state.snapshot, phase: 'connecting' } : state;
+      return state.phase === 'degraded' ? { ...state, phase: 'connecting' } : state;
     default:
       return state;
   }
+}
+
+/**
+ * Fold a window into the tail: append what is new, in arrival order, and drop the oldest past the
+ * cap.
+ *
+ * A snapshot with NO `recent` leaves the tail alone. That is the replay case — a reconnecting
+ * client is handed the counts it missed and no rows — and clearing on it would blank a tail that
+ * is still correct every time the socket blinked.
+ */
+function merge(tail: RowChunk[], incoming: RowChunk[] | undefined): RowChunk[] {
+  if (!Array.isArray(incoming) || incoming.length === 0) return tail;
+  const seen = new Set(tail.map((c) => c.id));
+  const fresh = incoming.filter((c) => c && typeof c.id === 'string' && !seen.has(c.id));
+  if (fresh.length === 0) return tail;
+  const next = tail.concat(fresh);
+  return next.length > ROW_TAIL_KEEP ? next.slice(next.length - ROW_TAIL_KEEP) : next;
 }
 
 /** The age of the newest chunk, at the coarse grain the tail actually knows it. `null` in means the
@@ -136,7 +185,17 @@ export function rowTailDegraded(state: RowTailState): boolean {
  * "no rows yet" over a Run whose count says otherwise, every time a client reconnected.
  */
 export function rowTailWindow(state: RowTailState): { rows: unknown[]; clipped: boolean } | null {
-  const recent = state.snapshot?.recent;
-  if (!Array.isArray(recent)) return null;
-  return { rows: recent, clipped: state.snapshot?.clipped === true };
+  if (state.tail.length === 0) return null;
+  return {
+    rows: state.tail.map((c) => c.row),
+    // `clipped` is a property of the LAST reading, not of the accumulated tail: it says the byte
+    // budget cut that window short, which is why a wide-rowed Run grows more slowly.
+    clipped: state.snapshot?.clipped === true,
+  };
+}
+
+/** True once the tail has reached {@link ROW_TAIL_KEEP} and is dropping its oldest end, so a reader
+ *  is told the top of the list is no longer the beginning of the Run. */
+export function rowTailTrimmed(state: RowTailState): boolean {
+  return state.tail.length >= ROW_TAIL_KEEP;
 }

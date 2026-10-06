@@ -45,6 +45,7 @@
   import {
     ROW_TAIL_START,
     rowTailLabel,
+    rowTailTrimmed,
     rowTailWindow,
     type RowTailState,
   } from '@kontra/console-core/datasets/rowTail';
@@ -707,26 +708,27 @@
    * deep selection on wide rows yields fewer rows than asked and `clipped` says so. This control
    * chooses how many of what arrived to render; it cannot make the stream send more than it budgets.
    */
-  const TAIL_DEPTHS = [5, 10, 25, 50] as const;
-  const TAIL_STORE = 'kontra.console.rowtail.depth';
-  let tailDepth = $state<number>(readTailDepth());
+  /**
+   * The tail scrolls and sticks to the newest end, the way a `tail -f` pane does.
+   *
+   * STICKING IS CONDITIONAL, and that is the whole behaviour: a reader who has scrolled up is
+   * reading something, and yanking them back on the next frame makes a growing tail unreadable. So
+   * the box follows only while it is already at the bottom.
+   */
+  let tailBox = $state<HTMLDivElement | null>(null);
+  let stick = $state(true);
 
-  function readTailDepth(): number {
-    try {
-      const raw = Number(localStorage.getItem(TAIL_STORE));
-      return TAIL_DEPTHS.includes(raw as (typeof TAIL_DEPTHS)[number]) ? raw : 10;
-    } catch {
-      return 10; // private mode, or no storage — the default is not worth an error
-    }
+  function onTailScroll(e: Event): void {
+    const el = e.currentTarget as HTMLDivElement;
+    // A few pixels of slack: "at the bottom" has to survive sub-pixel layout and a scrollbar.
+    stick = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   }
-  function setTailDepth(n: number): void {
-    tailDepth = n;
-    try {
-      localStorage.setItem(TAIL_STORE, String(n));
-    } catch {
-      /* a preference that cannot be saved is still a preference for this tab */
-    }
-  }
+
+  $effect(() => {
+    const n = liveTable.rows.length; // tracked: re-run when the tail grows
+    const el = tailBox;
+    if (el && stick && n > 0) el.scrollTop = el.scrollHeight;
+  });
 
   /**
    * The window as a TABLE — the union of every key across the drawn rows, in first-seen order.
@@ -749,9 +751,11 @@
      * object here holds one record, so flattening keeps "6 rows" and six table rows the same claim.
      * A blob that ever holds several records still renders correctly; it just contributes several.
      */
-    const all = (liveWindow?.rows ?? []).flatMap((e) => (Array.isArray(e) ? e : [e]));
-    // The LAST `tailDepth`, because a tail is the newest end.
-    const rows = all.slice(Math.max(0, all.length - tailDepth));
+    // EVERY ROW THE CLIENT HAS ACCUMULATED, oldest-first. The reducer keeps the tail across polls
+    // and caps it at ROW_TAIL_KEEP; slicing a window off it here is what made a growing Dataset
+    // render as the same few rows while its count climbed past them.
+    const rows = (liveWindow?.rows ?? []).flatMap((e) => (Array.isArray(e) ? e : [e]));
+    const all = rows;
     const cols: string[] = [];
     for (const r of rows) {
       if (r !== null && typeof r === 'object' && !Array.isArray(r)) {
@@ -760,7 +764,13 @@
         }
       }
     }
-    return { rows, cols, clipped: liveWindow?.clipped ?? false, total: all.length };
+    return {
+      rows,
+      cols,
+      clipped: liveWindow?.clipped ?? false,
+      total: all.length,
+      trimmed: rowTailTrimmed(liveRows),
+    };
   });
 
   /** Something arrived in a feed that nobody has opened since. */
@@ -1087,22 +1097,28 @@
             </p>
             {#if liveTable.rows.length > 0}
               <div class="tailbar">
-                <label class="small">
-                  tail
-                  <select
-                    data-testid="live-tail-depth"
-                    value={tailDepth}
-                    onchange={(e) => setTailDepth(Number((e.currentTarget as HTMLSelectElement).value))}
-                  >
-                    {#each TAIL_DEPTHS as d (d)}<option value={d}>{d}</option>{/each}
-                  </select>
-                  rows
-                </label>
-                <span class="muted small">
-                  showing {liveTable.rows.length} of the last {liveTable.total} the stream carried
+                <span class="muted small" data-testid="live-tail-count">
+                  {liveTable.rows.length.toLocaleString()} row{liveTable.rows.length === 1 ? '' : 's'}
+                  {#if liveTable.trimmed}· oldest dropped{/if}
+                  {#if !stick}· scrolled up{/if}
                 </span>
+                {#if !stick}
+                  <button
+                    class="small"
+                    data-testid="live-tail-follow"
+                    onclick={() => {
+                      stick = true;
+                      if (tailBox) tailBox.scrollTop = tailBox.scrollHeight;
+                    }}>follow</button
+                  >
+                {/if}
               </div>
-              <div class="tbl-wrap">
+              <div
+                class="tbl-wrap tail-scroll"
+                bind:this={tailBox}
+                onscroll={onTailScroll}
+                data-testid="live-tail-scroll"
+              >
                 <table data-testid="live-row-tail">
                   {#if liveTable.cols.length > 0}
                     <thead>
@@ -1492,9 +1508,17 @@
     flex-wrap: wrap;
     margin: 0 0 .5rem;
   }
-  .tailbar label { display: inline-flex; align-items: center; gap: .35rem; }
-  .tailbar select { font: inherit; padding: .1rem .25rem; }
+  .tailbar button { font: inherit; padding: .1rem .5rem; cursor: pointer; }
   .small { font-size: .85em; }
+
+  /* The tail scrolls on its own rather than growing the page: a Run that emits for an hour would
+     otherwise push every panel below it off the screen. `overflow-anchor: none` stops the browser's
+     own scroll anchoring fighting the stick-to-bottom effect. */
+  .tail-scroll {
+    max-height: min(26rem, 50vh);
+    overflow-y: auto;
+    overflow-anchor: none;
+  }
 
   .region.dataset.fills,
   .region.log {
