@@ -68,6 +68,21 @@ export interface ReportVersionRow {
   errorText?: string;
 }
 
+/** One Run's report as the Reports surface lists it — the newest version, and how many there are. */
+export interface ReportListRow {
+  runId: string;
+  version: number;
+  status: 'ok' | 'error';
+  templateHash: string;
+  renderedAt: number;
+  renderedBy: string;
+  versions: number;
+  /** The workspace the Run ran in. Absent when nothing pinned a template for it. */
+  workspace?: string;
+  /** The caller workflow's manifest name. Absent when the identity was never recorded. */
+  workflow?: string;
+}
+
 export interface FeedbackNote {
   id: string;
   runId: string;

@@ -59,7 +59,6 @@
   import Progress from './Progress.svelte';
   import Drawer from './Drawer.svelte';
   import Rack from './Rack.svelte';
-  import Report from '../report/Report.svelte';
   import { loadRack } from './fleetLoad';
   import { fleetStacksOf, type Rack as RackView } from '@kontra/console-core/run/fleet';
   import type { Missing } from '../infra/load';
@@ -69,22 +68,7 @@
     return a !== null && a.view === 'runs' ? a.run : null;
   }
 
-  /**
-   * Which face of the run the address asks for — its record, or its **Report** (ADR 0055).
-   *
-   * READ HERE BECAUSE THE SURFACE OWNS EVERYTHING BELOW ITS FIRST SEGMENT. `App.svelte` maps `runs` to
-   * this component and nothing else; a second surface for `/runs/<id>/report` is not available, so the
-   * report is a branch at the top of this one rather than a page of its own. That is also why it is a
-   * branch and not a tab: there is no page-level tab strip here to add to, and building one would be a
-   * change to 1700 lines this feature should not take on.
-   */
-  function tabFromUrl(): 'report' | null {
-    const a = parseAddress(location.pathname + location.search);
-    return a !== null && a.view === 'runs' ? a.tab : null;
-  }
-
   let openRun = $state<string | null>(runFromUrl());
-  let openTab = $state<'report' | null>(tabFromUrl());
   let rows = $state<RunRow[]>([]);
   let loading = $state(true);
   let error = $state('');
@@ -261,14 +245,13 @@
   });
 
   function open(id: string | null): void {
-    history.pushState({}, '', formatAddress({ view: 'runs', run: id, tab: null }));
+    history.pushState({}, '', formatAddress({ view: 'runs', run: id }));
     openRun = id;
   }
 
   $effect(() => {
     const onPop = (): void => {
       openRun = runFromUrl();
-      openTab = tabFromUrl();
     };
     addEventListener('popstate', onPop);
     return () => removeEventListener('popstate', onPop);
@@ -849,11 +832,7 @@
   }
 </script>
 
-{#if openRun !== null && openTab === 'report'}
-  <!-- WHAT THE RUN FOUND, which is a different question from what it DID. The record below answers the
-       second; this answers the first (ADR 0055). -->
-  <Report runId={openRun} />
-{:else if openRun === null}
+{#if openRun === null}
   <section class="list" data-testid="runs-list">
     <h1>Runs</h1>
     {#if loading}
@@ -882,14 +861,7 @@
   </section>
 {:else}
   <section class="detail" data-testid="run-detail">
-    <div class="detailnav">
-      <button class="back" onclick={() => open(null)}>‹ Runs</button>
-      <!-- THE WAY TO WHAT THE RUN FOUND (ADR 0055). An ordinary link and not a button: the report is an
-           address somebody pastes, so middle-click and copy-link have to work. -->
-      <a class="toreport" href={formatAddress({ view: 'runs', run: openRun, tab: 'report' })} data-testid="run-to-report">
-        Report ›
-      </a>
-    </div>
+    <button class="back" onclick={() => open(null)}>‹ Runs</button>
     <header class="head">
       <div class="idcol">
         <span class="rid mono" data-testid="run-detail-id">{openRun}</span>
@@ -1073,6 +1045,25 @@
         <p class="muted">This workflow returned no value.</p>
       {/if}
     </div>
+    <!-- WHAT THE RUN FOUND, AT THE END OF WHAT IT DID (ADR 0055).
+         AT THE BOTTOM AND NOT IN THE HEADER, which is where this first went. The header is the run
+         page's own: `‹ Runs` is how you leave, and a second control beside it competed with that for
+         the one position an operator's eye already has a job for. Down here it is the natural next
+         step after reading the record — you have just finished the input, the output and the phases,
+         and the report is what the run SAID about all of it.
+         IT LEAVES THIS SURFACE. The report is its own surface (`/reports/<runId>`), so this page
+         renders nothing of it and owns none of its address space.
+         AN ANCHOR, NOT A BUTTON. The report is an address somebody pastes to a colleague, so
+         middle-click, copy-link and open-in-new-tab all have to work; a button with an onclick
+         supports none of them. -->
+    <a
+      class="reportcta"
+      href={formatAddress({ view: 'reports', run: openRun })}
+      data-testid="run-to-report"
+    >
+      <span class="cta-main">Read the report ›</span>
+      <span class="cta-sub">what this run returned, rendered through its <code>report.md</code></span>
+    </a>
     <!-- THE TWO FEEDS, OUT OF THE FLOW. They are the only regions that grow while a run is going;
          in the column they pushed Input, Output and each other down for the whole run. Nothing
          here can move anything on the page behind it. -->
@@ -1350,21 +1341,46 @@
     padding: 0;
   }
 
-  .detailnav {
-    display: flex;
-    align-items: center;
-    gap: var(--s-3);
-  }
-
-  .toreport {
-    font-size: var(--t-small);
-    color: var(--accent);
+  .reportcta {
+    display: block;
+    /* The bottom margin is generous because the drawer is `position: fixed` over the bottom of the
+       page: the last thing in the flow needs room of its own or the drawer's edge sits on it. */
+    margin: var(--s-4) 0 var(--s-6);
+    padding: var(--s-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
     text-decoration: none;
   }
 
-  .toreport:hover {
-    text-decoration: underline;
+  .reportcta:hover {
+    border-color: var(--accent);
   }
+
+  .reportcta:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .cta-main {
+    display: block;
+    color: var(--accent);
+    font-size: var(--t-body);
+    font-weight: 600;
+  }
+
+  .cta-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--dim);
+    font-size: var(--t-small);
+  }
+
+  .cta-sub code {
+    font-family: var(--mono);
+    font-size: var(--t-micro);
+  }
+
   .head {
     display: flex;
     justify-content: space-between;

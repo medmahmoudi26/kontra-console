@@ -104,6 +104,11 @@ const DECLARED = [
     hint: 'every run this control plane has seen — each one as the input it was started with and the output it produced, replayable',
   },
   {
+    id: 'reports',
+    label: 'Reports',
+    hint: 'what every run FOUND, rendered through the report.md beside its workflow — versioned, redacted, with the thread people and agents left on it',
+  },
+  {
     id: 'actors',
     label: 'Actors',
     hint: 'what is deployed and registered, the Methods each Actor declares, and a form to call one',

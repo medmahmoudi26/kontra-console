@@ -154,6 +154,24 @@ async function stub(page: import('@playwright/test').Page, s: Stubs = {}): Promi
     }
 
     // Everything the run surface asks for on its way to mounting.
+    if (path === '/api/reports') {
+      if (s.report === 'absent') return json({ reports: [] });
+      return json({
+        reports: [
+          {
+            runId: RUN,
+            version: 2,
+            status: s.report === 'error' ? 'error' : 'ok',
+            templateHash: 'sha256:aaa',
+            renderedAt: Date.now() - 60_000,
+            renderedBy: 'sweep',
+            versions: 2,
+            workflow: 'enrich',
+            workspace: 'demo',
+          },
+        ],
+      });
+    }
     if (path === '/api/runs') return json([]);
     return json({});
   });
@@ -163,7 +181,7 @@ async function stub(page: import('@playwright/test').Page, s: Stubs = {}): Promi
 test.describe('a run report', () => {
   test('renders the snapshot the orchestrator stored', async ({ page }) => {
     await stub(page);
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
 
     const body = page.getByTestId('report-body');
     await expect(body).toBeVisible();
@@ -179,7 +197,7 @@ test.describe('a run report', () => {
 
   test('shows the bytes a code block holds, with the markers that make them legible', async ({ page }) => {
     await stub(page);
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
 
     const block = page.getByTestId('report-block-b1');
     await expect(block).toBeVisible();
@@ -197,7 +215,7 @@ test.describe('a run report', () => {
 
   test('switches that block to a hex view computed in the browser', async ({ page }) => {
     await stub(page);
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await page.getByTestId('report-block-b1').getByRole('button', { name: 'hex' }).click();
     const hex = page.getByTestId('report-block-hex');
     await expect(hex).toBeVisible();
@@ -208,7 +226,7 @@ test.describe('a run report', () => {
 
   test('says a render FAILED without pretending the run did', async ({ page }) => {
     await stub(page, { report: 'error' });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await expect(page.getByTestId('report-status')).toHaveText('render failed');
     await expect(page.getByTestId('report-error')).toContainText('undefined variable: results');
     await expect(page.getByTestId('report-page')).toContainText('The run itself is unaffected');
@@ -216,7 +234,7 @@ test.describe('a run report', () => {
 
   test('explains an absent report rather than drawing an empty page', async ({ page }) => {
     await stub(page, { report: 'absent' });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await expect(page.getByTestId('report-page')).toContainText('No report yet');
     // And it does NOT claim a failed read, which is the distinction `load.ts` keeps.
     await expect(page.getByTestId('report-missing')).toHaveCount(0);
@@ -224,7 +242,7 @@ test.describe('a run report', () => {
 
   test('NAMES a failed read, so an empty page is never silent', async ({ page }) => {
     await stub(page, { report: 'broken' });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     const missing = page.getByTestId('report-missing');
     await expect(missing).toBeVisible();
     await expect(missing).toContainText('/api/runs');
@@ -233,18 +251,18 @@ test.describe('a run report', () => {
 
   test('offers a version selector only when there is more than one version', async ({ page }) => {
     await stub(page, { versions: 1 });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await expect(page.getByTestId('report-version')).toHaveCount(0);
 
     await stub(page, { versions: 3 });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await expect(page.getByTestId('report-version')).toBeVisible();
     await expect(page.getByTestId('report-version').locator('option')).toHaveCount(3);
   });
 
   test('links to both exports and keeps the version on them', async ({ page }) => {
     await stub(page, { versions: 2 });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     const md = page.getByTestId('report-export-md');
     await expect(md).toHaveAttribute('href', /format=md&version=2/);
   });
@@ -258,7 +276,7 @@ test.describe('the feedback thread', () => {
         { id: 'n2', runId: RUN, workflow: 'enrich', author: 'service-token', authorKind: 'token', body: 'proposed: per-feed timeout', createdAt: Date.now() - 30_000 },
       ],
     });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     const notes = page.getByTestId('report-note');
     await expect(notes).toHaveCount(2);
     await expect(notes.first()).toContainText('mohamed');
@@ -269,7 +287,7 @@ test.describe('the feedback thread', () => {
 
   test('posts a note and shows it without a reload', async ({ page }) => {
     const posted = await stub(page, { notes: [] });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await page.getByTestId('report-note-input').fill('retry that feed with a longer timeout');
     await page.getByTestId('report-note-save').click();
     await expect(page.getByTestId('report-note')).toHaveCount(1);
@@ -281,7 +299,7 @@ test.describe('the feedback thread', () => {
 
   test('keeps what somebody typed when the save is refused, and says why', async ({ page }) => {
     await stub(page, { notes: [], post: { status: 400, body: { error: 'a note cannot be empty' } } });
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await page.getByTestId('report-note-input').fill('  ');
     // A blank draft disables the button, which is the first guard.
     await expect(page.getByTestId('report-note-save')).toBeDisabled();
@@ -293,22 +311,63 @@ test.describe('the feedback thread', () => {
   });
 });
 
+test.describe('the Reports surface', () => {
+  test('lists every run that has a report, and opens one', async ({ page }) => {
+    await stub(page);
+    await page.goto('/reports');
+    const list = page.getByTestId('reports-list');
+    await expect(list).toBeVisible();
+    const row = page.getByTestId(`report-row-${RUN}`);
+    await expect(row).toContainText(RUN);
+    await expect(row).toContainText('enrich');
+    await expect(row).toContainText('rendered');
+    // Two versions, so the row says which of how many.
+    await expect(row).toContainText('v2 of 2');
+    await row.click();
+    await expect(page.getByTestId('report-body')).toBeVisible();
+    // And back to the list, not to the run.
+    await page.getByTestId('report-back').click();
+    await expect(page.getByTestId('reports-list')).toBeVisible();
+  });
+
+  test('a row is a real link, so it can be pasted or opened in a new tab', async ({ page }) => {
+    await stub(page);
+    await page.goto('/reports');
+    await expect(page.getByTestId(`report-row-${RUN}`)).toHaveAttribute('href', `/reports/${RUN}`);
+  });
+
+  test('says nothing has been rendered rather than drawing an empty list', async ({ page }) => {
+    await stub(page, { report: 'absent' });
+    await page.goto('/reports');
+    await expect(page.getByTestId('reports-empty')).toContainText('No reports yet');
+    await expect(page.getByTestId('reports-missing')).toHaveCount(0);
+  });
+});
+
 test.describe('the address', () => {
-  test('is reachable from the run page and goes back to it', async ({ page }) => {
+  test('is reachable from the BOTTOM of the run page, and the run page keeps its own header', async ({ page }) => {
     await stub(page);
     await page.goto(`/runs/${RUN}`);
     const link = page.getByTestId('run-to-report');
     await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute('href', `/runs/${RUN}/report`);
+    // It points at the REPORTS surface, not at a tab under the run.
+    await expect(link).toHaveAttribute('href', `/reports/${RUN}`);
+    // The run page's header is its own: one control, `‹ Runs`.
+    await expect(page.getByTestId('run-detail').locator('.back')).toHaveText('‹ Runs');
     await link.click();
     await expect(page.getByTestId('report-page')).toBeVisible();
-    await page.getByTestId('report-back').click();
-    await expect(page.getByTestId('run-detail')).toBeVisible();
+  });
+
+  test('refuses the old tab address, so one thing has one URL', async ({ page }) => {
+    await stub(page);
+    await page.goto(`/runs/${RUN}/report`);
+    // `/runs/<id>/report` is not an address this app has any more; it must not render a report.
+    await expect(page.getByTestId('report-body')).toHaveCount(0);
   });
 
   test('survives a reload, which is what makes it pasteable', async ({ page }) => {
     await stub(page);
-    await page.goto(`/runs/${RUN}/report`);
+    await page.goto(`/reports/${RUN}`);
     await expect(page.getByTestId('report-body')).toBeVisible();
     await page.reload();
     await expect(page.getByTestId('report-body')).toBeVisible();

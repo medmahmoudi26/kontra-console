@@ -24,6 +24,8 @@ const EXPECTED: readonly string[] = [
   'catalog',
   'workflows',
   'runs',
+  // A **Report** sits beside the Run it is of, and after it: what a run DID, then what it FOUND.
+  'reports',
   'actors',
   'datasets',
   'logs',
@@ -110,6 +112,6 @@ describe('what the server has to serve', () => {
     // The number is here so adding a surface fails on BOTH sides of the boundary rather than
     // silently on neither.
     expect(SPA_SEGMENTS).toHaveLength(EXPECTED.length + 2);
-    expect(SPA_SEGMENTS).toHaveLength(10);
+    expect(SPA_SEGMENTS).toHaveLength(11);
   });
 });

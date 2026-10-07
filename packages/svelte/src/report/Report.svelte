@@ -27,7 +27,11 @@
   import Node from './Node.svelte';
   import { loadReport, type ReportPage } from './load';
 
-  const { runId }: { runId: string } = $props();
+  const {
+    runId,
+    backHref,
+    backLabel = 'runs',
+  }: { runId: string; backHref?: string; backLabel?: string } = $props();
 
   let page = $state<ReportPage | null>(null);
   let loading = $state(true);
@@ -49,7 +53,8 @@
 
   const report = $derived(page?.report ?? null);
   const snapshot = $derived(report?.snapshot ?? null);
-  const runHref = $derived(formatAddress({ view: 'runs', run: runId, tab: null }));
+  /** Where the breadcrumb goes back to. Defaults to the RUN, because that is where a report is of. */
+  const upHref = $derived(backHref ?? formatAddress({ view: 'runs', run: runId }));
   const exportBase = $derived(`/api/runs/${encodeURIComponent(runId)}/report/export`);
   const exportQuery = $derived(report ? `&version=${report.version}` : '');
 
@@ -65,7 +70,7 @@
 <section class="report" data-testid="report-page">
   <header>
     <nav class="crumbs">
-      <a href={runHref} data-testid="report-back">runs</a>
+      <a href={upHref} data-testid="report-back">{backLabel}</a>
       <span class="sep">/</span>
       <span class="mono rid">{runId}</span>
       <span class="sep">/</span>

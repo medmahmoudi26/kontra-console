@@ -60,7 +60,7 @@
        * half-mounted view under this one's state. A run is over in under a minute; the page has to
        * be there for the beginning of it, not after a click.
        */
-      location.assign(formatAddress({ view: 'runs', run: id, tab: null }));
+      location.assign(formatAddress({ view: 'runs', run: id }));
     }}
   />
 </section>

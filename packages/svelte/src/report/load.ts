@@ -16,6 +16,7 @@
 
 import type {
   FeedbackNote,
+  ReportListRow,
   ReportVersionRow,
   ReportVersionView,
 } from '@kontra/console-core/report/snapshot';
@@ -140,4 +141,31 @@ export function initialOf(note: Pick<FeedbackNote, 'author' | 'authorKind'>): st
   if (note.authorKind === 'token') return '·';
   const first = note.author.trim()[0];
   return first ? first.toUpperCase() : '?';
+}
+
+/** The Reports surface's listing: every Run that has one, newest first. */
+export interface ReportListing {
+  rows: ReportListRow[];
+  missing: Missing[];
+}
+
+/**
+ * Every report this control plane has rendered.
+ *
+ * ONE READ, and a failure is NAMED rather than drawn as an empty list — the distinction this module
+ * keeps everywhere: "nothing has been rendered yet" and "the listing could not be read" are different
+ * facts with different fixes, and a page that shows nothing for both teaches an operator to distrust
+ * every empty page.
+ */
+export async function loadReportList(fetchImpl: typeof fetch = fetch): Promise<ReportListing> {
+  const url = `${BASE}/reports`;
+  try {
+    const res = await fetchImpl(url, { credentials: 'same-origin' });
+    if (!res.ok) {
+      return { rows: [], missing: [{ url, status: res.status, why: `the listing answered ${res.status}` }] };
+    }
+    return { rows: ((await res.json()) as { reports?: ReportListRow[] }).reports ?? [], missing: [] };
+  } catch (err) {
+    return { rows: [], missing: [{ url, status: 0, why: why(err) }] };
+  }
 }

@@ -119,24 +119,21 @@ export type Address =
   // reached from, so the id is the whole address — `/runs` is the list, `/runs/<id>` is one run. It
   // gets its OWN store field (`runsRun`) rather than sharing the Workflows surface's `runId`, so
   // landing on `/runs/<id>` never silently reselects a run on the page the operator just left.
-  | {
-      view: 'runs';
-      run: string | null;
-      /**
-       * Which face of one run — its record, or its **Report** (ADR 0055).
-       *
-       * A SEGMENT AND NOT A QUERY, because it names a position in the path: `/runs/<id>/report` is the
-       * thing an operator pastes to say "read what this run found", and the run's record is what
-       * `/runs/<id>` already meant. `null` is the record, which keeps every existing address meaning
-       * exactly what it meant.
-       *
-       * ONE VALUE, not an open string. A tab this app does not have is not an address it could serve,
-       * and `parseAddress` returns `null` for anything else — the same refusal that `/runs/<id>/<x>`
-       * has always given, narrowed by exactly one word rather than opened up.
-       */
-      tab: 'report' | null;
-    }
+  | { view: 'runs'; run: string | null }
   | { view: 'actors' | 'catalog' | 'logs' | 'secrets' | 'settings' }
+  /**
+   * A **Report** — what a Run FOUND, which is a different question from what it did.
+   *
+   * ITS OWN SURFACE RATHER THAN A TAB UNDER `/runs/<id>`, and that is the second arrangement this
+   * went through. A tab put a second control in the run page's header competing with `‹ Runs` for the
+   * one position an operator's eye already has a job for, and it made `/runs/<id>/…` mean two things.
+   * A report outlives the Run's Parquet and is the thing somebody forwards, so it is addressed in its
+   * own right: `/reports` is every report this control plane has rendered, `/reports/<runId>` is one.
+   *
+   * KEYED BY THE RUN ID because that is what a report IS of. There is no report id: one Run has one
+   * report, with versions inside it.
+   */
+  | { view: 'reports'; run: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 
 /** Where an unknown or malformed address lands, and where a cold `/` lands. */
@@ -160,13 +157,12 @@ export interface AddressedState {
    *  run without touching which run the Workflows surface has selected. */
   runsRun: string | null;
   /**
-   * Which face of that run is open: its record, or its **Report** (ADR 0055).
+   * The **Report** the Reports surface has open — its OWN field, like `runsRun` and for the same
+   * reason: opening a report must not disturb which run the Runs surface has.
    *
-   * OPTIONAL, so every existing caller of `addressOf` keeps compiling and keeps meaning the record.
-   * A store that has never heard of a report reads as `null` here, which is what `/runs/<id>` already
-   * addressed.
+   * OPTIONAL, so every existing caller of `addressOf` keeps compiling.
    */
-  runsTab?: 'report' | null;
+  reportsRun?: string | null;
   datasetFocus: DatasetFocus | null;
 }
 
@@ -186,7 +182,9 @@ export function addressOf(s: AddressedState): Address {
     case 'datasets':
       return { view: 'datasets', dataset: s.datasetFocus };
     case 'runs':
-      return { view: 'runs', run: s.runsRun, tab: s.runsTab ?? null };
+      return { view: 'runs', run: s.runsRun };
+    case 'reports':
+      return { view: 'reports', run: s.reportsRun ?? null };
     default:
       return { view: s.view };
   }
@@ -213,7 +211,9 @@ export function stateFor(address: Address): Partial<AddressedState> {
     case 'datasets':
       return { view: 'datasets', datasetFocus: address.dataset };
     case 'runs':
-      return { view: 'runs', runsRun: address.run, runsTab: address.tab };
+      return { view: 'runs', runsRun: address.run };
+    case 'reports':
+      return { view: 'reports', reportsRun: address.run };
     default:
       return { view: address.view };
   }
@@ -260,22 +260,17 @@ export function formatAddress(address: Address): string {
       const search = query.toString();
       return `${PATHS.datasets}/${encodeURIComponent(address.dataset.name)}${search ? `?${search}` : ''}`;
     }
+    case 'reports':
+      // Same encoding rule as a run, and for the same reason: the id came from `--id`.
+      return address.run === null
+        ? PATHS.reports
+        : `${PATHS.reports}/${encodeURIComponent(address.run)}`;
     case 'runs': {
       // A run id is whatever `--id` was, so it is encoded rather than trusted — the server still
       // matches on the first segment (`runs`), which is why a dotted id like `sweep-v1.2` survives.
       if (address.run === null) return PATHS.runs;
       const base = `${PATHS.runs}/${encodeURIComponent(address.run)}`;
-      /* APPENDED ONLY WHEN THERE IS ONE, and the test is truthiness rather than `!== null` — which is
-         what the first version used, and it shipped `/runs/<id>/undefined` to two callers.
-
-         `tab` is REQUIRED by the type and `tsc` does enforce it, but MEASURED: `svelte-check` does not
-         report the same error inside a `.svelte` script block, so `Workflows.svelte` and `Runs.svelte`
-         both called this with the field absent and nothing objected until a browser did. The type is
-         the contract; this line is what makes a caller the type did not reach harmless.
-
-         The tab is a LITERAL and is not encoded: it is one of a closed set this module owns, not a
-         name that came from anywhere else. */
-      return address.tab ? `${base}/${address.tab}` : base;
+      return base;
     }
     default:
       return PATHS[address.view];
@@ -362,13 +357,13 @@ export function parseAddress(url: string): Address | null {
       return { view, workflow: first, run: second };
     }
     case 'runs':
-      /* ONE ID, AND ONE WORD UNDER IT. `/runs` is the list, `/runs/<id>` is the run's record, and
-         `/runs/<id>/report` is what it found (ADR 0055). Every other second segment is still `null`,
-         which is what this case has always answered — the refusal is narrowed by one word rather
-         than replaced by a wildcard, so a typo'd tab is a 404 in the app rather than a blank page. */
-      if (first === null) return second === null ? { view, run: null, tab: null } : null;
-      if (second === null) return { view, run: first, tab: null };
-      return second === 'report' ? { view, run: first, tab: 'report' } : null;
+      // One id, nothing under it: a run is addressed by its id and a second segment is no URL this
+      // app could mean. `/runs` is the list; `/runs/<id>` is one run's record. What a run FOUND is a
+      // different surface — see the `reports` arm.
+      return second === null ? { view, run: first } : null;
+    case 'reports':
+      // The same shape, for the same reason: `/reports` is every report, `/reports/<runId>` is one.
+      return second === null ? { view, run: first } : null;
     case 'datasets': {
       if (second !== null) return null;
       if (first === null) return { view, dataset: null };

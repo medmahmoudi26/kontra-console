@@ -47,6 +47,7 @@ export const ROUTES = {
   getProbesByRunId: { method: 'GET', path: '/api/probes/{runId}', open: false },
   getPulse: { method: 'GET', path: '/api/pulse', open: true },
   getQueuesByQueuePollers: { method: 'GET', path: '/api/queues/{queue}/pollers', open: true },
+  getReports: { method: 'GET', path: '/api/reports', open: false },
   getRuns: { method: 'GET', path: '/api/runs', open: false },
   getRunsByRunId: { method: 'GET', path: '/api/runs/{runId}', open: false },
   getRunsByRunIdAsks: { method: 'GET', path: '/api/runs/{runId}/asks', open: false },
