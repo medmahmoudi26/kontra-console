@@ -85,6 +85,28 @@ export interface CatalogActor {
    * "compatible" badge, because the check cannot support one.
    */
   incompatibilities?: Incompatibility[];
+  /**
+   * What the image was BUILT on: the Runtime by name and major, pinned to the digest the build
+   * resolved it to.
+   *
+   * ABSENT is not "no runtime" — it is an actor built before this field existed, or one whose worker
+   * was started without the environment that carries it. Nothing inside a container can see the run
+   * image it was layered onto, so this is recorded by the deploying CLI and echoed by the worker.
+   *
+   * `major` and `digest` both, because a reader needs both to answer "is this still current": the
+   * major is what the author asked for, and a digest that differs from the major tag's current one is
+   * the whole of rebase detection.
+   */
+  runtime?: ActorRuntime;
+  /** The CNB builder's digest. Absent when unknown, for the same reason as `runtime`. */
+  builderDigest?: string;
+}
+
+/** The Runtime an Actor image was layered onto. Mirrors the orchestrator's `ActorRuntimeRecord`. */
+export interface ActorRuntime {
+  name: string;
+  major: number;
+  digest: string;
 }
 
 /** Data carried on a canvas node — one actor invocation being authored. */
