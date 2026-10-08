@@ -85,6 +85,19 @@ jobs:
         working-directory: kontra-console
         run: pnpm run typecheck:e2e
 
+      # A BROWSER IS A DEPENDENCY OF `pnpm test`, NOT ONLY OF THE E2E SUITE. `pnpm test` ends with
+      # `@kontra/console-svelte run guard`, and the last of its four guards — `scripts/overflow.mjs`
+      # — launches chromium and MEASURES layout. It has to: jsdom has no layout engine, so every
+      # `clientHeight` in it is 0 and no overflow is visible to it (CLAUDE.md says this in as many
+      # words). Without the browser the guard dies with Playwright's "Executable doesn't exist",
+      # which names an install command and not the reason one is needed.
+      #
+      # `--with-deps` because the guard needs the shared libraries headless chromium links against,
+      # and chromium alone because that is the only browser any guard or spec here asks for.
+      - name: playwright's chromium, for the layout guard
+        working-directory: kontra-console
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: vitest
         working-directory: kontra-console
         run: pnpm test
