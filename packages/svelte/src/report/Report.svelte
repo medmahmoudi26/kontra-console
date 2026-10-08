@@ -23,6 +23,12 @@
   import { formatAddress } from '@kontra/console-core/state/address';
   import type { FeedbackNote } from '@kontra/console-core/report/snapshot';
 
+  import {
+    applyPatch,
+    openLiveReport,
+    type LivePhase,
+  } from '@kontra/console-core/report/live';
+
   import Feedback from './Feedback.svelte';
   import Node from './Node.svelte';
   import { loadReport, type ReportPage } from './load';
@@ -51,8 +57,43 @@
     void read(chosen);
   });
 
+  // LIVE MODE (ADR 0062). `liveBlocks` is non-null only while a stream is attached; when it is, the
+  // page renders it instead of the stored tree. The stream refuses with 409 for a finished run, so a
+  // report that is already frozen never enters this path.
+  let liveBlocks = $state<unknown[] | null>(null);
+  let livePhase = $state<LivePhase | null>(null);
+  let liveDegraded = $state<string | undefined>(undefined);
+  let liveStatus = $state<string | undefined>(undefined);
+
+  $effect(() => {
+    void runId;
+    // Only an unchosen version watches: picking an older version is asking for a stored document.
+    if (chosen !== undefined) return undefined;
+    const stop = openLiveReport(runId, {
+      onSnapshot: (blocks, extra) => {
+        liveBlocks = blocks.map((b) => b.node);
+        liveDegraded = extra.degraded;
+      },
+      onPatch: (blocks) => {
+        if (liveBlocks) liveBlocks = applyPatch(liveBlocks, blocks);
+      },
+      onStatus: (status) => (liveStatus = status),
+      // THE FREEZE IS A RE-READ, not the last live frame. The stored version is rendered from the
+      // final context, so `result` is populated and the `{% if result %}` branch has flipped.
+      onFinal: () => {
+        liveBlocks = null;
+        void read(undefined);
+      },
+      onPhase: (phase) => (livePhase = phase),
+      // 409 is the ordinary case: the run was already finished when the page opened.
+      onRefused: () => (liveBlocks = null),
+    });
+    return stop;
+  });
+
   const report = $derived(page?.report ?? null);
   const snapshot = $derived(report?.snapshot ?? null);
+  const isLive = $derived(liveBlocks !== null && livePhase === 'live');
   /** Where the breadcrumb goes back to. Defaults to the RUN, because that is where a report is of. */
   const upHref = $derived(backHref ?? formatAddress({ view: 'runs', run: runId }));
   const exportBase = $derived(`/api/runs/${encodeURIComponent(runId)}/report/export`);
@@ -137,6 +178,21 @@
         </p>
         <pre class="err-text" data-testid="report-error">{report.error}</pre>
         <p class="muted small">template {report.templateHash}</p>
+      </div>
+    {:else if isLive && liveBlocks}
+      <!-- LIVE: the blocks the stream has sent, patched in place by index. No reveal/raw here —
+           those routes default to the latest STORED version, so a reveal against a live block of the
+           same ordinal would serve a different block's bytes. -->
+      <div class="card" data-testid="report-live">
+        <p class="provenance">
+          live · re-rendering as the run progresses{liveStatus ? ` · ${liveStatus}` : ''}
+        </p>
+        {#if liveDegraded}
+          <p class="warning" data-testid="report-degraded">{liveDegraded}</p>
+        {/if}
+        {#each liveBlocks as node, i (i)}
+          <Node node={node as never} blocks={{}} {runId} version={0} />
+        {/each}
       </div>
     {:else if snapshot}
       <div class="card" data-testid="report-body">
