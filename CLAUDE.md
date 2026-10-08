@@ -7,16 +7,18 @@
 `dev` is the default branch and the base for every pull request. `main` is what has been released —
 it moves only by merging `dev`, and only deliberately.
 
-Branch protection is not available on this repository (it needs GitHub Pro for a private repo), so
-**nothing mechanically stops a push to `main`.** This paragraph is the enforcement. If you find
-yourself on `main`, switch before you commit:
+**This repository is PUBLIC**, as are `kontra` and `kontra-runtimes`; the other three are private.
+Verified 2026-10-07 by an unauthenticated `git ls-remote`. So branch protection IS available —
+rulesets are free on a public repo, and the sentence that used to stand here (that protection needs
+GitHub Pro for a private repo) was wrong about this one. Until a ruleset is configured, this
+paragraph is still the only enforcement. If you find yourself on `main`, switch before you commit:
 
 ```sh
 git switch dev        # or: git switch -c <topic> dev
 ```
 
-Same two branches, same rule, in all five repositories: `kontra`, `kontra-actors`,
-`kontra-workflows`, `kontra-console`, `kontra-cloud`.
+Same two branches, same rule, in all six repositories: `kontra`, `kontra-actors`,
+`kontra-workflows`, `kontra-console`, `kontra-cloud`, `kontra-runtimes`.
 
 ## What lives here
 

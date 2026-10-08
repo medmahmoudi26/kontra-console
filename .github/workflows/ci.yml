@@ -33,32 +33,22 @@ jobs:
       # `@kontra/core` goes to npm, this checkout and the build step below both go away and the
       # dependency becomes an ordinary version range.
       #
-      # `KONTRA_CORE_TOKEN` is a token with read access to kontra while it is private. A missing
-      # secret fails with a 404 on a repository that exists, which reads like a typo and is not.
-      # THE SECRET IS CHECKED BEFORE IT IS USED, because the failure without it is unreadable.
+      # NO TOKEN, BECAUSE `kontra` IS PUBLIC. It was private, and a private cross-repo checkout needs
+      # a PAT: `actions/checkout` without one fails in two seconds with `Input required and not
+      # supplied: token`, naming neither the secret nor the repository nor the reason. A guard step
+      # stood here to turn that into a readable sentence, and it required `KONTRA_CORE_TOKEN` to be
+      # set. The secret was never set, so from the day it was added this job failed before checking
+      # out the console at all — every step below it skipped, and a run that reported "console"
+      # failing had not looked at the console.
       #
-      # MEASURED on this repository's own CI: with `KONTRA_CORE_TOKEN` unset, `actions/checkout`
-      # fails in two seconds with `Input required and not supplied: token` — a message that names
-      # neither the secret, nor the repository it was for, nor the fact that a private cross-repo
-      # checkout is what needed it. Every step after it is skipped, so the run looks like the
-      # console is broken when nothing about the console has been checked at all.
-      #
-      # This turns that into one sentence with the fix in it. It cannot MAKE the job pass — the
-      # console genuinely cannot typecheck or test without `@kontra/core` built, because
-      # `package.json` names it `link:../kontra/shared/core` — and pretending otherwise by skipping
-      # the steps would be a green tick over a build nobody ran.
-      - name: the cross-repo checkout needs a token while kontra is private
-        run: |
-          if [ -z "${{ secrets.KONTRA_CORE_TOKEN }}" ]; then
-            echo "::error title=KONTRA_CORE_TOKEN is not set::This job checks out medmahmoudi26/kontra to build @kontra/core, which package.json resolves as link:../kontra/shared/core. That repository is private, so the checkout needs a PAT with read access to it. Add it at Settings -> Secrets and variables -> Actions -> New repository secret, named KONTRA_CORE_TOKEN. When @kontra/core is published to npm this step and the checkout below both go away (ADR 0041)."
-            exit 1
-          fi
-
+      # `kontra` is public now, so the workflow's own `GITHUB_TOKEN` reads it and the guard was
+      # refusing on a condition that no longer exists. When `@kontra/core` is published to npm this
+      # checkout and the build step below both go away and the dependency becomes an ordinary
+      # version range (ADR 0041).
       - uses: actions/checkout@v4
         with:
           repository: medmahmoudi26/kontra
           path: kontra
-          token: ${{ secrets.KONTRA_CORE_TOKEN }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -94,6 +84,19 @@ jobs:
       - name: typecheck the e2e harness (needs the kontra checkout)
         working-directory: kontra-console
         run: pnpm run typecheck:e2e
+
+      # A BROWSER IS A DEPENDENCY OF `pnpm test`, NOT ONLY OF THE E2E SUITE. `pnpm test` ends with
+      # `@kontra/console-svelte run guard`, and the last of its four guards — `scripts/overflow.mjs`
+      # — launches chromium and MEASURES layout. It has to: jsdom has no layout engine, so every
+      # `clientHeight` in it is 0 and no overflow is visible to it (CLAUDE.md says this in as many
+      # words). Without the browser the guard dies with Playwright's "Executable doesn't exist",
+      # which names an install command and not the reason one is needed.
+      #
+      # `--with-deps` because the guard needs the shared libraries headless chromium links against,
+      # and chromium alone because that is the only browser any guard or spec here asks for.
+      - name: playwright's chromium, for the layout guard
+        working-directory: kontra-console
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: vitest
         working-directory: kontra-console

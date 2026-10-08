@@ -39,7 +39,7 @@
     type RunIO,
   } from '@kontra/console-core/run/record';
   import { executionOf, materializationOf } from '@kontra/console-core/run/runState';
-  import { type LogRecord } from '@kontra/console-core/run/logs';
+  import { newestFirst, type LogRecord } from '@kontra/console-core/run/logs';
   import { LogStream } from '../logs/stream.svelte';
   import { followRows } from '../datasets/liveRows';
   import {
@@ -99,7 +99,21 @@
    * server-sent stream per open run, which is what ADR 0048 §3 asks for in place of an interval.
    */
   const logStream = new LogStream();
-  const logs = $derived(logStream.lines as LogRecord[]);
+  /**
+   * NEWEST FIRST, AND THAT REVERSAL IS NOT COSMETIC.
+   *
+   * `LogStream` is shared with the Logs page, which is a TERMINAL: it reads downward, so `backfill`
+   * sorts ascending and says so. `LogsRail` is not a terminal — it answers "why did this run do
+   * that", and the line that answers it is the last one written. Its own documentation calls it
+   * newest-first, and the rail renders `records` in the order it is handed them.
+   *
+   * The order flipped when this surface moved from `fetchLogs(id)` (which applied `newestFirst`) to
+   * `LogStream` for the reason written above — the rail had been slaved to the run's payload clock
+   * and sat on `Logs 0` for 62 of a 110-second run. That change was right and the ordering came
+   * along by accident, which is why the reversal belongs HERE rather than in either shared piece:
+   * the stream stays ascending for the terminal, and the rail gets what the rail is for.
+   */
+  const logs = $derived(newestFirst(logStream.lines as LogRecord[]));
   /**
    * Loading is "the tail has not connected AND the backfill has not answered". Either one landing
    * means the rail can say something true, and `reachable` is what distinguishes a quiet fleet
