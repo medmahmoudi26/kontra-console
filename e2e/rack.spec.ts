@@ -169,9 +169,18 @@ const PLACING: Stage = {
   },
 };
 
-/** A mutable pointer the stub reads on every request, so a test can advance the converge. */
-function stubApi(page: Page, opts: { stage: () => Stage | null; history?: unknown[] }): Promise<void> {
-  return page.route('**/api/**', async (route) => {
+/**
+ * A mutable pointer the stub reads on every request, so a test can advance the converge.
+ *
+ * AWAITED RATHER THAN RETURNED, because `page.route` now resolves to a `Disposable` — a handle for
+ * `using`-scoped unrouting — and returning it made the declared `Promise<void>` a lie that only
+ * `typecheck:e2e` could see. Awaiting keeps the signature true whatever the handle becomes.
+ */
+async function stubApi(
+  page: Page,
+  opts: { stage: () => Stage | null; history?: unknown[] },
+): Promise<void> {
+  await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
