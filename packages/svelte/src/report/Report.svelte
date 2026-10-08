@@ -120,10 +120,23 @@
 
     <div class="spacer"></div>
 
+    <!-- THE CHROME MUST DESCRIBE WHAT IS ON SCREEN. While the body is live, the pill, the version and
+         the export links all name the STORED version, which is a different document — and the trap is
+         the asymmetry beside it: Print calls `window.print()` and prints the live DOM, while Export
+         links to `?version=N` and downloads the stored one. Two chips a pixel apart, one gesture, two
+         answers. Found in a browser; no unit test can see it, and it only appears when a stored
+         version already exists, which is why it is the re-run case that would have hit it.
+         LABELLED RATHER THAN HIDDEN: an operator mid-run still wants to know a previous version is
+         there, so the answer is to say which one each control means. -->
+    {#if isLive}
+      <span class="pill live" data-testid="report-status">live</span>
+    {/if}
     {#if report}
-      <span class="pill {report.status === 'ok' ? 'ok' : 'bad'}" data-testid="report-status">
-        {report.status === 'ok' ? 'rendered' : 'render failed'}
-      </span>
+      {#if !isLive}
+        <span class="pill {report.status === 'ok' ? 'ok' : 'bad'}" data-testid="report-status">
+          {report.status === 'ok' ? 'rendered' : 'render failed'}
+        </span>
+      {/if}
       {#if page && page.versions.length > 1}
         <label class="versions">
           <span class="sr">version</span>
@@ -133,14 +146,18 @@
             onchange={(e) => (chosen = Number((e.currentTarget as HTMLSelectElement).value))}
           >
             {#each page.versions as v (v.version)}
-              <option value={String(v.version)}>v{v.version} · {v.status} · {stamp(v.renderedAt)}</option>
+              <option value={String(v.version)}
+                >{isLive ? 'stored ' : ''}v{v.version} · {v.status} · {stamp(v.renderedAt)}</option
+              >
             {/each}
           </select>
         </label>
       {:else}
-        <span class="muted">v{report.version}</span>
+        <span class="muted">{isLive ? `stored v${report.version}` : `v${report.version}`}</span>
       {/if}
-      <a class="chip" href="{exportBase}?format=md{exportQuery}" data-testid="report-export-md">Export .md</a>
+      <a class="chip" href="{exportBase}?format=md{exportQuery}" data-testid="report-export-md"
+        >Export {isLive ? `stored v${report.version} ` : ''}.md</a
+      >
       <a class="chip" href="{exportBase}?format=html{exportQuery}">.html</a>
       <!-- PRINT IS THE PDF STORY. §7.3: a PDF is not a server feature, and the print CSS in these
            components is what makes the printed page readable. -->
@@ -275,6 +292,13 @@
   .pill.bad {
     color: var(--bad);
     border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  }
+
+  /* Deliberately NOT `ok` green. A live report is not a verdict — it is a document still being
+     written, and borrowing the rendered-successfully colour would say it had finished. */
+  .pill.live {
+    color: var(--accent, var(--fg));
+    border-color: color-mix(in srgb, var(--accent, var(--fg)) 40%, transparent);
   }
 
   .chip,
