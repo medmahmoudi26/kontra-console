@@ -158,7 +158,12 @@
       <a class="chip" href="{exportBase}?format=md{exportQuery}" data-testid="report-export-md"
         >Export {isLive ? `stored v${report.version} ` : ''}.md</a
       >
-      <a class="chip" href="{exportBase}?format=html{exportQuery}">.html</a>
+      <!-- Labelled for the same reason as its neighbour: one labelled control beside an unlabelled
+           one reads as though only the labelled one is qualified, which is the ambiguity this row
+           just removed. -->
+      <a class="chip" href="{exportBase}?format=html{exportQuery}"
+        >{isLive ? `stored v${report.version} ` : ''}.html</a
+      >
       <!-- PRINT IS THE PDF STORY. §7.3: a PDF is not a server feature, and the print CSS in these
            components is what makes the printed page readable. -->
       <button type="button" class="chip" onclick={() => window.print()} data-testid="report-print">Print</button>
