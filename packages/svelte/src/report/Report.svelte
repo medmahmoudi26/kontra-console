@@ -23,6 +23,12 @@
   import { formatAddress } from '@kontra/console-core/state/address';
   import type { FeedbackNote } from '@kontra/console-core/report/snapshot';
 
+  import {
+    applyPatch,
+    openLiveReport,
+    type LivePhase,
+  } from '@kontra/console-core/report/live';
+
   import Feedback from './Feedback.svelte';
   import Node from './Node.svelte';
   import { loadReport, type ReportPage } from './load';
@@ -51,8 +57,43 @@
     void read(chosen);
   });
 
+  // LIVE MODE (ADR 0062). `liveBlocks` is non-null only while a stream is attached; when it is, the
+  // page renders it instead of the stored tree. The stream refuses with 409 for a finished run, so a
+  // report that is already frozen never enters this path.
+  let liveBlocks = $state<unknown[] | null>(null);
+  let livePhase = $state<LivePhase | null>(null);
+  let liveDegraded = $state<string | undefined>(undefined);
+  let liveStatus = $state<string | undefined>(undefined);
+
+  $effect(() => {
+    void runId;
+    // Only an unchosen version watches: picking an older version is asking for a stored document.
+    if (chosen !== undefined) return undefined;
+    const stop = openLiveReport(runId, {
+      onSnapshot: (blocks, extra) => {
+        liveBlocks = blocks.map((b) => b.node);
+        liveDegraded = extra.degraded;
+      },
+      onPatch: (blocks) => {
+        if (liveBlocks) liveBlocks = applyPatch(liveBlocks, blocks);
+      },
+      onStatus: (status) => (liveStatus = status),
+      // THE FREEZE IS A RE-READ, not the last live frame. The stored version is rendered from the
+      // final context, so `result` is populated and the `{% if result %}` branch has flipped.
+      onFinal: () => {
+        liveBlocks = null;
+        void read(undefined);
+      },
+      onPhase: (phase) => (livePhase = phase),
+      // 409 is the ordinary case: the run was already finished when the page opened.
+      onRefused: () => (liveBlocks = null),
+    });
+    return stop;
+  });
+
   const report = $derived(page?.report ?? null);
   const snapshot = $derived(report?.snapshot ?? null);
+  const isLive = $derived(liveBlocks !== null && livePhase === 'live');
   /** Where the breadcrumb goes back to. Defaults to the RUN, because that is where a report is of. */
   const upHref = $derived(backHref ?? formatAddress({ view: 'runs', run: runId }));
   const exportBase = $derived(`/api/runs/${encodeURIComponent(runId)}/report/export`);
@@ -79,10 +120,23 @@
 
     <div class="spacer"></div>
 
+    <!-- THE CHROME MUST DESCRIBE WHAT IS ON SCREEN. While the body is live, the pill, the version and
+         the export links all name the STORED version, which is a different document — and the trap is
+         the asymmetry beside it: Print calls `window.print()` and prints the live DOM, while Export
+         links to `?version=N` and downloads the stored one. Two chips a pixel apart, one gesture, two
+         answers. Found in a browser; no unit test can see it, and it only appears when a stored
+         version already exists, which is why it is the re-run case that would have hit it.
+         LABELLED RATHER THAN HIDDEN: an operator mid-run still wants to know a previous version is
+         there, so the answer is to say which one each control means. -->
+    {#if isLive}
+      <span class="pill live" data-testid="report-status">live</span>
+    {/if}
     {#if report}
-      <span class="pill {report.status === 'ok' ? 'ok' : 'bad'}" data-testid="report-status">
-        {report.status === 'ok' ? 'rendered' : 'render failed'}
-      </span>
+      {#if !isLive}
+        <span class="pill {report.status === 'ok' ? 'ok' : 'bad'}" data-testid="report-status">
+          {report.status === 'ok' ? 'rendered' : 'render failed'}
+        </span>
+      {/if}
       {#if page && page.versions.length > 1}
         <label class="versions">
           <span class="sr">version</span>
@@ -92,15 +146,24 @@
             onchange={(e) => (chosen = Number((e.currentTarget as HTMLSelectElement).value))}
           >
             {#each page.versions as v (v.version)}
-              <option value={String(v.version)}>v{v.version} · {v.status} · {stamp(v.renderedAt)}</option>
+              <option value={String(v.version)}
+                >{isLive ? 'stored ' : ''}v{v.version} · {v.status} · {stamp(v.renderedAt)}</option
+              >
             {/each}
           </select>
         </label>
       {:else}
-        <span class="muted">v{report.version}</span>
+        <span class="muted">{isLive ? `stored v${report.version}` : `v${report.version}`}</span>
       {/if}
-      <a class="chip" href="{exportBase}?format=md{exportQuery}" data-testid="report-export-md">Export .md</a>
-      <a class="chip" href="{exportBase}?format=html{exportQuery}">.html</a>
+      <a class="chip" href="{exportBase}?format=md{exportQuery}" data-testid="report-export-md"
+        >Export {isLive ? `stored v${report.version} ` : ''}.md</a
+      >
+      <!-- Labelled for the same reason as its neighbour: one labelled control beside an unlabelled
+           one reads as though only the labelled one is qualified, which is the ambiguity this row
+           just removed. -->
+      <a class="chip" href="{exportBase}?format=html{exportQuery}"
+        >{isLive ? `stored v${report.version} ` : ''}.html</a
+      >
       <!-- PRINT IS THE PDF STORY. §7.3: a PDF is not a server feature, and the print CSS in these
            components is what makes the printed page readable. -->
       <button type="button" class="chip" onclick={() => window.print()} data-testid="report-print">Print</button>
@@ -137,6 +200,21 @@
         </p>
         <pre class="err-text" data-testid="report-error">{report.error}</pre>
         <p class="muted small">template {report.templateHash}</p>
+      </div>
+    {:else if isLive && liveBlocks}
+      <!-- LIVE: the blocks the stream has sent, patched in place by index. No reveal/raw here —
+           those routes default to the latest STORED version, so a reveal against a live block of the
+           same ordinal would serve a different block's bytes. -->
+      <div class="card" data-testid="report-live">
+        <p class="provenance">
+          live · re-rendering as the run progresses{liveStatus ? ` · ${liveStatus}` : ''}
+        </p>
+        {#if liveDegraded}
+          <p class="warning" data-testid="report-degraded">{liveDegraded}</p>
+        {/if}
+        {#each liveBlocks as node, i (i)}
+          <Node node={node as never} blocks={{}} {runId} version={0} />
+        {/each}
       </div>
     {:else if snapshot}
       <div class="card" data-testid="report-body">
@@ -219,6 +297,13 @@
   .pill.bad {
     color: var(--bad);
     border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  }
+
+  /* Deliberately NOT `ok` green. A live report is not a verdict — it is a document still being
+     written, and borrowing the rendered-successfully colour would say it had finished. */
+  .pill.live {
+    color: var(--accent, var(--fg));
+    border-color: color-mix(in srgb, var(--accent, var(--fg)) 40%, transparent);
   }
 
   .chip,
