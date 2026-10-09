@@ -94,6 +94,21 @@
   const report = $derived(page?.report ?? null);
   const snapshot = $derived(report?.snapshot ?? null);
   const isLive = $derived(liveBlocks !== null && livePhase === 'live');
+  /**
+   * ATTACHED, BUT THE FIRST FRAME HAS NOT LANDED — the gap that printed "No report yet" over a
+   * stream that was working.
+   *
+   * The server now flushes its headers before rendering, so `connecting` becomes `live` the moment
+   * the socket opens, while the snapshot still waits on a render. `isLive` requires BLOCKS, so that
+   * window fell past every branch to `page.absent`, whose card says a report may not exist. It said
+   * the opposite of the truth to anyone watching a run start — MEASURED at ~2s on the live install,
+   * and unbounded for a first render of a large document.
+   *
+   * `connecting`/`reconnecting` are deliberately NOT here: in those phases there is no stream yet,
+   * and the absent card (which now names "this orchestrator has no report system" first) is the
+   * honest thing to show.
+   */
+  const liveWaiting = $derived(liveBlocks === null && livePhase === 'live');
   /** Where the breadcrumb goes back to. Defaults to the RUN, because that is where a report is of. */
   const upHref = $derived(backHref ?? formatAddress({ view: 'runs', run: runId }));
   const exportBase = $derived(`/api/runs/${encodeURIComponent(runId)}/report/export`);
@@ -216,6 +231,19 @@
           <Node node={node as never} blocks={{}} {runId} version={0} />
         {/each}
       </div>
+    {:else if liveWaiting}
+      <!-- The stream is attached and the first render is in flight. NOT the absent card: a report
+           is coming, and saying otherwise is what made a working stream look broken. -->
+      <div class="card" data-testid="report-rendering">
+        <p class="provenance">live · rendering…{liveStatus ? ` · ${liveStatus}` : ''}</p>
+        {#if liveDegraded}
+          <p class="warning" data-testid="report-degraded">{liveDegraded}</p>
+        {/if}
+        <p class="muted">
+          Connected to this run. The first render appears as soon as it is built, and the page
+          re-renders from then on as the run commits.
+        </p>
+      </div>
     {:else if snapshot}
       <div class="card" data-testid="report-body">
         <p class="provenance">
@@ -226,13 +254,24 @@
       </div>
     {:else if page.absent}
       <div class="card">
+        <!-- THIS COPY WAS WRONG, AND IT WAS WRONG BECAUSE LIVE MODE ARRIVED UNDER IT.
+             It said a report is rendered "after a run reaches a terminal state" — true of Phase 7,
+             false since ADR 0062: a RUNNING run re-renders on every batch commit and streams the
+             changed blocks. Leaving that sentence here told an operator to wait minutes for
+             something that was already updating, and worse, told them nothing about the one case
+             that actually produces this empty card today — a console built with reports talking to
+             an orchestrator built without them, where no amount of waiting helps. State the
+             reachable causes, newest first, and say which one a reader can check. -->
         <h1>No report yet</h1>
         <p class="muted">
-          A report is rendered after a run reaches a terminal state, so a run that just finished may not
-          have one for a few minutes. A run that never had a <span class="mono">report.md</span> still
-          gets a default report built from what it returned — if this stays empty, the run may predate
-          reports, or the renderer may be switched off
-          (<span class="mono">KONTRA_REPORT_RENDER=off</span>).
+          A report renders <strong>while the run is in progress</strong> and freezes when it ends, so
+          a running run should fill in within seconds of its first committed batch. If this stays
+          empty, the likely causes are: this orchestrator has no report system (its OpenAPI lists no
+          <span class="mono">/report</span> paths — a console with reports can be served by a server
+          without them); the run predates reports; or the renderer is switched off
+          (<span class="mono">KONTRA_REPORT_RENDER=off</span>). A run that never had a
+          <span class="mono">report.md</span> still gets the default report built from its progress,
+          its datasets and whatever it has returned so far.
         </p>
       </div>
     {/if}
