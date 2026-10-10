@@ -108,6 +108,12 @@ jobs:
         working-directory: kontra-console
         run: pnpm run typecheck:e2e
 
+      # THE OVERFLOW GUARD DRIVES A REAL BROWSER (`scripts/overflow.mjs`), which `pnpm test` runs
+      # after the unit suites, and a runner has no Playwright browser until one is installed.
+      - name: a browser for the overflow guard
+        working-directory: kontra-console
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: vitest
         working-directory: kontra-console
         run: pnpm test
