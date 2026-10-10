@@ -9,17 +9,21 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [dev, main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   web:
     name: console
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: kontra-console
+          persist-credentials: false
 
       # THE SIBLING CHECKOUT, AND WHY IT IS STILL HERE.
       #
@@ -33,38 +37,47 @@ jobs:
       # `@kontra/core` goes to npm, this checkout and the build step below both go away and the
       # dependency becomes an ordinary version range.
       #
-      # `KONTRA_CORE_TOKEN` is a token with read access to kontra while it is private. A missing
-      # secret fails with a 404 on a repository that exists, which reads like a typo and is not.
-      # THE SECRET IS CHECKED BEFORE IT IS USED, because the failure without it is unreadable.
+      # NO TOKEN. kontra is public (verified 2026-10-07), and this job used to refuse to run without
+      # a `KONTRA_CORE_TOKEN` that was only ever needed while it was private — so every run failed
+      # in its first step and nothing about the console was checked.
       #
-      # MEASURED on this repository's own CI: with `KONTRA_CORE_TOKEN` unset, `actions/checkout`
-      # fails in two seconds with `Input required and not supplied: token` — a message that names
-      # neither the secret, nor the repository it was for, nor the fact that a private cross-repo
-      # checkout is what needed it. Every step after it is skipped, so the run looks like the
-      # console is broken when nothing about the console has been checked at all.
-      #
-      # This turns that into one sentence with the fix in it. It cannot MAKE the job pass — the
-      # console genuinely cannot typecheck or test without `@kontra/core` built, because
-      # `package.json` names it `link:../kontra/shared/core` — and pretending otherwise by skipping
-      # the steps would be a green tick over a build nobody ran.
-      - name: the cross-repo checkout needs a token while kontra is private
+      # WHICH KONTRA: the branch named like this change's head wins, then its base, then kontra's
+      # default — kontra's own CI picks the console the same way, so a change that needs both
+      # repositories is two branches with one name. Names travel through `env:`, never through
+      # `${{ }}` inside the script, because a branch name on a fork's pull request is
+      # attacker-chosen text.
+      - name: which kontra branch goes with this change
+        id: kontra
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          PUSH_REF: ${{ github.ref_name }}
         run: |
-          if [ -z "${{ secrets.KONTRA_CORE_TOKEN }}" ]; then
-            echo "::error title=KONTRA_CORE_TOKEN is not set::This job checks out medmahmoudi26/kontra to build @kontra/core, which package.json resolves as link:../kontra/shared/core. That repository is private, so the checkout needs a PAT with read access to it. Add it at Settings -> Secrets and variables -> Actions -> New repository secret, named KONTRA_CORE_TOKEN. When @kontra/core is published to npm this step and the checkout below both go away (ADR 0041)."
-            exit 1
-          fi
+          set -euo pipefail
+          url=https://github.com/medmahmoudi26/kontra
+          ref=""
+          for want in "$HEAD_REF" "$BASE_REF" "$PUSH_REF"; do
+            [ -n "$want" ] || continue
+            if git ls-remote --exit-code --heads "$url" "refs/heads/$want" >/dev/null 2>&1; then
+              ref="$want"
+              break
+            fi
+          done
+          echo "kontra at ${ref:-its default branch}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: medmahmoudi26/kontra
           path: kontra
-          token: ${{ secrets.KONTRA_CORE_TOKEN }}
+          ref: ${{ steps.kontra.outputs.ref }}
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: pnpm
