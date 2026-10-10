@@ -27,6 +27,8 @@
  * ADR 0048 §3. A poll would work and would reintroduce the thing being removed: a surface that is
  * stale for its interval and then jumps.
  */
+import { withWorkspace } from '@kontra/console-core/run/session';
+
 import { contractFor, type Contract } from './contract';
 
 export type Link = 'connecting' | 'live' | 'reconnecting' | 'unsupported';
@@ -93,7 +95,7 @@ export function watchContract(
       emit({ link: 'unsupported' });
       return;
     }
-    source = new ES(`/api/sources/actor/${encodeURIComponent(id)}/schema/stream`);
+    source = new ES(withWorkspace(`/api/sources/actor/${encodeURIComponent(id)}/schema/stream`));
     source.onopen = () => emit({ link: 'live' });
     source.onmessage = () => void reread();
     // NOT AN ERROR STATE. EventSource fires `onerror` on every reconnect attempt, including the

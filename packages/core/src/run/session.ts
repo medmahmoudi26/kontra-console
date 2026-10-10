@@ -161,7 +161,7 @@ export async function logout(): Promise<void> {
 }
 
 /** Same-origin `/api/…`? The only requests this credential belongs on. */
-function isOwnApi(input: RequestInfo | URL): boolean {
+export function isOwnApi(input: RequestInfo | URL): boolean {
   try {
     const url = new URL(
       typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
@@ -171,6 +171,48 @@ function isOwnApi(input: RequestInfo | URL): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * WHICH WORKSPACE THIS TAB IS LOOKING AT (kontra ADR 0070). Every same-origin `/api/…` request
+ * names it in `x-kontra-workspace`, so two tabs, or two people, can look at two workspaces of one
+ * install at once. Unset, the server answers with the install's `.current`, as it always did.
+ *
+ * `sessionStorage`, NOT `localStorage`: per tab is the point. A choice made in one tab must not
+ * move another tab's view underneath it.
+ */
+const WORKSPACE_KEY = 'kontra.workspace';
+export const WORKSPACE_HEADER = 'x-kontra-workspace';
+let workspaceMemory = '';
+
+export function selectedWorkspace(): string {
+  try {
+    return window.sessionStorage.getItem(WORKSPACE_KEY) ?? workspaceMemory;
+  } catch {
+    return workspaceMemory;
+  }
+}
+
+export function selectWorkspace(name: string): void {
+  workspaceMemory = name;
+  try {
+    if (name) window.sessionStorage.setItem(WORKSPACE_KEY, name);
+    else window.sessionStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    /* storage denied: the in-memory copy carries this page */
+  }
+}
+
+/**
+ * `url` with `?workspace=` for a client that cannot set a header: an `EventSource`. Same-origin
+ * `/api/…` only, like the header.
+ */
+export function withWorkspace(url: string): string {
+  const name = selectedWorkspace();
+  if (!name || typeof window === 'undefined' || !isOwnApi(url)) return url;
+  const u = new URL(url, window.location.href);
+  if (!u.searchParams.has('workspace')) u.searchParams.set('workspace', name);
+  return /^[a-z]+:/i.test(url) ? u.href : `${u.pathname}${u.search}${u.hash}`;
 }
 
 let installed = false;
@@ -187,10 +229,12 @@ export function install(): void {
   const original = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const token = sessionToken();
-    if (!token || !isOwnApi(input)) return original(input, init);
+    const workspace = selectedWorkspace();
+    if ((!token && !workspace) || !isOwnApi(input)) return original(input, init);
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     // A caller that set its own Authorization knows something this does not.
-    if (!headers.has('authorization')) headers.set('authorization', `Bearer ${token}`);
+    if (token && !headers.has('authorization')) headers.set('authorization', `Bearer ${token}`);
+    if (workspace && !headers.has(WORKSPACE_HEADER)) headers.set(WORKSPACE_HEADER, workspace);
     const res = await original(input, { ...init, headers });
     // A SESSION THAT STOPPED WORKING SIGNS YOU OUT, rather than leaving every panel to render its
     // own 401. The orchestrator restarting drops every session by design, and the honest response
