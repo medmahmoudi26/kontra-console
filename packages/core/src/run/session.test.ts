@@ -8,10 +8,10 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { install, isSignedIn, logout, onSessionChange, sessionToken } from './session';
+import { install, isSignedIn, logout, onSessionChange, selectWorkspace, sessionToken, withWorkspace } from './session';
 
 const KEY = 'kontra.session';
-let calls: Array<{ url: string; auth: string | null }> = [];
+let calls: Array<{ url: string; auth: string | null; workspace: string | null }> = [];
 let status = 200;
 
 /**
@@ -27,7 +27,8 @@ let status = 200;
  */
 let underlying: typeof fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  calls.push({ url, auth: new Headers(init?.headers ?? {}).get('authorization') });
+  const h = new Headers(init?.headers ?? {});
+  calls.push({ url, auth: h.get('authorization'), workspace: h.get('x-kontra-workspace') });
   return new Response('{}', { status, headers: { 'content-type': 'application/json' } });
 };
 
@@ -43,6 +44,7 @@ beforeEach(() => {
 
 afterEach(() => {
   window.localStorage.removeItem(KEY);
+  selectWorkspace('');
 });
 
 /** NON-VACUOUS GUARD. Without this every "no header" assertion below is trivially true. */
@@ -104,5 +106,41 @@ describe('a session that stopped working', () => {
     off();
     expect(isSignedIn(), 'a 401 must clear the session').toBe(false);
     expect(seen, 'and it must notify, or the gate never re-renders').toContain('');
+  });
+});
+
+describe('the workspace this tab is looking at (kontra ADR 0070)', () => {
+  it('names it on every same-origin /api call, signed in or not', async () => {
+    assertWrapped();
+    selectWorkspace('bugbounty');
+    await fetch('/api/runs');
+    expect(calls.at(-1)?.workspace).toBe('bugbounty');
+    window.localStorage.removeItem(KEY);
+    await fetch('/api/runs');
+    expect(calls.at(-1)).toMatchObject({ workspace: 'bugbounty', auth: null });
+  });
+
+  it('names none when none is picked, and never leaves the origin', async () => {
+    assertWrapped();
+    await fetch('/api/runs');
+    expect(calls.at(-1)?.workspace).toBeNull();
+    selectWorkspace('bugbounty');
+    await fetch('http://elsewhere.example:8090/api/panels/terminals');
+    expect(calls.at(-1)?.workspace).toBeNull();
+  });
+
+  it('keeps a header the caller set', async () => {
+    assertWrapped();
+    selectWorkspace('bugbounty');
+    await fetch('/api/runs', { headers: { 'x-kontra-workspace': 'scraping' } });
+    expect(calls.at(-1)?.workspace).toBe('scraping');
+  });
+
+  it('puts it in the query string for an EventSource, which cannot send a header', () => {
+    expect(withWorkspace('/api/runs/r1/stream')).toBe('/api/runs/r1/stream');
+    selectWorkspace('bugbounty');
+    expect(withWorkspace('/api/runs/r1/stream')).toBe('/api/runs/r1/stream?workspace=bugbounty');
+    expect(withWorkspace('/api/x?a=1')).toBe('/api/x?a=1&workspace=bugbounty');
+    expect(withWorkspace('http://elsewhere.example/api/x')).toBe('http://elsewhere.example/api/x');
   });
 });

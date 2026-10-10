@@ -8,12 +8,16 @@
    * serves — there is no registration beside it. So "which workspace" is the single most
    * consequential piece of context on screen: it decides what every surface below lists.
    *
-   * ── SWITCHING IS A SERVER FACT, NOT A CLIENT ONE ────────────────────────────────────────────────
+   * ── THE CHOICE IS THIS TAB'S, AND THE SERVER CHECKS IT ─────────────────────────────────────────
    *
-   * `.current` in the workspace parent is what discovery reads, so switching writes that file
-   * (`PUT /api/workspaces/current`) and everything re-reads. It is deliberately not a client-side
-   * filter: a worker serving code from the old workspace is still serving it, and a console that
-   * pretended otherwise would show an inventory nothing agrees with.
+   * Every API request names the picked workspace (`x-kontra-workspace`, kontra ADR 0070), and the
+   * server answers from that workspace's own namespace and stores, after checking this session is a
+   * member of it. So two tabs can look at two workspaces. It is not a client-side filter: the
+   * server never returns another workspace's rows to filter.
+   *
+   * A member of every workspace also moves the install's default (`PUT /api/workspaces/current`),
+   * which is what the CLI and code discovery read. A session scoped to some workspaces is refused
+   * that (403), and its choice stays this tab's.
    *
    * ── IT SAYS THE PATH ────────────────────────────────────────────────────────────────────────────
    *
@@ -21,6 +25,8 @@
    * about it is "where is it". The title carries the answer rather than making them go and look.
    */
   import { onMount } from 'svelte';
+
+  import { selectWorkspace, selectedWorkspace } from '@kontra/console-core/run/session';
 
   import { readWorkspaces, type Workspaces } from './workspaces';
 
@@ -32,6 +38,13 @@
     try {
       const res = await fetch('/api/workspaces', { credentials: 'same-origin' });
       ws = res.ok ? readWorkspaces(await res.json()) : undefined;
+      if (ws) {
+        // THIS TAB'S CHOICE WINS while it is still a workspace this session may see; otherwise the
+        // server's answer, which is the install default or the session's first workspace.
+        const mine = selectedWorkspace();
+        if (mine && ws.names.includes(mine)) ws = { ...ws, current: mine };
+        else selectWorkspace(ws.current);
+      }
     } catch {
       ws = undefined;
     }
@@ -50,11 +63,13 @@
         credentials: 'same-origin',
         body: JSON.stringify({ name }),
       });
-      if (!res.ok) {
+      // 403 IS A SCOPED SESSION, which may look at the workspace but not move the install's
+      // default. Anything else that failed is a real error and the choice is not kept.
+      if (!res.ok && res.status !== 403) {
         error = ((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`;
         return;
       }
-      ws = readWorkspaces(await res.json());
+      selectWorkspace(name);
       /**
        * A FULL RELOAD, ON PURPOSE. Every surface derives from the workspace — the actor list, the
        * workflow folders, the forms built from their contracts — and re-fetching them piecemeal

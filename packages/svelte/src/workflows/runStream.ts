@@ -17,6 +17,9 @@
  * server closed on purpose would be reopened forever against a finished run — a poll, reinvented,
  * against the one run guaranteed never to change again. So `end` closes the source explicitly.
  */
+
+import { withWorkspace } from '@kontra/console-core/run/session';
+
 export type Follow<T> =
   | { state: 'connecting' }
   | { state: 'live'; run: T }
@@ -42,7 +45,7 @@ export function followRun<T>(
 
   let last: T | undefined;
   let closed = false;
-  const source = new ES(`/api/runs/${encodeURIComponent(runId)}/stream`);
+  const source = new ES(withWorkspace(`/api/runs/${encodeURIComponent(runId)}/stream`));
 
   source.addEventListener('state', (e) => {
     try {
