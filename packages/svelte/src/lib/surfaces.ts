@@ -25,6 +25,7 @@ export const SURFACES: readonly Surface[] = [
   { id: 'catalog', label: 'Catalog' },
   { id: 'workflows', label: 'Workflows' },
   { id: 'runs', label: 'Runs' },
+  { id: 'reports', label: 'Reports' },
   { id: 'actors', label: 'Actors' },
   { id: 'datasets', label: 'Datasets' },
   { id: 'logs', label: 'Logs' },

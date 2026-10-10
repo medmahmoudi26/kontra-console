@@ -54,6 +54,7 @@ describe('the address of a surface', () => {
       'catalog',
       'workflows',
       'runs',
+      'reports',
       'actors',
       'datasets',
       'logs',
@@ -215,8 +216,44 @@ describe('the runs surface', () => {
     expect(formatAddress({ view: 'runs', run: 'sweep-v1.2' })).toBe('/runs/sweep-v1.2');
   });
 
-  it('refuses a second segment under a run', () => {
+  // THE REPORT IS THE ONE WORD THAT MAY SIT UNDER A RUN (ADR 0055). A run's record is what
+  // `/runs/<id>` has always meant and still means; what the run FOUND is a different page and a
+  // different thing to paste, so it gets a segment rather than a query.
+  it('refuses a second segment under a run, which it always did', () => {
+    // A report is NOT addressed here any more. `/runs/<id>/report` was the first arrangement; it put a
+    // second meaning on this surface's path and a second control in its header. Reports have their
+    // own surface now, so this refusal is back to exactly what it was.
     expect(parseAddress('/runs/a/b')).toBeNull();
+    expect(parseAddress('/runs/a/report')).toBeNull();
+  });
+});
+
+describe('the reports surface', () => {
+  it('round-trips the list', () => {
+    expect(parseAddress('/reports')).toEqual({ view: 'reports', run: null });
+    expect(formatAddress({ view: 'reports', run: null })).toBe('/reports');
+  });
+
+  it('round-trips one report, addressed by the RUN it is of', () => {
+    // There is no report id: one Run has one report, with versions inside it.
+    expect(parseAddress('/reports/nscheck-123')).toEqual({ view: 'reports', run: 'nscheck-123' });
+    expect(formatAddress({ view: 'reports', run: 'nscheck-123' })).toBe('/reports/nscheck-123');
+  });
+
+  it('keeps a dotted run id, the shape that bit this app before', () => {
+    expect(parseAddress('/reports/sweep-v1.2')).toEqual({ view: 'reports', run: 'sweep-v1.2' });
+  });
+
+  it('refuses a second segment', () => {
+    expect(parseAddress('/reports/a/b')).toBeNull();
+  });
+
+  it('does not disturb the Runs surface: the two carry separate store fields', () => {
+    // Opening a report must not silently reselect a run on the page somebody just left — the same
+    // rule `runsRun` exists for.
+    const state = { ...RESTING, runsRun: 'r1', reportsRun: 'r2' };
+    expect(formatAddress(addressOf({ ...state, view: 'runs' }))).toBe('/runs/r1');
+    expect(formatAddress(addressOf({ ...state, view: 'reports' }))).toBe('/reports/r2');
   });
 });
 

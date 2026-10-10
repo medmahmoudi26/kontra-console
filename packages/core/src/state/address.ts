@@ -121,6 +121,19 @@ export type Address =
   // landing on `/runs/<id>` never silently reselects a run on the page the operator just left.
   | { view: 'runs'; run: string | null }
   | { view: 'actors' | 'catalog' | 'logs' | 'secrets' | 'settings' }
+  /**
+   * A **Report** — what a Run FOUND, which is a different question from what it did.
+   *
+   * ITS OWN SURFACE RATHER THAN A TAB UNDER `/runs/<id>`, and that is the second arrangement this
+   * went through. A tab put a second control in the run page's header competing with `‹ Runs` for the
+   * one position an operator's eye already has a job for, and it made `/runs/<id>/…` mean two things.
+   * A report outlives the Run's Parquet and is the thing somebody forwards, so it is addressed in its
+   * own right: `/reports` is every report this control plane has rendered, `/reports/<runId>` is one.
+   *
+   * KEYED BY THE RUN ID because that is what a report IS of. There is no report id: one Run has one
+   * report, with versions inside it.
+   */
+  | { view: 'reports'; run: string | null }
   | { view: 'datasets'; dataset: DatasetFocus | null };
 
 /** Where an unknown or malformed address lands, and where a cold `/` lands. */
@@ -143,6 +156,13 @@ export interface AddressedState {
   /** The **Run** the Runs surface has open — its OWN field, not `runId`. `/runs/<id>` addresses a
    *  run without touching which run the Workflows surface has selected. */
   runsRun: string | null;
+  /**
+   * The **Report** the Reports surface has open — its OWN field, like `runsRun` and for the same
+   * reason: opening a report must not disturb which run the Runs surface has.
+   *
+   * OPTIONAL, so every existing caller of `addressOf` keeps compiling.
+   */
+  reportsRun?: string | null;
   datasetFocus: DatasetFocus | null;
 }
 
@@ -163,6 +183,8 @@ export function addressOf(s: AddressedState): Address {
       return { view: 'datasets', dataset: s.datasetFocus };
     case 'runs':
       return { view: 'runs', run: s.runsRun };
+    case 'reports':
+      return { view: 'reports', run: s.reportsRun ?? null };
     default:
       return { view: s.view };
   }
@@ -190,6 +212,8 @@ export function stateFor(address: Address): Partial<AddressedState> {
       return { view: 'datasets', datasetFocus: address.dataset };
     case 'runs':
       return { view: 'runs', runsRun: address.run };
+    case 'reports':
+      return { view: 'reports', reportsRun: address.run };
     default:
       return { view: address.view };
   }
@@ -236,12 +260,18 @@ export function formatAddress(address: Address): string {
       const search = query.toString();
       return `${PATHS.datasets}/${encodeURIComponent(address.dataset.name)}${search ? `?${search}` : ''}`;
     }
-    case 'runs':
+    case 'reports':
+      // Same encoding rule as a run, and for the same reason: the id came from `--id`.
+      return address.run === null
+        ? PATHS.reports
+        : `${PATHS.reports}/${encodeURIComponent(address.run)}`;
+    case 'runs': {
       // A run id is whatever `--id` was, so it is encoded rather than trusted — the server still
       // matches on the first segment (`runs`), which is why a dotted id like `sweep-v1.2` survives.
-      return address.run === null
-        ? PATHS.runs
-        : `${PATHS.runs}/${encodeURIComponent(address.run)}`;
+      if (address.run === null) return PATHS.runs;
+      const base = `${PATHS.runs}/${encodeURIComponent(address.run)}`;
+      return base;
+    }
     default:
       return PATHS[address.view];
   }
@@ -328,7 +358,11 @@ export function parseAddress(url: string): Address | null {
     }
     case 'runs':
       // One id, nothing under it: a run is addressed by its id and a second segment is no URL this
-      // app could mean. `/runs` is the list; `/runs/<id>` is one run's record.
+      // app could mean. `/runs` is the list; `/runs/<id>` is one run's record. What a run FOUND is a
+      // different surface — see the `reports` arm.
+      return second === null ? { view, run: first } : null;
+    case 'reports':
+      // The same shape, for the same reason: `/reports` is every report, `/reports/<runId>` is one.
       return second === null ? { view, run: first } : null;
     case 'datasets': {
       if (second !== null) return null;

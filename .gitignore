@@ -4,3 +4,13 @@ dist/
 .env.local
 playwright-report/
 test-results/
+
+# Working scratch. TRACKED FILES UNDER .scratch/ ARE UNAFFECTED — a .gitignore never applies to a
+# path already in the index, so `.scratch/console-svelte/` (the issue tracker, 16 files) stays.
+#
+# THIS REPOSITORY IS PUBLIC, and this line exists because of a near miss: a session left Playwright
+# screenshots in `.scratch/liveshots/` that rendered a private run's identifiers as PIXELS. No text
+# grep would ever have found them, and they were one reflexive `git add -A` from publication. The
+# directory is where people put previews, traces and renders of real data; ignoring it by default is
+# the only version of this that survives someone being in a hurry.
+.scratch/

@@ -61,6 +61,7 @@
     actors: () => import('./actors/Actors.svelte'),
     workflows: () => import('./workflows/Workflows.svelte'),
     runs: () => import('./runs/Runs.svelte'),
+    reports: () => import('./report/Reports.svelte'),
     datasets: () => import('./datasets/Datasets.svelte'),
     secrets: () => import('./secrets/Secrets.svelte'),
     settings: () => import('./secrets/Settings.svelte'),

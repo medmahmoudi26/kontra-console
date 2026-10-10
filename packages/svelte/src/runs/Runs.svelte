@@ -39,7 +39,7 @@
     type RunIO,
   } from '@kontra/console-core/run/record';
   import { executionOf, materializationOf } from '@kontra/console-core/run/runState';
-  import { type LogRecord } from '@kontra/console-core/run/logs';
+  import { newestFirst, type LogRecord } from '@kontra/console-core/run/logs';
   import { LogStream } from '../logs/stream.svelte';
   import { followRows } from '../datasets/liveRows';
   import {
@@ -99,7 +99,21 @@
    * server-sent stream per open run, which is what ADR 0048 §3 asks for in place of an interval.
    */
   const logStream = new LogStream();
-  const logs = $derived(logStream.lines as LogRecord[]);
+  /**
+   * NEWEST FIRST, AND THAT REVERSAL IS NOT COSMETIC.
+   *
+   * `LogStream` is shared with the Logs page, which is a TERMINAL: it reads downward, so `backfill`
+   * sorts ascending and says so. `LogsRail` is not a terminal — it answers "why did this run do
+   * that", and the line that answers it is the last one written. Its own documentation calls it
+   * newest-first, and the rail renders `records` in the order it is handed them.
+   *
+   * The order flipped when this surface moved from `fetchLogs(id)` (which applied `newestFirst`) to
+   * `LogStream` for the reason written above — the rail had been slaved to the run's payload clock
+   * and sat on `Logs 0` for 62 of a 110-second run. That change was right and the ordering came
+   * along by accident, which is why the reversal belongs HERE rather than in either shared piece:
+   * the stream stays ascending for the terminal, and the rail gets what the rail is for.
+   */
+  const logs = $derived(newestFirst(logStream.lines as LogRecord[]));
   /**
    * Loading is "the tail has not connected AND the backfill has not answered". Either one landing
    * means the rail can say something true, and `reachable` is what distinguishes a quiet fleet
@@ -1031,6 +1045,25 @@
         <p class="muted">This workflow returned no value.</p>
       {/if}
     </div>
+    <!-- WHAT THE RUN FOUND, AT THE END OF WHAT IT DID (ADR 0055).
+         AT THE BOTTOM AND NOT IN THE HEADER, which is where this first went. The header is the run
+         page's own: `‹ Runs` is how you leave, and a second control beside it competed with that for
+         the one position an operator's eye already has a job for. Down here it is the natural next
+         step after reading the record — you have just finished the input, the output and the phases,
+         and the report is what the run SAID about all of it.
+         IT LEAVES THIS SURFACE. The report is its own surface (`/reports/<runId>`), so this page
+         renders nothing of it and owns none of its address space.
+         AN ANCHOR, NOT A BUTTON. The report is an address somebody pastes to a colleague, so
+         middle-click, copy-link and open-in-new-tab all have to work; a button with an onclick
+         supports none of them. -->
+    <a
+      class="reportcta"
+      href={formatAddress({ view: 'reports', run: openRun })}
+      data-testid="run-to-report"
+    >
+      <span class="cta-main">Read the report ›</span>
+      <span class="cta-sub">what this run returned, rendered through its <code>report.md</code></span>
+    </a>
     <!-- THE TWO FEEDS, OUT OF THE FLOW. They are the only regions that grow while a run is going;
          in the column they pushed Input, Output and each other down for the whole run. Nothing
          here can move anything on the page behind it. -->
@@ -1307,6 +1340,47 @@
     font-size: var(--t-small);
     padding: 0;
   }
+
+  .reportcta {
+    display: block;
+    /* The bottom margin is generous because the drawer is `position: fixed` over the bottom of the
+       page: the last thing in the flow needs room of its own or the drawer's edge sits on it. */
+    margin: var(--s-4) 0 var(--s-6);
+    padding: var(--s-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    text-decoration: none;
+  }
+
+  .reportcta:hover {
+    border-color: var(--accent);
+  }
+
+  .reportcta:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .cta-main {
+    display: block;
+    color: var(--accent);
+    font-size: var(--t-body);
+    font-weight: 600;
+  }
+
+  .cta-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--dim);
+    font-size: var(--t-small);
+  }
+
+  .cta-sub code {
+    font-family: var(--mono);
+    font-size: var(--t-micro);
+  }
+
   .head {
     display: flex;
     justify-content: space-between;
